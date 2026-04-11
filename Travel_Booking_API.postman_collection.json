@@ -1,0 +1,177 @@
+{
+  "info": {
+    "name": "Travel Booking Platform API",
+    "description": "Complete API collection for testing authentication endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Send OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"9876543210\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/auth/otp/send",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "auth", "otp", "send"]
+        },
+        "description": "Send OTP to phone number. Check console logs for OTP in MOCK mode."
+      }
+    },
+    {
+      "name": "2. User Signup",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone\": \"9876543210\",\n  \"name\": \"Rajesh Kumar\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/auth/user/signup",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "auth", "user", "signup"]
+        },
+        "description": "Register new user with phone number"
+      }
+    },
+    {
+      "name": "3. User Login (Phone OTP)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"loginType\": \"PHONE\",\n  \"phone\": \"9876543210\",\n  \"otp\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/auth/user/login",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "auth", "user", "login"]
+        },
+        "description": "Login with phone and OTP. Replace OTP with actual value from SMS/console."
+      }
+    },
+    {
+      "name": "4. User Login (Google OAuth)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"loginType\": \"GOOGLE\",\n  \"token\": \"google_oauth_token_here\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/auth/user/login",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "auth", "user", "login"]
+        },
+        "description": "Login with Google OAuth token"
+      }
+    },
+    {
+      "name": "5. Driver Signup",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Suresh Sharma\",\n  \"mobile\": \"9123456789\",\n  \"password\": \"driver@123\",\n  \"licenseNumber\": \"DL1420110012345\",\n  \"aadhaarNumber\": \"123456789012\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/auth/driver/signup",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "auth", "driver", "signup"]
+        },
+        "description": "Register new driver with credentials"
+      }
+    },
+    {
+      "name": "6. Driver Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mobile\": \"9123456789\",\n  \"password\": \"driver@123\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/auth/driver/login",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "auth", "driver", "login"]
+        },
+        "description": "Login driver with mobile and password"
+      }
+    },
+    {
+      "name": "7. Owner Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@travelplatform.com\",\n  \"password\": \"owner@123\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/auth/owner/login",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "auth", "owner", "login"]
+        },
+        "description": "Login owner with email and password. Owner must be created in database first."
+      }
+    }
+  ]
+}

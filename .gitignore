@@ -1,0 +1,41 @@
+# Environment variables
+.env
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Logs
+*.log
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# Build artifacts
+build/
+target/
+graphhopper-cache/
+uploads/
+maven.zip
+apache-maven-3.9.6/
+maven-wrapper.jar
+
+# Large data files (OSM/GraphHopper)
+src/india-latest.osm.pbf/
+*.osm.pbf
+*.pbf

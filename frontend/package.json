@@ -1,0 +1,33 @@
+{
+  "name": "namma-journey",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-leaflet/core": "^2.1.0",
+    "@react-oauth/google": "^0.13.4",
+    "@stomp/stompjs": "^7.3.0",
+    "axios": "^1.6.7",
+    "jspdf": "^4.2.0",
+    "jspdf-autotable": "^5.0.7",
+    "leaflet": "^1.9.4",
+    "leaflet.marker.slideto": "^0.3.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-leaflet": "^4.2.1",
+    "react-router-dom": "^6.22.0",
+    "sockjs-client": "^1.6.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.0.0",
+    "vite": "^5.1.0"
+  }
+}

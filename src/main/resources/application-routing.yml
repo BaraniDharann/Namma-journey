@@ -1,0 +1,8 @@
+# OSM Routing Configuration
+osm:
+  file:
+    path: india-latest.osm.pbf  # Place this file in project root
+
+graphhopper:
+  cache:
+    path: graphhopper-cache  # Cache directory for routing data

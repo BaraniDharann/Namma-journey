@@ -1,0 +1,275 @@
+{
+  "info": {
+    "name": "Driver Creation & Verification Workflow",
+    "description": "Complete workflow for owner to create and verify driver accounts with photo uploads",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "ownerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "driverToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "driverEmail",
+      "value": "driver@example.com",
+      "type": "string"
+    },
+    {
+      "key": "driverMobile",
+      "value": "9123456789",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Owner Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.collectionVariables.set('ownerToken', jsonData.token);",
+              "    pm.environment.set('ownerToken', jsonData.token);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@travelplatform.com\",\n  \"password\": \"owner@123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/owner/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "owner", "login"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. Create Driver with Photos",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.collectionVariables.set('driverEmail', jsonData.email);",
+              "    pm.collectionVariables.set('driverMobile', jsonData.mobile);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{ownerToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Suresh Sharma\",\n  \"mobile\": \"9123456789\",\n  \"email\": \"suresh.sharma@example.com\",\n  \"licenseNumber\": \"DL1420110012345\",\n  \"aadhaarNumber\": \"123456789012\",\n  \"photo\": \"https://example.com/photos/driver-profile.jpg\",\n  \"licensePhoto\": \"https://example.com/photos/driver-license.jpg\",\n  \"aadhaarPhoto\": \"https://example.com/photos/driver-aadhaar.jpg\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/owner/drivers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "owner", "drivers"]
+        },
+        "description": "Owner creates driver account. OTP is sent to driver's email."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Verify Driver Email with OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{ownerToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{driverEmail}}\",\n  \"otp\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/owner/drivers/verify",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "owner", "drivers", "verify"]
+        },
+        "description": "Owner enters OTP received on driver's email. After verification, login credentials are sent to driver."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Driver First Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.collectionVariables.set('driverToken', jsonData.token);",
+              "    pm.environment.set('driverToken', jsonData.token);",
+              "    ",
+              "    if (jsonData.firstLogin === true) {",
+              "        console.log('First login detected. Driver must change password.');",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mobile\": \"{{driverMobile}}\",\n  \"password\": \"aB3#xY9@kL\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/driver/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "driver", "login"]
+        },
+        "description": "Driver logs in with credentials received via email. Response includes firstLogin flag."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Driver Change Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{driverToken}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"oldPassword\": \"aB3#xY9@kL\",\n  \"newPassword\": \"MyNewSecure@123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/driver/change-password",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "driver", "change-password"]
+        },
+        "description": "Driver changes password after first login. firstLogin flag is set to false."
+      },
+      "response": []
+    },
+    {
+      "name": "6. Driver Subsequent Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.collectionVariables.set('driverToken', jsonData.token);",
+              "    ",
+              "    if (jsonData.firstLogin === false) {",
+              "        console.log('Normal login. Password already changed.');",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mobile\": \"{{driverMobile}}\",\n  \"password\": \"MyNewSecure@123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/driver/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "driver", "login"]
+        },
+        "description": "Driver logs in with new password. firstLogin is false."
+      },
+      "response": []
+    },
+    {
+      "name": "Send OTP (Manual Test)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"test@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/otp/send",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "otp", "send"]
+        },
+        "description": "Test OTP sending functionality"
+      },
+      "response": []
+    }
+  ]
+}

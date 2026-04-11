@@ -1,0 +1,162 @@
+{
+  "info": {
+    "name": "Travel Booking Platform API",
+    "description": "Complete API collection for authentication endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "User Authentication",
+      "item": [
+        {
+          "name": "User Signup (Phone)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"9876543210\",\n  \"name\": \"Rajesh Kumar\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/user/signup",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "auth", "user", "signup"]
+            }
+          }
+        },
+        {
+          "name": "User Login (Phone OTP)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loginType\": \"PHONE\",\n  \"phone\": \"9876543210\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/user/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "auth", "user", "login"]
+            }
+          }
+        },
+        {
+          "name": "User Login (Google OAuth)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loginType\": \"GOOGLE\",\n  \"token\": \"google_oauth_token_here\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/user/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "auth", "user", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Driver Authentication",
+      "item": [
+        {
+          "name": "Driver Signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Suresh Sharma\",\n  \"mobile\": \"9123456789\",\n  \"password\": \"driver@123\",\n  \"licenseNumber\": \"DL1420110012345\",\n  \"aadhaarNumber\": \"123456789012\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/driver/signup",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "auth", "driver", "signup"]
+            }
+          }
+        },
+        {
+          "name": "Driver Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mobile\": \"9123456789\",\n  \"password\": \"driver@123\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/driver/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "auth", "driver", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Owner Authentication",
+      "item": [
+        {
+          "name": "Owner Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@travelplatform.com\",\n  \"password\": \"owner@123\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/owner/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "auth", "owner", "login"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
