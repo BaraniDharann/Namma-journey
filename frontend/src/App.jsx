@@ -1,5 +1,6 @@
 import React, { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import { AuthProvider, useAuth } from './context/AuthContext'
 
 // Lazy load all pages for faster initial load
@@ -101,6 +102,13 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <AppRoutes />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            error: { style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' } },
+            success: { style: { background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' } },
+          }}
+        />
       </BrowserRouter>
     </AuthProvider>
   )

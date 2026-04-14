@@ -1,4 +1,5 @@
 import axios from 'axios'
+import toast from 'react-hot-toast'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -24,6 +25,20 @@ api.interceptors.response.use(
         localStorage.removeItem('nj_user')
         window.location.href = '/login'
       }
+    }
+    // Show user-friendly error toast for all API errors (except 401 auth redirects)
+    const isAuthRedirect = err.response?.status === 401 && !err.config?.url?.includes('/auth/')
+    if (!isAuthRedirect) {
+      const message = err.response?.data?.error
+        || err.response?.data?.message
+        || (err.response?.status === 403 ? 'You do not have permission for this action'
+          : err.response?.status === 404 ? 'The requested resource was not found'
+          : err.response?.status === 409 ? 'This action has already been performed'
+          : err.response?.status >= 500 ? 'Something went wrong on our end. Please try again later'
+          : err.code === 'ECONNABORTED' ? 'Request timed out. Please check your connection'
+          : !err.response ? 'Unable to connect to server. Please check your internet'
+          : 'Something went wrong. Please try again')
+      toast.error(message, { duration: 4000, id: `api-error-${err.config?.url}` })
     }
     return Promise.reject(err)
   }
@@ -90,7 +105,7 @@ export const getBookingById = (userId, bookingId) => api.get(`/user/${userId}/bo
 export const updateBooking = (userId, bookingId, data) => api.put(`/user/${userId}/bookings/${bookingId}`, data).then(res => { invalidateCache('bookings'); return res })
 export const deleteBooking = (userId, bookingId) => api.delete(`/user/${userId}/bookings/${bookingId}`).then(res => { invalidateCache('bookings'); return res })
 export const confirmBooking = (userId, bookingId) => api.post(`/user/${userId}/bookings/${bookingId}/confirm`).then(res => { invalidateCache('bookings'); return res })
-export const submitReview = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/reviews`, data)
+export const submitReview = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/reviews`, data).then(res => { invalidateCache('reviews'); return res })
 export const initiatePayment = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/payment`, data).then(res => { invalidateCache('payments'); return res })
 export const getUserPayments = (userId) => cachedGet(`/user/${userId}/payments`)
 export const getTripSummary = (userId, bookingId) => api.get(`/user/${userId}/bookings/${bookingId}/summary`)
