@@ -26,18 +26,26 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     }
-    // Show user-friendly error toast for all API errors (except 401 auth redirects)
+    // Show user-friendly error toast (skip 401 redirects and silent requests)
     const isAuthRedirect = err.response?.status === 401 && !err.config?.url?.includes('/auth/')
-    if (!isAuthRedirect) {
-      const message = err.response?.data?.error
-        || err.response?.data?.message
-        || (err.response?.status === 403 ? 'You do not have permission for this action'
-          : err.response?.status === 404 ? 'The requested resource was not found'
-          : err.response?.status === 409 ? 'This action has already been performed'
-          : err.response?.status >= 500 ? 'Something went wrong on our end. Please try again later'
-          : err.code === 'ECONNABORTED' ? 'Request timed out. Please check your connection'
-          : !err.response ? 'Unable to connect to server. Please check your internet'
-          : 'Something went wrong. Please try again')
+    const isSilent = err.config?._silent
+    if (!isAuthRedirect && !isSilent) {
+      const serverMsg = err.response?.data?.error || err.response?.data?.message || ''
+      const friendlyMap = {
+        'Review already submitted': 'You have already submitted a review for this booking',
+        'Booking not found': 'This booking could not be found',
+        'Unauthorized': 'You are not authorized to perform this action',
+        'Driver not found': 'Driver information is currently unavailable',
+      }
+      const friendly = Object.entries(friendlyMap).find(([k]) => serverMsg.includes(k))?.[1]
+      const message = friendly
+        || (err.response?.status === 403 ? 'Access denied. Please log in with the correct account'
+          : err.response?.status === 404 ? 'The requested information was not found'
+          : err.response?.status === 409 ? 'This action has already been completed'
+          : err.response?.status >= 500 ? 'Our servers are experiencing issues. Please try again shortly'
+          : err.code === 'ECONNABORTED' ? 'The request took too long. Please check your connection and try again'
+          : !err.response ? 'Unable to reach the server. Please check your internet connection'
+          : serverMsg || 'Something went wrong. Please try again')
       toast.error(message, { duration: 4000, id: `api-error-${err.config?.url}` })
     }
     return Promise.reject(err)
@@ -48,13 +56,13 @@ api.interceptors.response.use(
 const cache = new Map()
 const CACHE_TTL = 30000 // 30 seconds
 
-function cachedGet(url, ttl = CACHE_TTL) {
+function cachedGet(url, ttl = CACHE_TTL, silent = false) {
   const now = Date.now()
   const cached = cache.get(url)
   if (cached && now - cached.time < ttl) {
     return Promise.resolve(cached.data)
   }
-  return api.get(url).then((res) => {
+  return api.get(url, silent ? { _silent: true } : {}).then((res) => {
     cache.set(url, { data: res, time: now })
     return res
   })
@@ -144,13 +152,14 @@ export const getDriverProfile = (driverId) => api.get(`/driver/${driverId}/profi
 export const toggleDriverAvailability = (driverId, status) => api.put(`/driver/${driverId}/availability`, { status })
 export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/profile`, data)
 
-// Public APIs
-export const getPublicReviews = () => cachedGet('/public/reviews', 60000)
+// Public APIs (silent — landing page has fallbacks)
+export const getPublicReviews = () => cachedGet('/public/reviews', 60000, true)
+export const getPublicPricing = () => cachedGet('/public/pricing', 60000, true)
 
 // Travel Package APIs (Public)
 export const getPublicPackages = (params = {}) => {
   const query = new URLSearchParams(params).toString()
-  return cachedGet(`/public/packages${query ? '?' + query : ''}`, 60000)
+  return cachedGet(`/public/packages${query ? '?' + query : ''}`, 60000, true)
 }
 export const getPublicPackageById = (id) => cachedGet(`/public/packages/${id}`, 60000)
 

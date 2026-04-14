@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getPublicReviews, getPublicPackages, getCurrentPricing, createBooking } from '../utils/api'
+import { getPublicReviews, getPublicPackages, getPublicPricing, createBooking } from '../utils/api'
 import Pagination, { usePagination } from '../components/Pagination'
 import PlaceAutocomplete from '../components/PlaceAutocomplete'
 
@@ -150,7 +150,7 @@ export default function LandingPage() {
   }, [])
 
   useEffect(() => {
-    getCurrentPricing().then(res => { if (res.data) setQbPricing(res.data) }).catch(() => {})
+    getPublicPricing().then(res => { if (res.data) setQbPricing(res.data) }).catch(() => {})
   }, [])
 
   useEffect(() => {
