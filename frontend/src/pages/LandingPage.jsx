@@ -314,11 +314,39 @@ export default function LandingPage() {
                   opacity: wordFade ? 1 : 0,
                   transform: wordFade ? 'translateY(0)' : 'translateY(8px)',
                   transition: 'opacity 0.35s ease, transform 0.35s ease',
-                }}>{rotatingWords[wordIndex]}</span><br />Awaits
+                }} className="hero-glow-text">{rotatingWords[wordIndex]}</span><br />Awaits
               </h1>
-              <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.75)', lineHeight: 1.8, marginBottom: 32, maxWidth: 480 }}>
+              <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.75)', lineHeight: 1.8, marginBottom: 20, maxWidth: 480 }}>
                 Book AC/Non-AC cars for temple visits, devotional trips and long-distance travel across India. Verified drivers, transparent pricing.
               </p>
+
+              <div className="hero-route-anim">
+                <svg viewBox="0 0 520 70" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="routeGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#f97316" />
+                      <stop offset="50%" stopColor="#fbbf24" />
+                      <stop offset="100%" stopColor="#f97316" />
+                    </linearGradient>
+                  </defs>
+                  <path className="route-path" d="M 24 50 Q 130 0 260 50 T 496 50" />
+                  <path className="route-progress" d="M 24 50 Q 130 0 260 50 T 496 50" strokeDasharray="8 10" style={{ animation: 'dashMove 1.2s linear infinite reverse', opacity: 0.55 }} />
+                  <g className="pin" transform="translate(18, 44)">
+                    <circle r="7" fill="#f97316" stroke="#fff" strokeWidth="2" />
+                    <circle r="2.5" fill="#fff" />
+                  </g>
+                  <g className="pin pin-end" transform="translate(496, 44)">
+                    <circle r="7" fill="#22c55e" stroke="#fff" strokeWidth="2" />
+                    <circle r="2.5" fill="#fff" />
+                  </g>
+                </svg>
+                <span className="car-emoji">🚗</span>
+                <div className="route-labels">
+                  <span>📍 Pickup</span>
+                  <span style={{ color: '#fbbf24' }}>⛩️ Temple</span>
+                  <span>🏁 Drop</span>
+                </div>
+              </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 40 }}>
                 <Link to="/signup" className="btn-primary landing-btn-glow" style={{ fontSize: 15, padding: '13px 28px' }}>🚀 Book Your Ride</Link>
                 <Link to="/driver/login" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 28px', borderRadius: 10, border: '2px solid rgba(255,255,255,0.4)', color: '#fff', fontSize: 15, fontWeight: 600, textDecoration: 'none', transition: 'all 0.3s' }}
@@ -405,10 +433,6 @@ export default function LandingPage() {
                             {h}h
                           </button>
                         ))}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, padding: '8px 12px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                        <span style={{ fontSize: 11, color: '#94a3b8' }}>₹{qbPricing.pricePerHour}/hr × {qb.bookingHours}h</span>
-                        <span style={{ fontSize: 18, fontWeight: 900, color: '#f97316' }}>₹{(qb.bookingHours * qbPricing.pricePerHour).toLocaleString()}</span>
                       </div>
                     </div>
 
