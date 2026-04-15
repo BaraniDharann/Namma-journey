@@ -25,7 +25,7 @@ public class PublicController {
     @GetMapping("/reviews")
     public ResponseEntity<List<ReviewResponse>> getPublicReviews() {
         return ResponseEntity.ok()
-                .cacheControl(CacheControl.maxAge(2, TimeUnit.MINUTES).cachePublic())
+                .cacheControl(CacheControl.noCache())
                 .body(reviewService.getAllReviews());
     }
 

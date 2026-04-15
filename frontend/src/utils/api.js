@@ -153,7 +153,7 @@ export const toggleDriverAvailability = (driverId, status) => api.put(`/driver/$
 export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/profile`, data)
 
 // Public APIs (silent — landing page has fallbacks)
-export const getPublicReviews = () => cachedGet('/public/reviews', 60000, true)
+export const getPublicReviews = () => cachedGet('/public/reviews', 5000, true)
 export const getPublicPricing = () => cachedGet('/public/pricing', 60000, true)
 
 // Travel Package APIs (Public)
