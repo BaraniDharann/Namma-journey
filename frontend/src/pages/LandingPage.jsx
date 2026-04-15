@@ -564,12 +564,24 @@ export default function LandingPage() {
             Travel Across <span style={{ color: '#f97316' }}>Every State</span>
           </h2>
           <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 15, marginBottom: 36 }}>From Kashmir to Kanyakumari — watch your journey unfold</p>
-          <div className="india-map-anim">
-            <img src="/images/india-3d-map.jfif" alt="India 3D Map" className="india-map-img" />
-            <div className="india-map-marker india-map-marker-top">📍 PICKUP</div>
-            <div className="india-map-marker india-map-marker-mid">⛩️ TEMPLE</div>
-            <div className="india-map-marker india-map-marker-bottom">🏁 DROP</div>
-            <div className="india-map-car">🚗</div>
+          <div className="india-map-slider">
+            {['/images/maps/map1.png','/images/maps/map2.png','/images/maps/map3.png','/images/maps/map4.png','/images/maps/map5.jfif','/images/maps/map6.jpg','/images/india-3d-map.jfif'].map((src, i) => (
+              <div key={i} className="india-map-slide" style={{ animationDelay: `${i * 4}s` }}>
+                <div className="india-map-tiles">
+                  {Array.from({ length: 16 }).map((_, j) => (
+                    <div
+                      key={j}
+                      className="india-map-tile"
+                      style={{
+                        backgroundImage: `url(${src})`,
+                        backgroundPosition: `${(j % 4) * (100/3)}% ${Math.floor(j/4) * (100/3)}%`,
+                        animationDelay: `${(i * 4) + (j * 0.08)}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>

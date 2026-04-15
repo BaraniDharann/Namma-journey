@@ -222,25 +222,58 @@ body {
 .hero-route-anim .route-labels { display: flex; justify-content: space-between; font-size: 11px; color: rgba(255,255,255,0.75); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; margin-top: 4px; }
 .hero-glow-text { animation: textGlow 2.4s ease-in-out infinite; }
 
-@keyframes carVertical {
-  0% { top: 2%; transform: translateX(-50%) rotate(180deg) scale(1); }
-  25% { top: 30%; transform: translateX(-80%) rotate(200deg) scale(1.05); }
-  50% { top: 50%; transform: translateX(-50%) rotate(180deg) scale(1.1); }
-  75% { top: 72%; transform: translateX(-20%) rotate(160deg) scale(1.05); }
-  100% { top: 94%; transform: translateX(-50%) rotate(180deg) scale(1); }
+.india-map-slider {
+  position: relative;
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  aspect-ratio: 16/11;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+  background: radial-gradient(circle at 50% 50%, #1e1b4b, #0b1020);
 }
-@keyframes markerPulse { 0%, 100% { transform: translateX(-50%) scale(1); box-shadow: 0 6px 16px rgba(0,0,0,0.35); } 50% { transform: translateX(-50%) scale(1.08); box-shadow: 0 10px 24px rgba(249,115,22,0.55); } }
-
-.india-map-anim { position: relative; width: 100%; max-width: 720px; margin: 0 auto; border-radius: 24px; overflow: hidden; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 30px 80px rgba(0,0,0,0.45); background: #0f172a; }
-.india-map-img { display: block; width: 100%; height: auto; object-fit: cover; filter: saturate(1.1) contrast(1.05); }
-.india-map-car { position: absolute; left: 50%; top: 2%; font-size: 42px; transform: translateX(-50%) rotate(180deg); animation: carVertical 12s cubic-bezier(0.45, 0, 0.55, 1) infinite; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.55)); z-index: 3; pointer-events: none; }
-.india-map-marker { position: absolute; left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: rgba(15,23,42,0.85); color: #fff; font-size: 12px; font-weight: 800; letter-spacing: 1px; border: 1px solid rgba(249,115,22,0.5); backdrop-filter: blur(6px); animation: markerPulse 2.4s ease-in-out infinite; z-index: 2; white-space: nowrap; }
-.india-map-marker-top { top: 3%; }
-.india-map-marker-mid { top: 48%; background: rgba(249,115,22,0.9); border-color: #fbbf24; color: #fff; animation-delay: 0.8s; }
-.india-map-marker-bottom { bottom: 3%; animation-delay: 1.6s; }
+.india-map-slide {
+  position: absolute; inset: 0;
+  opacity: 0;
+  animation: slideCycle 28s ease-in-out infinite;
+}
+.india-map-tiles {
+  position: absolute; inset: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 2px;
+  padding: 10px;
+}
+.india-map-tile {
+  background-size: 400% 400%;
+  background-repeat: no-repeat;
+  border-radius: 6px;
+  opacity: 0;
+  transform: scale(0.4) rotate(-8deg);
+  filter: blur(8px);
+  animation: tileReveal 28s ease-out infinite;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+@keyframes slideCycle {
+  0%   { opacity: 0; }
+  5%   { opacity: 1; }
+  22%  { opacity: 1; }
+  28%  { opacity: 0; }
+  100% { opacity: 0; }
+}
+@keyframes tileReveal {
+  0%   { opacity: 0; transform: scale(0.4) rotate(-8deg); filter: blur(8px); }
+  8%   { opacity: 1; transform: scale(1) rotate(0deg); filter: blur(0); }
+  22%  { opacity: 1; transform: scale(1) rotate(0deg); filter: blur(0); }
+  28%  { opacity: 0; transform: scale(1.1); filter: blur(4px); }
+  100% { opacity: 0; }
+}
 @media (max-width: 640px) {
-  .india-map-car { font-size: 30px; }
-  .india-map-marker { font-size: 10px; padding: 4px 10px; }
+  .india-map-slider { aspect-ratio: 4/5; }
+  .india-map-tiles { padding: 6px; gap: 1px; }
 }
 
 .animate-fadeInUp { animation: fadeInUp 0.4s ease forwards; }
