@@ -568,22 +568,22 @@ export default function LandingPage() {
             <div className="india-map-marquee-track">
               {[
                 ...[
-                  { src: '/images/maps/map1.png', label: 'Ooty', tag: 'Hill Station', emoji: '⛰️' },
-                  { src: '/images/maps/map2.png', label: 'Trichy', tag: 'Temple City', emoji: '🛕' },
-                  { src: '/images/maps/map3.png', label: 'Kerala', tag: "God's Own Country", emoji: '🌴' },
-                  { src: '/images/maps/map4.png', label: 'Tamil Nadu', tag: 'Heritage', emoji: '🏛️' },
-                  { src: '/images/maps/map5.jfif', label: 'Coorg', tag: 'Coffee Hills', emoji: '☕' },
-                  { src: '/images/maps/map6.jpg', label: 'South India', tag: 'Route Map', emoji: '🗺️' },
-                  { src: '/images/india-3d-map.jfif', label: 'Bharat', tag: 'All India', emoji: '🇮🇳' },
+                  { src: '/images/maps/map1.png', label: 'Coimbatore', tag: 'Hill Gateway', emoji: '⛰️' },
+                  { src: '/images/maps/map2.png', label: 'Chennai', tag: 'Capital City', emoji: '🏙️' },
+                  { src: '/images/maps/map3.png', label: 'Kancheepuram', tag: 'Temple City', emoji: '🛕' },
+                  { src: '/images/maps/map4.png', label: 'Ooty', tag: 'Hill Station', emoji: '🌄' },
+                  { src: '/images/maps/map5.jfif', label: 'Madurai', tag: 'Temple Town', emoji: '🛕' },
+                  { src: '/images/maps/map6.jpg', label: 'Kerala', tag: "God's Own Country", emoji: '🌴' },
+                  { src: '/images/india-3d-map.jfif', label: 'Tamil Nadu', tag: '3D State Map', emoji: '🗺️' },
                 ],
                 ...[
-                  { src: '/images/maps/map1.png', label: 'Ooty', tag: 'Hill Station', emoji: '⛰️' },
-                  { src: '/images/maps/map2.png', label: 'Trichy', tag: 'Temple City', emoji: '🛕' },
-                  { src: '/images/maps/map3.png', label: 'Kerala', tag: "God's Own Country", emoji: '🌴' },
-                  { src: '/images/maps/map4.png', label: 'Tamil Nadu', tag: 'Heritage', emoji: '🏛️' },
-                  { src: '/images/maps/map5.jfif', label: 'Coorg', tag: 'Coffee Hills', emoji: '☕' },
-                  { src: '/images/maps/map6.jpg', label: 'South India', tag: 'Route Map', emoji: '🗺️' },
-                  { src: '/images/india-3d-map.jfif', label: 'Bharat', tag: 'All India', emoji: '🇮🇳' },
+                  { src: '/images/maps/map1.png', label: 'Coimbatore', tag: 'Hill Gateway', emoji: '⛰️' },
+                  { src: '/images/maps/map2.png', label: 'Chennai', tag: 'Capital City', emoji: '🏙️' },
+                  { src: '/images/maps/map3.png', label: 'Kancheepuram', tag: 'Temple City', emoji: '🛕' },
+                  { src: '/images/maps/map4.png', label: 'Ooty', tag: 'Hill Station', emoji: '🌄' },
+                  { src: '/images/maps/map5.jfif', label: 'Madurai', tag: 'Temple Town', emoji: '🛕' },
+                  { src: '/images/maps/map6.jpg', label: 'Kerala', tag: "God's Own Country", emoji: '🌴' },
+                  { src: '/images/india-3d-map.jfif', label: 'Tamil Nadu', tag: '3D State Map', emoji: '🗺️' },
                 ],
               ].map((item, i) => (
                 <div key={i} className="india-map-card">
