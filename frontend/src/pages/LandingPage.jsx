@@ -566,20 +566,33 @@ export default function LandingPage() {
           <p style={{ color: '#64748b', fontSize: 15, marginBottom: 36 }}>From Kashmir to Kanyakumari — watch your journey unfold</p>
           <div className="india-map-marquee">
             <div className="india-map-marquee-track">
-              {[...['/images/maps/map1.png','/images/maps/map2.png','/images/maps/map3.png','/images/maps/map4.png','/images/maps/map5.jfif','/images/maps/map6.jpg','/images/india-3d-map.jfif'], ...['/images/maps/map1.png','/images/maps/map2.png','/images/maps/map3.png','/images/maps/map4.png','/images/maps/map5.jfif','/images/maps/map6.jpg','/images/india-3d-map.jfif']].map((src, i) => (
+              {[
+                ...[
+                  { src: '/images/maps/map1.png', label: 'Ooty', tag: 'Hill Station', emoji: '⛰️' },
+                  { src: '/images/maps/map2.png', label: 'Trichy', tag: 'Temple City', emoji: '🛕' },
+                  { src: '/images/maps/map3.png', label: 'Kerala', tag: "God's Own Country", emoji: '🌴' },
+                  { src: '/images/maps/map4.png', label: 'Tamil Nadu', tag: 'Heritage', emoji: '🏛️' },
+                  { src: '/images/maps/map5.jfif', label: 'Coorg', tag: 'Coffee Hills', emoji: '☕' },
+                  { src: '/images/maps/map6.jpg', label: 'South India', tag: 'Route Map', emoji: '🗺️' },
+                  { src: '/images/india-3d-map.jfif', label: 'Bharat', tag: 'All India', emoji: '🇮🇳' },
+                ],
+                ...[
+                  { src: '/images/maps/map1.png', label: 'Ooty', tag: 'Hill Station', emoji: '⛰️' },
+                  { src: '/images/maps/map2.png', label: 'Trichy', tag: 'Temple City', emoji: '🛕' },
+                  { src: '/images/maps/map3.png', label: 'Kerala', tag: "God's Own Country", emoji: '🌴' },
+                  { src: '/images/maps/map4.png', label: 'Tamil Nadu', tag: 'Heritage', emoji: '🏛️' },
+                  { src: '/images/maps/map5.jfif', label: 'Coorg', tag: 'Coffee Hills', emoji: '☕' },
+                  { src: '/images/maps/map6.jpg', label: 'South India', tag: 'Route Map', emoji: '🗺️' },
+                  { src: '/images/india-3d-map.jfif', label: 'Bharat', tag: 'All India', emoji: '🇮🇳' },
+                ],
+              ].map((item, i) => (
                 <div key={i} className="india-map-card">
-                  <div className="india-map-tiles">
-                    {Array.from({ length: 16 }).map((_, j) => (
-                      <div
-                        key={j}
-                        className="india-map-tile"
-                        style={{
-                          backgroundImage: `url(${src})`,
-                          backgroundPosition: `${(j % 4) * (100/3)}% ${Math.floor(j/4) * (100/3)}%`,
-                          animationDelay: `${j * 0.05}s`,
-                        }}
-                      />
-                    ))}
+                  <div className="india-map-card-img" style={{ backgroundImage: `url(${item.src})` }} />
+                  <div className="india-map-card-shine" />
+                  <div className="india-map-card-badge">{item.emoji} {item.tag}</div>
+                  <div className="india-map-card-overlay">
+                    <div className="india-map-card-title">{item.label}</div>
+                    <div className="india-map-card-cta">Explore Routes →</div>
                   </div>
                 </div>
               ))}
