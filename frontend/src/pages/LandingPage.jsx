@@ -121,6 +121,9 @@ export default function LandingPage() {
   const [packages, setPackages] = useState([])
   const [pkgCategory, setPkgCategory] = useState('ALL')
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+  const rotatingWords = ['Journey', 'Adventure', 'Pilgrimage', 'Escape', 'Discovery', 'Getaway', 'Expedition']
+  const [wordIndex, setWordIndex] = useState(0)
+  const [wordFade, setWordFade] = useState(true)
   const [qb, setQb] = useState({
     fromPlace: '', toPlace: '', fromLat: null, fromLon: null, toLat: null, toLon: null,
     fromDate: '', toDate: '', travelMembers: 1, acType: 'AC', bookingHours: 2
@@ -169,6 +172,18 @@ export default function LandingPage() {
         }
       })
       .catch(() => setReviews(defaultReviews))
+  }, [])
+
+  // Rotate hero highlight word
+  useEffect(() => {
+    const t = setInterval(() => {
+      setWordFade(false)
+      setTimeout(() => {
+        setWordIndex(i => (i + 1) % rotatingWords.length)
+        setWordFade(true)
+      }, 350)
+    }, 2200)
+    return () => clearInterval(t)
   }, [])
 
   // Track mouse for parallax effect on hero
@@ -295,7 +310,11 @@ export default function LandingPage() {
                   WebkitBackgroundClip: 'text',
                   WebkitTextFillColor: 'transparent',
                   animation: 'gradientShift 3s linear infinite',
-                }}>Journey</span><br />Awaits
+                  display: 'inline-block',
+                  opacity: wordFade ? 1 : 0,
+                  transform: wordFade ? 'translateY(0)' : 'translateY(8px)',
+                  transition: 'opacity 0.35s ease, transform 0.35s ease',
+                }}>{rotatingWords[wordIndex]}</span><br />Awaits
               </h1>
               <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.75)', lineHeight: 1.8, marginBottom: 32, maxWidth: 480 }}>
                 Book AC/Non-AC cars for temple visits, devotional trips and long-distance travel across India. Verified drivers, transparent pricing.

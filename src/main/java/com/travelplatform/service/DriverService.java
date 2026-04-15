@@ -156,15 +156,16 @@ public class DriverService {
         }
 
         try {
-            Path dirPath = Paths.get(uploadDir, "driver-trip-photos");
+            String tripFolder = "trip_" + bookingId;
+            Path dirPath = Paths.get("driverphoto", tripFolder);
             Files.createDirectories(dirPath);
 
-            String filename = "trip_" + bookingId + "_driver_" + driverId + "_" + System.currentTimeMillis()
+            String filename = "driver_" + driverId + "_" + System.currentTimeMillis()
                     + getExtension(photo.getOriginalFilename());
             Path filePath = dirPath.resolve(filename);
             Files.copy(photo.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
-            String photoPath = "/uploads/driver-trip-photos/" + filename;
+            String photoPath = "/driverphoto/" + tripFolder + "/" + filename;
 
             // Remove existing photo if re-uploading
             tripDriverPhotoRepository.findByBookingIdAndDriverId(bookingId, driverId)

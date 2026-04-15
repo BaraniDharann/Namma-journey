@@ -19,5 +19,9 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/uploads/drivers/**")
                 .addResourceLocations("file:" + uploadDir + "/")
                 .setCacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePublic());
+
+        registry.addResourceHandler("/driverphoto/**")
+                .addResourceLocations("file:driverphoto/")
+                .setCacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePublic());
     }
 }

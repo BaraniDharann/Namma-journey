@@ -47,7 +47,7 @@ public class RateLimitingFilter implements Filter {
 
         String path = request.getRequestURI();
 
-        if (path.startsWith("/uploads/") || path.startsWith("/actuator/")) {
+        if (path.startsWith("/uploads/") || path.startsWith("/driverphoto/") || path.startsWith("/actuator/")) {
             chain.doFilter(request, response);
             return;
         }
