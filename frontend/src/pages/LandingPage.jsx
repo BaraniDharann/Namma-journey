@@ -555,33 +555,35 @@ export default function LandingPage() {
       </section>
 
       {/* India Map Route Animation */}
-      <section className="landing-section" style={{ padding: '80px 24px', background: 'linear-gradient(135deg, #0b1020, #1e1b4b)' }}>
-        <div ref={el => observe('india-map', el)} style={{ maxWidth: 1100, margin: '0 auto', textAlign: 'center', ...sectionStyle('india-map') }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 20, background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.35)', color: '#fbbf24', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
+      <section className="landing-section" style={{ padding: '80px 24px', background: '#ffffff' }}>
+        <div ref={el => observe('india-map', el)} style={{ maxWidth: 1280, margin: '0 auto', textAlign: 'center', ...sectionStyle('india-map') }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 20, background: '#fff7ed', border: '1px solid #fed7aa', color: '#f97316', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
             🗺️ Pan-India Coverage
           </div>
-          <h2 style={{ fontFamily: 'Poppins', fontSize: 'clamp(1.8rem,4vw,2.8rem)', fontWeight: 900, color: '#fff', marginBottom: 10 }}>
+          <h2 style={{ fontFamily: 'Poppins', fontSize: 'clamp(1.8rem,4vw,2.8rem)', fontWeight: 900, color: '#0f172a', marginBottom: 10 }}>
             Travel Across <span style={{ color: '#f97316' }}>Every State</span>
           </h2>
-          <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 15, marginBottom: 36 }}>From Kashmir to Kanyakumari — watch your journey unfold</p>
-          <div className="india-map-slider">
-            {['/images/maps/map1.png','/images/maps/map2.png','/images/maps/map3.png','/images/maps/map4.png','/images/maps/map5.jfif','/images/maps/map6.jpg','/images/india-3d-map.jfif'].map((src, i) => (
-              <div key={i} className="india-map-slide" style={{ animationDelay: `${i * 4}s` }}>
-                <div className="india-map-tiles">
-                  {Array.from({ length: 16 }).map((_, j) => (
-                    <div
-                      key={j}
-                      className="india-map-tile"
-                      style={{
-                        backgroundImage: `url(${src})`,
-                        backgroundPosition: `${(j % 4) * (100/3)}% ${Math.floor(j/4) * (100/3)}%`,
-                        animationDelay: `${(i * 4) + (j * 0.08)}s`,
-                      }}
-                    />
-                  ))}
+          <p style={{ color: '#64748b', fontSize: 15, marginBottom: 36 }}>From Kashmir to Kanyakumari — watch your journey unfold</p>
+          <div className="india-map-marquee">
+            <div className="india-map-marquee-track">
+              {[...['/images/maps/map1.png','/images/maps/map2.png','/images/maps/map3.png','/images/maps/map4.png','/images/maps/map5.jfif','/images/maps/map6.jpg','/images/india-3d-map.jfif'], ...['/images/maps/map1.png','/images/maps/map2.png','/images/maps/map3.png','/images/maps/map4.png','/images/maps/map5.jfif','/images/maps/map6.jpg','/images/india-3d-map.jfif']].map((src, i) => (
+                <div key={i} className="india-map-card">
+                  <div className="india-map-tiles">
+                    {Array.from({ length: 16 }).map((_, j) => (
+                      <div
+                        key={j}
+                        className="india-map-tile"
+                        style={{
+                          backgroundImage: `url(${src})`,
+                          backgroundPosition: `${(j % 4) * (100/3)}% ${Math.floor(j/4) * (100/3)}%`,
+                          animationDelay: `${j * 0.05}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </section>
