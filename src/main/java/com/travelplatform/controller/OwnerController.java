@@ -49,7 +49,7 @@ public class OwnerController {
     }
     
     @GetMapping("/pricing/current")
-    @PreAuthorize("hasRole('OWNER')")
+    @PreAuthorize("hasAnyRole('OWNER','USER','DRIVER')")
     public ResponseEntity<Map<String, Object>> getCurrentPrice() {
         return ResponseEntity.ok(Map.of(
             "pricePerKm", ownerService.getCurrentPricePerKm(),
