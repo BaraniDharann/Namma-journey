@@ -209,7 +209,7 @@ export default function LandingPage() {
         setDestSetIndex(prev => (prev + 1) % 3)
         setDestFading(false)
       }, 150)
-    }, 3000)
+    }, 90000)
     return () => clearInterval(timer)
   }, [])
 
