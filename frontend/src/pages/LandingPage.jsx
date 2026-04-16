@@ -29,13 +29,38 @@ const images = {
   gps: '/images/GPS navigator-cuate.png'
 }
 
-const destinations = [
-  { name: 'Tirupati', state: 'Andhra Pradesh', img: images.temple, tag: 'Temple' },
-  { name: 'Hampi', state: 'Karnataka', img: images.ancient, tag: 'Heritage' },
-  { name: 'Lodhi Garden', state: 'Delhi', img: images.garden, tag: 'Nature' },
-  { name: 'Mahabalipuram', state: 'Tamil Nadu', img: images.palace, tag: 'Temple' },
-  { name: 'Sunrise Point', state: 'Himachal', img: images.backpacker, tag: 'Adventure' },
-  { name: 'Hill Station', state: 'Ooty', img: images.mountain, tag: 'Scenic' },
+const allDestinations = [
+  { name: 'Alappuzha', location: 'Kerala', img: '/images/travel places/Alappuzha keralam.jpg' },
+  { name: 'Brihadisvara Temple', location: 'Thanjavur', img: '/images/travel places/Brihadisvara Temple thanjavur.jpg' },
+  { name: 'Hawa Mahal', location: 'Jaipur', img: '/images/travel places/Hawa Mahal jaipur.jpg' },
+  { name: 'India Gate', location: 'New Delhi', img: '/images/travel places/India Gate, an iconic war memorial located in New Delhi.jpg' },
+  { name: 'Kashmir Valley', location: 'Kashmir', img: '/images/travel places/Kashmir Valley.jpg' },
+  { name: 'Lodhi Gardens', location: 'New Delhi', img: '/images/travel places/Lodhi Gardens in New Delhi.jpg' },
+  { name: 'Mahabalipuram', location: 'Tamil Nadu', img: '/images/travel places/Mahabalipuram.jpg' },
+  { name: 'Matrimandir', location: 'Auroville, Tamil Nadu', img: '/images/travel places/Matrimandir, which is the spiritual heart of the experimental international township of Auroville, located in Tamil Nadu.jpg' },
+  { name: 'Mumbai Skyline', location: 'Maharashtra', img: '/images/travel places/Mumbai.jpg' },
+  { name: 'Murudeshwar Temple', location: 'Karnataka', img: '/images/travel places/Murudeshwar Temple located in Karnataka.jpg' },
+  { name: 'Mysore Palace', location: 'Karnataka', img: '/images/travel places/Mysore Palace.jpg' },
+  { name: 'Naqqar Khana', location: 'Jaipur', img: '/images/travel places/Naqqar Khana jaipur.jpg' },
+  { name: 'Nohkalikai Falls', location: 'Meghalaya', img: '/images/travel places/Nohkalikai Falls.jpg' },
+  { name: 'Pattadakal Temples', location: 'Karnataka', img: '/images/travel places/Pattadakal Temples in karnataka.jpg' },
+  { name: 'Ripple Waterfalls', location: 'India', img: '/images/travel places/Ripple Waterfalls.jpg' },
+  { name: 'Sree Padmanabhaswamy Temple', location: 'Thiruvananthapuram, Kerala', img: '/images/travel places/Sree Padmanabhaswamy Temple in Thiruvananthapuram, Kerala,.jpg' },
+  { name: 'Sripuram Golden Temple', location: 'Vellore', img: '/images/travel places/Sripuram Golden Temple (Sri Lakshmi Narayani Golden Temple) located in Vellore.jpg' },
+  { name: 'Taj Mahal', location: 'New Delhi', img: '/images/travel places/Taj Mahal , New Delhi.jpg' },
+  { name: 'Tamil Nadu Heritage', location: 'Tamil Nadu', img: '/images/travel places/Tamilnadu.jpg' },
+  { name: 'Thiruvalluvar Statue', location: 'Kanyakumari', img: '/images/travel places/Thiruvalluvar Statue and the Vivekananda Rock Memorial in Kanyakumari.jpg' },
+  { name: 'Varkala Beach', location: 'Kerala', img: '/images/travel places/Varkala Beach in Kerala.jpg' },
+  { name: 'Vijaya Vittala Temple', location: 'Hampi', img: '/images/travel places/Vijaya Vittala Temple complex in Hampi.jpg' },
+  { name: 'Kashi Vishwanath', location: 'Varanasi', img: '/images/travel places/kasi.jpg' },
+  { name: 'Mountain Peaks', location: 'Himalayas', img: '/images/travel places/mountianes.jpg' },
+]
+
+// Split into 3 sets of 8 for cycling
+const destinationSets = [
+  allDestinations.slice(0, 8),
+  allDestinations.slice(8, 16),
+  allDestinations.slice(16, 24),
 ]
 
 const features = [
@@ -132,6 +157,8 @@ export default function LandingPage() {
   const [qbLoading, setQbLoading] = useState(false)
   const [qbError, setQbError] = useState('')
   const [qbSuccess, setQbSuccess] = useState(null)
+  const [destSetIndex, setDestSetIndex] = useState(0)
+  const [destFading, setDestFading] = useState(false)
   const { visibleSections, observe } = useScrollReveal()
   const filteredPackages = packages.filter(p => pkgCategory === 'ALL' || p.category === pkgCategory)
   const { currentPage: pkgPage, totalPages: pkgTotalPages, paginatedItems: paginatedPackages, setCurrentPage: setPkgPage } = usePagination(filteredPackages, 8)
@@ -172,6 +199,18 @@ export default function LandingPage() {
         }
       })
       .catch(() => setReviews(defaultReviews))
+  }, [])
+
+  // Cycle destination images every 3 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDestFading(true)
+      setTimeout(() => {
+        setDestSetIndex(prev => (prev + 1) % 3)
+        setDestFading(false)
+      }, 300)
+    }, 3000)
+    return () => clearInterval(timer)
   }, [])
 
   // Rotate hero highlight word
@@ -601,45 +640,59 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Destinations */}
-      <section id="destinations" className="landing-section" style={{ padding: '80px 24px', background: '#f8fafc' }}>
+      {/* Destinations - Floating Gallery */}
+      <section id="destinations" className="landing-section" style={{ padding: '80px 24px', background: '#fff', overflow: 'hidden' }}>
+        <style>{`
+          .dest-gallery-card { position:relative; border-radius:16px; overflow:hidden; cursor:pointer; aspect-ratio:3/4; box-shadow:0 2px 12px rgba(0,0,0,0.08); transition:transform 0.3s ease, box-shadow 0.3s ease; }
+          .dest-gallery-card:hover { transform:translateY(-6px); box-shadow:0 12px 32px rgba(0,0,0,0.15); }
+          .dest-gallery-card img { width:100%; height:100%; object-fit:cover; transition:transform 0.4s ease; }
+          .dest-gallery-card:hover img { transform:scale(1.06); }
+          .dest-gallery-card::after { content:''; position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 40%, transparent 100%); }
+          .dest-gallery-card .dest-info { position:absolute; bottom:0; left:0; right:0; padding:16px; z-index:2; }
+          .dest-gallery-card .dest-explore { opacity:0; transition:opacity 0.25s ease; }
+          .dest-gallery-card:hover .dest-explore { opacity:1; }
+          @media(max-width:900px) { .dest-responsive-grid { grid-template-columns:repeat(2,1fr) !important; } }
+          @media(max-width:500px) { .dest-responsive-grid { grid-template-columns:1fr !important; } }
+        `}</style>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div ref={el => observe('dest-header', el)} style={{ textAlign: 'center', marginBottom: 48, ...sectionStyle('dest-header') }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 20, background: '#fff7ed', border: '1px solid #fed7aa', color: '#f97316', fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
-              🗺️ Popular Destinations
+              Discover India
             </div>
             <h2 style={{ fontFamily: 'Poppins', fontSize: 'clamp(1.8rem,4vw,2.8rem)', fontWeight: 900, color: '#0f172a', marginBottom: 10 }}>
-              Explore <span style={{ color: '#f97316' }}>Sacred India</span>
+              Wonders of <span style={{ color: '#f97316' }}>Incredible India</span>
             </h2>
-            <p style={{ color: '#64748b', fontSize: 15 }}>From ancient temples to scenic hill stations</p>
+            <p style={{ color: '#64748b', fontSize: 15 }}>24 breathtaking destinations across the subcontinent</p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
+              {[0, 1, 2].map(i => (
+                <button key={i} onClick={() => { setDestFading(true); setTimeout(() => { setDestSetIndex(i); setDestFading(false) }, 300) }}
+                  style={{ width: destSetIndex === i ? 28 : 10, height: 10, borderRadius: 5, border: 'none', background: destSetIndex === i ? '#f97316' : '#e2e8f0', cursor: 'pointer', transition: 'all 0.3s ease' }} />
+              ))}
+            </div>
           </div>
-          <div ref={el => observe('dest-grid', el)} className="landing-dest-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-            {destinations.map((dest, i) => (
-              <div key={i} className="card landing-dest-card" style={{
-                overflow: 'hidden', cursor: 'pointer',
+          <div ref={el => observe('dest-grid', el)} className="dest-responsive-grid" style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateRows: 'repeat(2, 1fr)',
+            gap: 16,
+            opacity: destFading ? 0 : 1,
+            transition: 'opacity 0.3s ease',
+          }}>
+            {destinationSets[destSetIndex].map((dest, i) => (
+              <div key={`${destSetIndex}-${i}`} className="dest-gallery-card" style={{
                 opacity: visibleSections.has('dest-grid') ? 1 : 0,
-                transform: visibleSections.has('dest-grid') ? 'translateY(0)' : 'translateY(30px)',
-                transition: `all 0.6s cubic-bezier(0.16, 1, 0.3, 1) ${i * 0.1}s`,
-              }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-8px)'; e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.12)' }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '' }}>
-                <div style={{ position: 'relative', height: 180, overflow: 'hidden' }}>
-                  <img src={dest.img} alt={dest.name} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.6s ease' }}
-                    onMouseEnter={e => e.target.style.transform = 'scale(1.1)'}
-                    onMouseLeave={e => e.target.style.transform = 'scale(1)'} loading="lazy" decoding="async" />
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.4), transparent)', opacity: 0, transition: 'opacity 0.3s' }}
-                    className="landing-dest-overlay" />
-                  <span style={{ position: 'absolute', top: 10, right: 10, padding: '4px 10px', borderRadius: 20, background: '#f97316', color: '#fff', fontSize: 11, fontWeight: 700 }}>{dest.tag}</span>
-                </div>
-                <div style={{ padding: '16px 18px' }}>
-                  <h3 style={{ fontWeight: 700, fontSize: 16, color: '#0f172a', marginBottom: 4 }}>{dest.name}</h3>
-                  <p style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>📍 {dest.state}</p>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#f97316' }}>From ₹999</span>
-                    <Link to="/signup" style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: '#fff7ed', color: '#f97316', border: '1px solid #fed7aa', fontWeight: 600, textDecoration: 'none', transition: 'all 0.2s' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#f97316'; e.currentTarget.style.color = '#fff' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = '#fff7ed'; e.currentTarget.style.color = '#f97316' }}
-                    >Book Now →</Link>
+                transition: `opacity 0.3s ease ${i * 0.05}s`,
+              }}>
+                <img src={dest.img} alt={dest.name} loading="lazy" decoding="async" />
+                <div className="dest-info">
+                  <h3 style={{ fontFamily: 'Poppins', fontWeight: 700, fontSize: 'clamp(14px,1.2vw,18px)', color: '#fff', marginBottom: 2, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{dest.name}</h3>
+                  <p style={{ fontSize: 13, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ color: '#fb923c' }}>&#9679;</span> {dest.location}
+                  </p>
+                  <div className="dest-explore" style={{ marginTop: 8 }}>
+                    <Link to="/signup" style={{ fontSize: 12, padding: '5px 14px', borderRadius: 16, background: '#f97316', color: '#fff', fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
+                      Explore →
+                    </Link>
                   </div>
                 </div>
               </div>
