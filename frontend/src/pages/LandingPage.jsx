@@ -208,7 +208,7 @@ export default function LandingPage() {
       setTimeout(() => {
         setDestSetIndex(prev => (prev + 1) % 3)
         setDestFading(false)
-      }, 300)
+      }, 150)
     }, 3000)
     return () => clearInterval(timer)
   }, [])
@@ -665,7 +665,7 @@ export default function LandingPage() {
             <p style={{ color: '#64748b', fontSize: 15 }}>24 breathtaking destinations across the subcontinent</p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 16 }}>
               {[0, 1, 2].map(i => (
-                <button key={i} onClick={() => { setDestFading(true); setTimeout(() => { setDestSetIndex(i); setDestFading(false) }, 300) }}
+                <button key={i} onClick={() => { setDestFading(true); setTimeout(() => { setDestSetIndex(i); setDestFading(false) }, 150) }}
                   style={{ width: destSetIndex === i ? 28 : 10, height: 10, borderRadius: 5, border: 'none', background: destSetIndex === i ? '#f97316' : '#e2e8f0', cursor: 'pointer', transition: 'all 0.3s ease' }} />
               ))}
             </div>
@@ -676,12 +676,12 @@ export default function LandingPage() {
             gridTemplateRows: 'repeat(2, 1fr)',
             gap: 16,
             opacity: destFading ? 0 : 1,
-            transition: 'opacity 0.3s ease',
+            transition: 'opacity 0.15s ease',
           }}>
             {destinationSets[destSetIndex].map((dest, i) => (
               <div key={`${destSetIndex}-${i}`} className="dest-gallery-card" style={{
                 opacity: visibleSections.has('dest-grid') ? 1 : 0,
-                transition: `opacity 0.3s ease ${i * 0.05}s`,
+                transition: 'none',
               }}>
                 <img src={dest.img} alt={dest.name} loading="lazy" decoding="async" />
                 <div className="dest-info">
