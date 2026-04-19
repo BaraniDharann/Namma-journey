@@ -93,6 +93,10 @@ public class TravelBooking {
     @Column
     private Double pricePerHourAtBooking;
 
+    @Version
+    @Column
+    private Long version;
+
     public enum BookingStatus {
         PENDING, CONFIRMED, STARTED, COMPLETED, CANCELLED
     }

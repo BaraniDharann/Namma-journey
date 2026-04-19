@@ -18,7 +18,7 @@ export default function useDriverLocationSender({ bookingId, driverId, active })
 
     const sendLocation = (lat, lon, heading) => {
       const now = Date.now()
-      if (now - lastSentRef.current < 3000) return
+      if (now - lastSentRef.current < 2000) return
       lastSentRef.current = now
 
       const payload = {

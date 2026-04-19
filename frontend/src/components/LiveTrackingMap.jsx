@@ -24,6 +24,7 @@ function createCarIcon(heading = 0) {
     className: 'driver-car-icon',
     html: `
       <div class="car-container" style="transform:rotate(${heading}deg)">
+        <div class="car-pulse-ring"></div>
         <div class="car-glow"></div>
         <div class="car-emoji">🚖</div>
       </div>
@@ -62,12 +63,12 @@ function FitBounds({ bounds }) {
   return null
 }
 
-function FollowDriver({ driverPos }) {
+function FollowDriver({ driverPos, active }) {
   const map = useMap()
   useEffect(() => {
-    if (!driverPos || !map) return
+    if (!active || !driverPos || !map) return
     map.panTo(driverPos, { animate: true, duration: 1 })
-  }, [driverPos, map])
+  }, [driverPos, map, active])
   return null
 }
 
@@ -77,7 +78,7 @@ function DriverMarker({ position, heading, map }) {
   useEffect(() => {
     if (!map || !position) return
     if (!markerRef.current) {
-      markerRef.current = L.marker(position, { icon: createCarIcon(heading) }).addTo(map)
+      markerRef.current = L.marker(position, { icon: createCarIcon(heading), zIndexOffset: 1000 }).addTo(map)
     } else {
       markerRef.current.setIcon(createCarIcon(heading))
       if (markerRef.current.slideTo) {
@@ -100,9 +101,81 @@ function DriverMarker({ position, heading, map }) {
   return null
 }
 
-function MapInstance({ setMap }) {
+// Rapido-style animated car that moves along the route from pickup to drop
+function AnimatedRouteCarMarker({ routeCoords, map, speedFactor = 1 }) {
+  const markerRef = useRef(null)
+  const animFrameRef = useRef(null)
+  const indexRef = useRef(0)
+  const progressRef = useRef(0)
+
+  useEffect(() => {
+    if (!map || !routeCoords || routeCoords.length < 2) return
+
+    const icon = createCarIcon(0)
+    markerRef.current = L.marker(routeCoords[0], { icon, zIndexOffset: 1000 }).addTo(map)
+
+    const stepsPerSegment = 60 // frames per segment for smoothness
+    let currentIndex = 0
+    let currentStep = 0
+
+    const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+
+    const animate = () => {
+      if (!markerRef.current || !routeCoords) return
+
+      const from = routeCoords[currentIndex]
+      const to = routeCoords[currentIndex + 1]
+      if (!from || !to) {
+        // Loop back to start
+        currentIndex = 0
+        currentStep = 0
+        animFrameRef.current = requestAnimationFrame(animate)
+        return
+      }
+
+      const t = currentStep / stepsPerSegment
+      const pos = lerp(from, to, t)
+      const heading = getBearing(from, to)
+
+      markerRef.current.setLatLng(pos)
+      markerRef.current.setIcon(createCarIcon(heading))
+
+      // Update progress for trail effect
+      indexRef.current = currentIndex
+      progressRef.current = t
+
+      currentStep += speedFactor
+      if (currentStep >= stepsPerSegment) {
+        currentStep = 0
+        currentIndex++
+        if (currentIndex >= routeCoords.length - 1) {
+          currentIndex = 0 // loop
+        }
+      }
+
+      animFrameRef.current = requestAnimationFrame(animate)
+    }
+
+    animFrameRef.current = requestAnimationFrame(animate)
+
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+      if (markerRef.current && map) map.removeLayer(markerRef.current)
+    }
+  }, [map, routeCoords, speedFactor])
+
+  return null
+}
+
+function MapInstance({ setMap, onUserDrag }) {
   const map = useMap()
-  useEffect(() => { setMap(map) }, [map, setMap])
+  useEffect(() => {
+    setMap(map)
+    if (onUserDrag) {
+      map.on('dragstart', onUserDrag)
+      return () => map.off('dragstart', onUserDrag)
+    }
+  }, [map, setMap, onUserDrag])
   return null
 }
 
@@ -111,9 +184,12 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
   const [driverPos, setDriverPos] = useState(null)
   const [driverHeading, setDriverHeading] = useState(0)
   const [eta, setEta] = useState(null)
+  const [distRemaining, setDistRemaining] = useState(null)
   const [map, setMap] = useState(null)
   const [waitingForLocation, setWaitingForLocation] = useState(true)
+  const [followDriver, setFollowDriver] = useState(true)
   const etaTimerRef = useRef(null)
+  const lastEtaCalcRef = useRef(0)
   const clientRef = useRef(null)
   const prevPosRef = useRef(null)
 
@@ -172,7 +248,7 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
       }).catch(() => {})
     }
     pollLocation()
-    const pollInterval = setInterval(pollLocation, 5000)
+    const pollInterval = setInterval(pollLocation, 3000)
 
     return () => {
       if (clientRef.current) clientRef.current.deactivate()
@@ -193,23 +269,22 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
     return () => navigator.geolocation.clearWatch(watchId)
   }, [isDriver, updateDriverPos])
 
-  // ETA calculation every 30 seconds
+  // ETA calculation - throttled to every 10s, triggered by position changes
   useEffect(() => {
     if (!driverPos || !toLat || !toLon) return
 
-    const calcEta = () => {
-      const url = `https://router.project-osrm.org/route/v1/driving/${driverPos[1]},${driverPos[0]};${toLon},${toLat}?overview=false`
-      fetch(url).then(r => r.json()).then(data => {
-        if (data.code === 'Ok' && data.routes?.length > 0) {
-          setEta(Math.ceil(data.routes[0].duration / 60))
-        }
-      }).catch(() => {})
-    }
+    const now = Date.now()
+    if (now - lastEtaCalcRef.current < 10000) return
+    lastEtaCalcRef.current = now
 
-    calcEta()
-    etaTimerRef.current = setInterval(calcEta, 30000)
-    return () => clearInterval(etaTimerRef.current)
-  }, [driverPos?.[0], driverPos?.[1], toLat, toLon])
+    const url = `https://router.project-osrm.org/route/v1/driving/${driverPos[1]},${driverPos[0]};${toLon},${toLat}?overview=false`
+    fetch(url).then(r => r.json()).then(data => {
+      if (data.code === 'Ok' && data.routes?.length > 0) {
+        setEta(Math.ceil(data.routes[0].duration / 60))
+        setDistRemaining((data.routes[0].distance / 1000).toFixed(1))
+      }
+    }).catch(() => {})
+  }, [driverPos, toLat, toLon])
 
   // Travelled route (green portion behind driver)
   const travelledRoute = useMemo(() => {
@@ -251,6 +326,7 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
           <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1 }}>LIVE TRACKING</span>
         </div>
         <div style={{ display: 'flex', gap: 16, fontSize: 13, alignItems: 'center' }}>
+          {distRemaining && <span style={{ color: '#94a3b8' }}>{distRemaining} km left</span>}
           <span>ETA: <strong style={{ color: '#60a5fa' }}>{formatEta(eta)}</strong></span>
         </div>
       </div>
@@ -308,22 +384,22 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           padding: '8px 12px', marginBottom: 8, borderRadius: 8,
-          background: '#fef3c7', border: '1px solid #fbbf24', fontSize: 12, color: '#92400e',
+          background: 'linear-gradient(135deg, #eff6ff, #f0fdf4)', border: '1px solid #bfdbfe', fontSize: 12, color: '#1e40af',
         }}>
           <span className="waiting-spinner" />
-          Waiting for driver location...
+          Connecting to driver's live location...
         </div>
       )}
 
       {/* Map */}
-      <div style={{ borderRadius: 14, overflow: 'hidden', border: '2px solid #e2e8f0', height: 400 }}>
+      <div style={{ borderRadius: 14, overflow: 'hidden', border: '2px solid #e2e8f0', height: 400, position: 'relative' }}>
         <MapContainer center={center} zoom={7} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true} zoomControl={false}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <FitBounds bounds={bounds} />
-          <MapInstance setMap={setMap} />
+          <MapInstance setMap={setMap} onUserDrag={() => setFollowDriver(false)} />
 
           <Marker position={[fromLat, fromLon]} icon={pickupIcon}>
             <Popup><strong>Pickup</strong><br />{fromPlace || 'Start'}</Popup>
@@ -333,32 +409,60 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
             <Popup><strong>Drop</strong><br />{toPlace || 'Destination'}</Popup>
           </Marker>
 
-          {/* Full route - grey dashed */}
+          {/* Route line - blue with glow effect */}
           {routeCoords && (
-            <Polyline positions={routeCoords} pathOptions={{ color: '#94a3b8', weight: 5, opacity: 0.4, dashArray: '8 8' }} />
+            <>
+              {/* Route glow (wider, semi-transparent) */}
+              <Polyline positions={routeCoords} pathOptions={{ color: '#3b82f6', weight: 10, opacity: 0.15 }} />
+              {/* Main route line */}
+              <Polyline positions={routeCoords} pathOptions={{ color: '#3b82f6', weight: 5, opacity: 0.6 }} />
+            </>
           )}
 
           {/* Travelled route - green solid */}
           {travelledRoute && travelledRoute.length > 1 && (
-            <Polyline positions={travelledRoute} pathOptions={{ color: '#22c55e', weight: 6, opacity: 0.9 }} />
+            <>
+              <Polyline positions={travelledRoute} pathOptions={{ color: '#22c55e', weight: 8, opacity: 0.15 }} />
+              <Polyline positions={travelledRoute} pathOptions={{ color: '#22c55e', weight: 5, opacity: 0.9 }} />
+            </>
           )}
 
-          {/* Remaining route - blue solid */}
+          {/* Remaining route - blue solid when live tracking */}
           {routeCoords && driverPos && (
             <Polyline
               positions={routeCoords.slice(findNearestRouteIndex(routeCoords, driverPos))}
-              pathOptions={{ color: '#3b82f6', weight: 5, opacity: 0.7 }}
+              pathOptions={{ color: '#3b82f6', weight: 5, opacity: 0.8 }}
             />
           )}
 
-          {/* Real driver car - only shows when we have actual driver GPS */}
+          {/* Animated car along route when waiting for real GPS */}
+          {routeCoords && !driverPos && map && (
+            <AnimatedRouteCarMarker routeCoords={routeCoords} map={map} speedFactor={1.5} />
+          )}
+
+          {/* Real driver car - shows when we have actual driver GPS */}
           {driverPos && map && (
             <>
               <DriverMarker position={driverPos} heading={driverHeading} map={map} />
-              <FollowDriver driverPos={driverPos} />
+              <FollowDriver driverPos={driverPos} active={followDriver} />
             </>
           )}
         </MapContainer>
+        {/* Recenter button */}
+        {driverPos && (
+          <button onClick={() => {
+            setFollowDriver(true)
+            if (map) map.panTo(driverPos, { animate: true, duration: 0.5 })
+          }} style={{
+            position: 'absolute', bottom: 12, right: 12, zIndex: 1000,
+            width: 38, height: 38, borderRadius: '50%', border: '2px solid #e2e8f0',
+            background: followDriver ? '#3b82f6' : '#fff', color: followDriver ? '#fff' : '#3b82f6',
+            cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'all 0.2s',
+          }} title="Re-center on driver">
+            📍
+          </button>
+        )}
       </div>
 
       <style>{`
@@ -380,7 +484,7 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
         }
         .waiting-spinner {
           width: 14px; height: 14px; border-radius: 50%;
-          border: 2px solid #fbbf24; border-top-color: #92400e;
+          border: 2px solid #bfdbfe; border-top-color: #3b82f6;
           animation: spin 1s linear infinite;
         }
         .driver-car-icon { background: none !important; border: none !important; }
@@ -388,6 +492,15 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
           position: relative; width: 48px; height: 48px;
           display: flex; align-items: center; justify-content: center;
           transition: transform 0.5s ease;
+        }
+        .car-pulse-ring {
+          position: absolute; width: 48px; height: 48px; border-radius: 50%;
+          border: 2px solid rgba(59,130,246,0.6);
+          animation: car-ring-pulse 2s ease-out infinite;
+        }
+        @keyframes car-ring-pulse {
+          0% { transform: scale(0.5); opacity: 1; }
+          100% { transform: scale(1.8); opacity: 0; }
         }
         .car-glow {
           position: absolute; width: 36px; height: 36px; border-radius: 50%;

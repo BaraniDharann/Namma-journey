@@ -3,15 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
     <title>Namma Journey - Temple & Travel Booking</title>
+
+    <!-- DNS prefetch + preconnect for third-party origins used on first paint -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://photon.komoot.io" />
+    <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
+    <link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
+    <link rel="dns-prefetch" href="https://b.tile.openstreetmap.org" />
+    <link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
+
+    <!-- Font CSS loaded with preload to avoid render blocking -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&display=swap" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="preload" as="image" href="/images/indian-hindu-temple-singapore.jpg" />
-    <link rel="preload" as="image" href="/images/indian-city-buildings-scene.jpg" />
+
+    <!-- Preload hero images so they start downloading before JS parses -->
+    <link rel="preload" as="image" href="/images/indian-hindu-temple-singapore.jpg" fetchpriority="high" />
+    <link rel="preload" as="image" href="/images/indian-city-buildings-scene.jpg" fetchpriority="high" />
+
+    <!-- Inline critical CSS — shows a spinner instantly, before the JS bundle parses -->
+    <style>
+      html, body, #root { height: 100%; margin: 0; padding: 0; background: #ffffff; }
+      body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+      .app-boot { display:flex; align-items:center; justify-content:center; height:100vh; background:#fff; }
+      .app-boot .spinner { width:40px; height:40px; border:3px solid #e2e8f0; border-top-color:#0f172a; border-radius:50%; animation: spin 0.9s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="app-boot"><div class="spinner"></div></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

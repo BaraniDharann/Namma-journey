@@ -158,7 +158,8 @@ export default function DriverBookings() {
     setActionLoading(bookingId + action)
     try {
       await driverBookingAction(user.userId, bookingId, action)
-      load()
+      const newStatus = action === 'ACCEPT' ? 'CONFIRMED' : 'CANCELLED'
+      setBookings(prev => prev.map(b => b.bookingId === bookingId ? { ...b, status: newStatus } : b))
     } catch { /* ignore */ }
     setActionLoading(null)
   }

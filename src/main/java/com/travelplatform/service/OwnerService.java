@@ -13,6 +13,7 @@ import com.travelplatform.repository.TripDriverPhotoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
@@ -90,6 +91,7 @@ public class OwnerService {
         return response;
     }
     
+    @Cacheable(value = "dailyRevenue", key = "#date.toString()")
     public Map<String, Object> getDailyRevenue(LocalDate date) {
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.plusDays(1).atStartOfDay();
@@ -98,6 +100,7 @@ public class OwnerService {
         return buildRevenueResponse(bookings, "Daily", date.toString());
     }
 
+    @Cacheable(value = "monthlyRevenue", key = "#year + '-' + #month")
     public Map<String, Object> getMonthlyRevenue(int year, int month) {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDateTime start = startDate.atStartOfDay();
@@ -107,6 +110,7 @@ public class OwnerService {
         return buildRevenueResponse(bookings, "Monthly", year + "-" + String.format("%02d", month));
     }
 
+    @Cacheable(value = "yearlyRevenue", key = "#year")
     public Map<String, Object> getYearlyRevenue(int year) {
         LocalDateTime start = LocalDate.of(year, 1, 1).atStartOfDay();
         LocalDateTime end = LocalDate.of(year + 1, 1, 1).atStartOfDay();
@@ -152,12 +156,14 @@ public class OwnerService {
         return response;
     }
     
+    @Cacheable(value = "allDrivers")
     public List<DriverDetailsResponse> getAllDrivers() {
         return driverRepository.findAll().stream()
                 .map(this::mapToDriverDetails)
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "driverById", key = "#driverId")
     public DriverDetailsResponse getDriverById(Long driverId) {
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
@@ -184,17 +190,39 @@ public class OwnerService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "dailyRevenue",   allEntries = true),
+            @CacheEvict(value = "monthlyRevenue", allEntries = true),
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true)
+    })
     public TravelBookingResponse assignDriver(UUID bookingId, Long driverId) {
         TravelBooking booking = travelBookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
-        
+
+        if (booking.getStatus() == TravelBooking.BookingStatus.COMPLETED
+                || booking.getStatus() == TravelBooking.BookingStatus.CANCELLED) {
+            throw new RuntimeException("Cannot assign driver to a " + booking.getStatus() + " booking");
+        }
+
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
-        
+
+        if (driver.getStatus() != Driver.Status.ACTIVE) {
+            throw new RuntimeException("Driver is not active and cannot be assigned");
+        }
+
+        long overlapping = driverRepository.countOverlappingActiveBookings(
+                driverId, booking.getFromDate(), booking.getToDate(), bookingId);
+        if (overlapping > 0) {
+            throw new RuntimeException(
+                    "Driver already has an active trip overlapping these dates ("
+                            + booking.getFromDate() + " to " + booking.getToDate() + ")");
+        }
+
         booking.setDriverId(driverId);
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         TravelBooking updatedBooking = travelBookingRepository.save(booking);
-        
+
         return mapToResponse(updatedBooking, driver);
     }
     

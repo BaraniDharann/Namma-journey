@@ -26,6 +26,9 @@ frontend/node_modules/
 frontend/dist/
 frontend/build/
 
+# Vite temp artifacts
+frontend/vite.config.js.timestamp-*
+
 # Build artifacts
 build/
 target/

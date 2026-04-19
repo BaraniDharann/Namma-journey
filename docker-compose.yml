@@ -25,10 +25,16 @@ services:
       context: .
       dockerfile: Dockerfile
     env_file: .env
+    environment:
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      APP_CACHE_TYPE: ${APP_CACHE_TYPE:-redis}
     ports:
       - "8080:8080"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - travel-network
@@ -46,13 +52,22 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     networks:
       - travel-network
 
 volumes:
   postgres-data:
+  redis-data:
 
 networks:
   travel-network:

@@ -971,20 +971,45 @@ export default function LandingPage() {
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg,#f97316,#ea580c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🚗</div>
                 <span style={{ fontFamily: 'Poppins', fontWeight: 800, fontSize: 16 }}>Namma Journey</span>
               </div>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7 }}>India's trusted platform for temple visits and devotional travel.</p>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', lineHeight: 1.7 }}>India's trusted platform for booking rides to any destination across the country.</p>
             </div>
             {[
-              { title: 'Quick Links', links: ['Home', 'Destinations', 'Packages', 'Features', 'Reviews', 'About'] },
-              { title: 'For Users', links: ['Book a Ride', 'My Bookings', 'Payments', 'Reviews'] },
-              { title: 'For Drivers', links: ['Join as Driver', 'Driver Login', 'Earnings', 'Support'] },
+              { title: 'Quick Links', links: [
+                { label: 'Home', href: '#home' },
+                { label: 'Destinations', href: '#destinations' },
+                { label: 'Packages', href: '#packages' },
+                { label: 'Features', href: '#features' },
+                { label: 'Reviews', href: '#reviews' },
+                { label: 'About', href: '#about' },
+              ]},
+              { title: 'For Users', links: [
+                { label: 'Book a Ride', href: '/user/bookings/new' },
+                { label: 'My Bookings', href: '/user/bookings' },
+                { label: 'Payments', href: '/user/payments' },
+                { label: 'Reviews', href: '#reviews' },
+              ]},
+              { title: 'For Drivers', links: [
+                { label: 'Join as Driver', href: '/driver/login' },
+                { label: 'Driver Login', href: '/driver/login' },
+                { label: 'Earnings', href: '/driver/dashboard' },
+                { label: 'Support', href: '#about' },
+              ]},
             ].map(col => (
               <div key={col.title}>
                 <h4 style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: '#fff' }}>{col.title}</h4>
                 <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {col.links.map(link => (
-                    <li key={link}><a href="#" style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none', transition: 'color 0.2s' }}
+                    <li key={link.label}><a href={link.href} onClick={e => {
+                      if (link.href.startsWith('#')) {
+                        e.preventDefault()
+                        document.getElementById(link.href.slice(1))?.scrollIntoView({ behavior: 'smooth' })
+                      } else {
+                        e.preventDefault()
+                        navigate(link.href)
+                      }
+                    }} style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', textDecoration: 'none', transition: 'color 0.2s', cursor: 'pointer' }}
                       onMouseEnter={e => e.target.style.color = '#f97316'}
-                      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.5)'}>{link}</a></li>
+                      onMouseLeave={e => e.target.style.color = 'rgba(255,255,255,0.5)'}>{link.label}</a></li>
                   ))}
                 </ul>
               </div>

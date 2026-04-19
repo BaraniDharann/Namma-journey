@@ -1,7 +1,9 @@
 package com.travelplatform.exception;
 
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -44,6 +46,13 @@ public class GlobalExceptionHandler {
         Map<String, String> error = new HashMap<>();
         error.put("error", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler({ObjectOptimisticLockingFailureException.class, OptimisticLockingFailureException.class})
+    public ResponseEntity<Map<String, String>> handleOptimisticLock(Exception ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "This booking was just updated by another request. Please refresh and try again.");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
     
     @ExceptionHandler(Exception.class)
