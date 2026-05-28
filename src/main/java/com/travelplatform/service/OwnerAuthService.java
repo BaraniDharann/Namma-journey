@@ -25,6 +25,9 @@ public class OwnerAuthService {
     
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private OtpService otpService;
     
     public AuthResponse login(OwnerLoginRequest request) {
         Owner owner = ownerRepository.findByEmail(request.getEmail())
@@ -70,10 +73,16 @@ public class OwnerAuthService {
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new IllegalArgumentException("Passwords do not match");
         }
-        
+
+        // Without the OTP gate, anyone who knew the owner's email could take over the
+        // account. Verify the OTP against the email before mutating the password.
+        if (!otpService.verifyOtp(request.getEmail(), request.getOtp())) {
+            throw new IllegalArgumentException("Invalid or expired OTP");
+        }
+
         Owner owner = ownerRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("Owner not found with email: " + request.getEmail()));
-        
+
         owner.setPassword(passwordEncoder.encode(request.getNewPassword()));
         ownerRepository.save(owner);
         

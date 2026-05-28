@@ -2,12 +2,9 @@ package com.travelplatform.service;
 
 import com.travelplatform.entity.Otp;
 import com.travelplatform.repository.OtpRepository;
-import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,13 +20,7 @@ public class OtpService {
     private OtpRepository otpRepository;
 
     @Autowired
-    private JavaMailSender mailSender;
-
-    @Value("${spring.mail.username}")
-    private String fromEmail;
-
-    @Value("${mail.from.name:Namma Journey}")
-    private String fromName;
+    private EmailService emailService;
 
     @Value("${otp.expiry.minutes:5}")
     private int otpExpiryMinutes;
@@ -51,8 +42,8 @@ public class OtpService {
         otpEntity.setExpiryTime(LocalDateTime.now().plusMinutes(otpExpiryMinutes));
         Otp savedOtp = otpRepository.save(otpEntity);
 
-        log.info("✅ OTP saved to DB - ID: {}, Email: {}, OTP: {}, Expiry: {}",
-            savedOtp.getId(), savedOtp.getEmail(), savedOtp.getOtp(), savedOtp.getExpiryTime());
+        log.info("OTP saved to DB - ID: {}, Email: {}, Expiry: {}",
+            savedOtp.getId(), savedOtp.getEmail(), savedOtp.getExpiryTime());
 
         if (testMode) {
             log.warn("\n=================================================\n🔐 TEST MODE - OTP FOR: {}\n📧 OTP CODE: {}\n⏰ Valid for {} minutes\n=================================================\n",
@@ -60,7 +51,8 @@ public class OtpService {
             return true;
         }
 
-        return sendEmailViaGmail(trimmedEmail, otp);
+        emailService.sendOtpEmail(trimmedEmail, otp, otpExpiryMinutes);
+        return true;
     }
 
     @Transactional
@@ -82,43 +74,17 @@ public class OtpService {
         if (otpEntity.getOtp().equals(trimmedOtp)) {
             otpEntity.setVerified(true);
             otpRepository.save(otpEntity);
-            log.info("✅ OTP verified successfully for email: {}", trimmedEmail);
+            log.info("OTP verified successfully for email: {}", trimmedEmail);
             return true;
         }
 
-        log.warn("❌ Invalid OTP for email: {}. Expected: {}, Got: {}", trimmedEmail, otpEntity.getOtp(), trimmedOtp);
+        log.warn("Invalid OTP for email: {}. Expected: {}, Got: {}", trimmedEmail, otpEntity.getOtp(), trimmedOtp);
         return false;
     }
 
     private String generateOtp() {
         int otp = 100000 + new Random().nextInt(900000);
         return String.valueOf(otp);
-    }
-
-    private boolean sendEmailViaGmail(String toEmail, String otp) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(toEmail);
-            helper.setSubject("Your OTP for Namma Journey");
-            helper.setText(String.format(
-                "<html><body>" +
-                "<h2>Your OTP Code</h2>" +
-                "<p>Your OTP for Namma Journey is: <strong style='font-size:24px;color:#007bff;'>%s</strong></p>" +
-                "<p>This OTP is valid for %d minutes.</p>" +
-                "<p>If you didn't request this OTP, please ignore this email.</p>" +
-                "<br><p>Best regards,<br>Namma Journey Team</p>" +
-                "</body></html>",
-                otp, otpExpiryMinutes
-            ), true);
-            mailSender.send(message);
-            log.info("✅ OTP email sent successfully to: {}", toEmail);
-            return true;
-        } catch (Exception e) {
-            log.error("❌ Failed to send OTP email to {}: {}", toEmail, e.getMessage());
-            return false;
-        }
     }
 
     @Transactional

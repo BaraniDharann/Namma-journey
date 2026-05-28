@@ -139,9 +139,10 @@ public class OwnerService {
         response.put("period", period);
         response.put("periodValue", periodValue);
         response.put("totalTrips", bookings.size());
-        response.put("totalDistance", bookings.stream().mapToDouble(TravelBooking::getDistanceKm).sum());
-        response.put("totalRevenue", bookings.stream().mapToDouble(TravelBooking::getTotalAmount).sum());
-        response.put("totalTravelDays", bookings.stream().mapToInt(TravelBooking::getTravelDays).sum());
+        // Null-safe aggregates: legacy bookings may have null distance/amount/days.
+        response.put("totalDistance", bookings.stream().mapToDouble(b -> b.getDistanceKm() != null ? b.getDistanceKm() : 0.0).sum());
+        response.put("totalRevenue", bookings.stream().mapToDouble(b -> b.getTotalAmount() != null ? b.getTotalAmount() : 0.0).sum());
+        response.put("totalTravelDays", bookings.stream().mapToInt(b -> b.getTravelDays() != null ? b.getTravelDays() : 0).sum());
         response.put("trips", bookings.stream().map(b -> {
             Map<String, Object> trip = new HashMap<>();
             trip.put("id", b.getId());

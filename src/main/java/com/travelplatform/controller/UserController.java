@@ -10,7 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,36 +20,45 @@ import java.util.UUID;
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
 public class UserController {
-    
+
     private final UserService userService;
     private final ReviewService reviewService;
     private final PaymentService paymentService;
     private final TripSummaryService tripSummaryService;
     private final RoutingService routingService;
-    
+
+    // SpEL guard reused on every per-user endpoint: the authenticated principal (JWT subject)
+    // must match the {userId} path variable, otherwise a logged-in user could read or mutate
+    // any other user's data simply by changing the URL.
+    private static final String SAME_USER = "hasRole('USER') and #userId.toString() == authentication.principal";
+
     @PostMapping("/{userId}/bookings")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<TravelBookingResponse> createBooking(
             @PathVariable UUID userId,
             @Valid @RequestBody TravelBookingRequest request) {
         TravelBookingResponse response = userService.createBooking(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
-    
+
     @GetMapping("/{userId}/bookings")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<List<TravelBookingResponse>> getAllBookings(@PathVariable UUID userId) {
         List<TravelBookingResponse> bookings = userService.getAllBookings(userId);
         return ResponseEntity.ok(bookings);
     }
-    
+
     @GetMapping("/{userId}/bookings/{bookingId}")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<TravelBookingResponse> getBookingById(
             @PathVariable UUID userId,
             @PathVariable UUID bookingId) {
         TravelBookingResponse booking = userService.getBookingById(bookingId, userId);
         return ResponseEntity.ok(booking);
     }
-    
+
     @PutMapping("/{userId}/bookings/{bookingId}")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<TravelBookingResponse> updateBooking(
             @PathVariable UUID userId,
             @PathVariable UUID bookingId,
@@ -57,16 +66,18 @@ public class UserController {
         TravelBookingResponse response = userService.updateBooking(userId, bookingId, request);
         return ResponseEntity.ok(response);
     }
-    
+
     @DeleteMapping("/{userId}/bookings/{bookingId}")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<Void> deleteBooking(
             @PathVariable UUID userId,
             @PathVariable UUID bookingId) {
         userService.deleteBooking(userId, bookingId);
         return ResponseEntity.noContent().build();
     }
-    
+
     @PostMapping("/{userId}/bookings/{bookingId}/reviews")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<ReviewResponse> submitReview(
             @PathVariable UUID userId,
             @PathVariable UUID bookingId,
@@ -74,8 +85,9 @@ public class UserController {
         ReviewResponse response = reviewService.submitReview(userId, bookingId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
-    
+
     @PostMapping("/{userId}/bookings/{bookingId}/payment")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<PaymentResponse> initiatePayment(
             @PathVariable UUID userId,
             @PathVariable UUID bookingId,
@@ -83,8 +95,9 @@ public class UserController {
         PaymentResponse response = paymentService.initiatePayment(userId, bookingId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
-    
+
     @GetMapping("/{userId}/payments")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<List<PaymentResponse>> getUserPayments(@PathVariable UUID userId) {
         List<PaymentResponse> payments = paymentService.getUserPayments(userId);
         return ResponseEntity.ok(payments);
@@ -94,14 +107,16 @@ public class UserController {
      * Returns full trip summary after trip is completed — includes booking, driver, payment info, and review status.
      */
     @GetMapping("/{userId}/bookings/{bookingId}/summary")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<TripSummaryResponse> getTripSummary(
             @PathVariable UUID userId,
             @PathVariable UUID bookingId) {
         TripSummaryResponse summary = tripSummaryService.getTripSummary(userId, bookingId);
         return ResponseEntity.ok(summary);
     }
-    
+
     @PostMapping("/{userId}/bookings/{bookingId}/confirm")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<TravelBookingResponse> confirmBooking(
             @PathVariable UUID userId,
             @PathVariable UUID bookingId) {
@@ -110,6 +125,7 @@ public class UserController {
     }
 
     @PutMapping("/{userId}/profile")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<java.util.Map<String, Object>> updateProfile(
             @PathVariable UUID userId,
             @RequestBody com.travelplatform.dto.UserUpdateRequest request) {

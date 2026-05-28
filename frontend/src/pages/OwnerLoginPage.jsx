@@ -1,14 +1,15 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { ownerLogin, ownerForgotPassword } from '../utils/api'
+import { ownerLogin, ownerForgotPassword, sendOtp } from '../utils/api'
 
 export default function OwnerLoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showForgot, setShowForgot] = useState(false)
-  const [forgotForm, setForgotForm] = useState({ email: '', newPassword: '', confirmPassword: '' })
+  const [forgotStep, setForgotStep] = useState(1) // 1 = send OTP, 2 = enter OTP + new password
+  const [forgotForm, setForgotForm] = useState({ email: '', otp: '', newPassword: '', confirmPassword: '' })
   const [forgotLoading, setForgotLoading] = useState(false)
   const [forgotMsg, setForgotMsg] = useState('')
   const [forgotError, setForgotError] = useState('')
@@ -30,21 +31,38 @@ export default function OwnerLoginPage() {
     }
   }
 
+  const handleSendForgotOtp = async (e) => {
+    e.preventDefault()
+    setForgotLoading(true); setForgotError(''); setForgotMsg('')
+    try {
+      await sendOtp(forgotForm.email)
+      setForgotStep(2)
+      setForgotMsg('OTP sent to your email. Enter it below to reset your password.')
+    } catch (err) {
+      setForgotError(err.response?.data?.error || 'Failed to send OTP. Check your email.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
   const handleForgot = async (e) => {
     e.preventDefault()
+    if (!/^\d{4,6}$/.test(forgotForm.otp)) { setForgotError('Enter the OTP you received'); return }
+    if (forgotForm.newPassword.length < 6) { setForgotError('Password must be at least 6 characters'); return }
     if (forgotForm.newPassword !== forgotForm.confirmPassword) {
-      setForgotError('Passwords do not match')
-      return
+      setForgotError('Passwords do not match'); return
     }
-    setForgotLoading(true)
-    setForgotError('')
-    setForgotMsg('')
+    setForgotLoading(true); setForgotError(''); setForgotMsg('')
     try {
       const res = await ownerForgotPassword(forgotForm)
       setForgotMsg(res.data?.message || 'Password reset successful')
-      setTimeout(() => { setShowForgot(false); setForgotForm({ email: '', newPassword: '', confirmPassword: '' }); setForgotMsg('') }, 2000)
+      setTimeout(() => {
+        setShowForgot(false); setForgotStep(1)
+        setForgotForm({ email: '', otp: '', newPassword: '', confirmPassword: '' })
+        setForgotMsg('')
+      }, 2000)
     } catch (err) {
-      setForgotError(err.response?.data?.error || 'Reset failed. Check your email.')
+      setForgotError(err.response?.data?.error || 'Reset failed. Check the OTP and try again.')
     } finally {
       setForgotLoading(false)
     }
@@ -98,34 +116,53 @@ export default function OwnerLoginPage() {
             {forgotError && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13 }}>⚠ {forgotError}</div>}
             {forgotMsg && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: '#f0fdf4', color: '#15803d', fontSize: 13, fontWeight: 600 }}>✓ {forgotMsg}</div>}
 
-            <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Email Address</label>
-                <input type="email" className="input-field" placeholder="admin@travelplatform.com" value={forgotForm.email}
-                  onChange={e => setForgotForm({ ...forgotForm, email: e.target.value })} required
-                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>New Password</label>
-                <input type="password" className="input-field" placeholder="Enter new password" value={forgotForm.newPassword}
-                  onChange={e => setForgotForm({ ...forgotForm, newPassword: e.target.value })} required
-                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Confirm Password</label>
-                <input type="password" className="input-field" placeholder="Repeat password" value={forgotForm.confirmPassword}
-                  onChange={e => setForgotForm({ ...forgotForm, confirmPassword: e.target.value })} required
-                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
-              </div>
-              <button type="submit" disabled={forgotLoading} className="btn-primary"
-                style={{ width: '100%', padding: '13px', borderRadius: 10, background: forgotLoading ? '#c4b5fd' : 'linear-gradient(135deg, #8b5cf6, #ec4899)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                {forgotLoading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Resetting...</> : 'Reset Password'}
-              </button>
-              <button type="button" onClick={() => { setShowForgot(false); setForgotError(''); setForgotMsg('') }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#64748b', width: '100%', textAlign: 'center' }}>
-                ← Back to Login
-              </button>
-            </form>
+            {forgotStep === 1 ? (
+              <form onSubmit={handleSendForgotOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Email Address</label>
+                  <input type="email" className="input-field" placeholder="admin@travelplatform.com" value={forgotForm.email}
+                    onChange={e => setForgotForm({ ...forgotForm, email: e.target.value })} required
+                    style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <button type="submit" disabled={forgotLoading} className="btn-primary"
+                  style={{ width: '100%', padding: '13px', borderRadius: 10, background: forgotLoading ? '#c4b5fd' : 'linear-gradient(135deg, #8b5cf6, #ec4899)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  {forgotLoading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Sending OTP...</> : 'Send OTP'}
+                </button>
+                <button type="button" onClick={() => { setShowForgot(false); setForgotError(''); setForgotMsg('') }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#64748b', width: '100%', textAlign: 'center' }}>
+                  ← Back to Login
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>OTP</label>
+                  <input type="text" className="input-field" placeholder="Enter OTP from email" maxLength={6} value={forgotForm.otp}
+                    onChange={e => setForgotForm({ ...forgotForm, otp: e.target.value.replace(/\D/g, '') })} required
+                    style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 18, width: '100%', boxSizing: 'border-box', letterSpacing: '0.3em', textAlign: 'center', fontWeight: 700 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>New Password</label>
+                  <input type="password" className="input-field" placeholder="Min 6 characters" value={forgotForm.newPassword}
+                    onChange={e => setForgotForm({ ...forgotForm, newPassword: e.target.value })} required
+                    style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Confirm Password</label>
+                  <input type="password" className="input-field" placeholder="Repeat password" value={forgotForm.confirmPassword}
+                    onChange={e => setForgotForm({ ...forgotForm, confirmPassword: e.target.value })} required
+                    style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <button type="submit" disabled={forgotLoading} className="btn-primary"
+                  style={{ width: '100%', padding: '13px', borderRadius: 10, background: forgotLoading ? '#c4b5fd' : 'linear-gradient(135deg, #8b5cf6, #ec4899)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  {forgotLoading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Resetting...</> : 'Reset Password'}
+                </button>
+                <button type="button" onClick={() => { setForgotStep(1); setForgotError(''); setForgotMsg('') }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#64748b', width: '100%', textAlign: 'center' }}>
+                  ← Use a different email
+                </button>
+              </form>
+            )}
           </>
         )}
 

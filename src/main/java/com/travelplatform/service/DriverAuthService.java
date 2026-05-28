@@ -125,15 +125,40 @@ public class DriverAuthService {
         return response;
     }
     
+    /**
+     * Public step 1 of driver password reset. Looks up the driver by mobile and dispatches
+     * an OTP to the driver's registered email. Returns a generic message regardless of
+     * whether the mobile matched, so an attacker can't probe for existing accounts.
+     */
+    public Map<String, String> sendPasswordResetOtp(String mobile) {
+        driverRepository.findByMobile(mobile).ifPresent(driver -> {
+            if (driver.getEmail() != null && !driver.getEmail().isBlank()) {
+                otpService.sendOtp(driver.getEmail());
+            }
+        });
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "If this mobile is registered, an OTP has been sent to the associated email.");
+        return response;
+    }
+
     @Transactional
     public Map<String, String> resetPassword(DriverResetPasswordRequest request) {
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new IllegalArgumentException("Passwords do not match");
         }
-        
+
         Driver driver = driverRepository.findByMobile(request.getMobile())
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found with mobile: " + request.getMobile()));
-        
+
+        // Without the OTP gate, anyone with a driver's mobile number could take over the
+        // account. OTP is sent to (and verified against) the driver's registered email.
+        if (driver.getEmail() == null || driver.getEmail().isBlank()) {
+            throw new IllegalArgumentException("Driver has no email on file; please contact the owner");
+        }
+        if (!otpService.verifyOtp(driver.getEmail(), request.getOtp())) {
+            throw new IllegalArgumentException("Invalid or expired OTP");
+        }
+
         driver.setPassword(passwordEncoder.encode(request.getNewPassword()));
         driver.setFirstLogin(false);
         driverRepository.save(driver);

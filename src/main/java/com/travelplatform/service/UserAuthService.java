@@ -36,7 +36,14 @@ public class UserAuthService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email already registered");
         }
-        
+        // Mobile is also a unique column in `users`; checking up-front gives a friendly
+        // message instead of bubbling a DataIntegrityViolationException (which the
+        // GlobalExceptionHandler turns into a generic 409 the user can't act on).
+        if (request.getMobile() != null && !request.getMobile().isBlank()
+                && userRepository.existsByPhone(request.getMobile())) {
+            throw new IllegalArgumentException("Mobile number already registered");
+        }
+
         if (!otpService.verifyOtp(request.getEmail(), request.getOtp())) {
             throw new IllegalArgumentException("Invalid or expired OTP");
         }

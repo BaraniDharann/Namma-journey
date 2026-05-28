@@ -12,6 +12,14 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('nj_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
+  // The axios instance defaults to Content-Type: application/json. When the caller passes
+  // FormData (multipart upload), that default suppresses axios's auto-boundary detection,
+  // so Spring sees no parts. Drop the header for FormData and let axios + the browser pick
+  // the right Content-Type (with boundary) themselves.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    if (config.headers && 'Content-Type' in config.headers) delete config.headers['Content-Type']
+    if (config.headers && 'content-type' in config.headers) delete config.headers['content-type']
+  }
   return config
 })
 
@@ -23,37 +31,57 @@ api.interceptors.response.use(
       if (!isAuthRequest) {
         localStorage.removeItem('nj_token')
         localStorage.removeItem('nj_user')
-        window.location.href = '/login'
+        // Notify AuthContext so in-memory user/token are cleared before the navigation;
+        // otherwise the dashboard renders one stale frame before /login mounts.
+        try { window.dispatchEvent(new Event('nj_auth_expired')) } catch { /* SSR safety */ }
+        // Don't bounce the user mid-flow if they're already on a public page.
+        if (!/^\/(login|signup|driver\/login|owner\/login|packages\/|$)/.test(window.location.pathname)) {
+          window.location.href = '/login'
+        }
       }
     }
     // Show user-friendly error toast (skip 401 redirects and silent requests)
     const isAuthRedirect = err.response?.status === 401 && !err.config?.url?.includes('/auth/')
     const isSilent = err.config?._silent
     if (!isAuthRedirect && !isSilent) {
+      const status = err.response?.status
       const serverMsg = err.response?.data?.error || err.response?.data?.message || ''
       const friendlyMap = {
         'Review already submitted': 'You have already submitted a review for this booking',
         'Booking not found': 'This booking could not be found',
         'Unauthorized': 'You are not authorized to perform this action',
         'Driver not found': 'Driver information is currently unavailable',
+        'Pricing not set': 'Pricing has not been configured yet',
       }
       const friendly = Object.entries(friendlyMap).find(([k]) => serverMsg.includes(k))?.[1]
       const message = friendly
-        || (err.response?.status === 403 ? 'Access denied. Please log in with the correct account'
-          : err.response?.status === 404 ? 'The requested information was not found'
-          : err.response?.status === 409 ? 'This action has already been completed'
-          : err.response?.status >= 500 ? 'Our servers are experiencing issues. Please try again shortly'
+        || (status === 400 ? (serverMsg || 'The information you entered is not valid. Please check and try again')
+          : status === 403 ? 'Access denied. Please log in with the correct account'
+          : status === 404 ? 'The requested information was not found'
+          : status === 409 ? 'This action has already been completed'
+          : status === 422 ? (serverMsg || 'Please check the details and try again')
+          : status === 429 ? 'Too many requests. Please wait a moment and try again'
+          : status >= 500 ? 'Our servers are temporarily unavailable. Please try again in a moment'
           : err.code === 'ECONNABORTED' ? 'The request took too long. Please check your connection and try again'
           : !err.response ? 'Unable to reach the server. Please check your internet connection'
           : serverMsg || 'Something went wrong. Please try again')
-      toast.error(message, { duration: 4000, id: `api-error-${err.config?.url}` })
+      // Coalesce repeated errors so a burst of failed calls (e.g. 12 monthly revenue requests)
+      // shows a single toast instead of stacking. Use status-class as the toast id for 4xx/5xx.
+      const toastId = status >= 500 ? 'api-error-server'
+        : status === 401 ? 'api-error-auth'
+        : status === 403 ? 'api-error-forbidden'
+        : status === 404 ? 'api-error-notfound'
+        : !err.response ? 'api-error-network'
+        : `api-error-${err.config?.url}`
+      toast.error(message, { duration: 4000, id: toastId })
     }
     return Promise.reject(err)
   }
 )
 
-// --- In-memory GET cache with TTL ---
+// --- In-memory GET cache with TTL + in-flight dedup ---
 const cache = new Map()
+const inflight = new Map()
 const CACHE_TTL = 30000 // 30 seconds
 
 function cachedGet(url, ttl = CACHE_TTL, silent = false) {
@@ -62,10 +90,20 @@ function cachedGet(url, ttl = CACHE_TTL, silent = false) {
   if (cached && now - cached.time < ttl) {
     return Promise.resolve(cached.data)
   }
-  return api.get(url, silent ? { _silent: true } : {}).then((res) => {
-    cache.set(url, { data: res, time: now })
-    return res
-  })
+  const pending = inflight.get(url)
+  if (pending) return pending
+  const req = api.get(url, silent ? { _silent: true } : {})
+    .then((res) => {
+      cache.set(url, { data: res, time: now })
+      inflight.delete(url)
+      return res
+    })
+    .catch((err) => {
+      inflight.delete(url)
+      throw err
+    })
+  inflight.set(url, req)
+  return req
 }
 
 export function invalidateCache(urlPattern) {
@@ -96,6 +134,7 @@ export const driverLogin = (data) => api.post('/auth/driver/login', data)
 export const ownerLogin = (data) => api.post('/auth/owner/login', data)
 export const driverVerifyOtp = (data) => api.post('/auth/driver/verify-otp', data)
 export const driverForgotPassword = (data) => api.post('/auth/driver/forgot-password', data)
+export const driverRequestResetOtp = (mobile) => api.post('/auth/driver/request-reset-otp', { mobile })
 export const ownerForgotPassword = (data) => api.post('/auth/owner/forgot-password', data)
 export const userForgotPassword = (data) => api.post('/user/forgot-password', data)
 
@@ -120,14 +159,16 @@ export const getTripSummary = (userId, bookingId) => api.get(`/user/${userId}/bo
 
 // Driver APIs
 export const getDriverBookings = (driverId) => cachedGet(`/driver/${driverId}/bookings`)
-export const driverBookingAction = (driverId, bookingId, action) => api.post(`/driver/${driverId}/bookings/${bookingId}/action`, { action })
-export const endTrip = (driverId, bookingId) => api.post(`/driver/${driverId}/bookings/${bookingId}/end-trip`)
-export const markCashReceived = (driverId, bookingId, data) => api.post(`/driver/${driverId}/bookings/${bookingId}/cash-payment`, data)
-export const startTrip = (driverId, bookingId) => api.post(`/driver/${driverId}/bookings/${bookingId}/start-trip`)
+export const driverBookingAction = (driverId, bookingId, action) => api.post(`/driver/${driverId}/bookings/${bookingId}/action`, { action }).then(res => { invalidateCache('bookings'); return res })
+export const endTrip = (driverId, bookingId) => api.post(`/driver/${driverId}/bookings/${bookingId}/end-trip`).then(res => { invalidateCache('bookings'); invalidateCache('payments'); return res })
+export const markCashReceived = (driverId, bookingId, data) => api.post(`/driver/${driverId}/bookings/${bookingId}/cash-payment`, data).then(res => { invalidateCache('bookings'); invalidateCache('payments'); return res })
+export const startTrip = (driverId, bookingId) => api.post(`/driver/${driverId}/bookings/${bookingId}/start-trip`).then(res => { invalidateCache('bookings'); return res })
 export const uploadEndTripPhoto = (driverId, bookingId, photoFile) => {
   const formData = new FormData()
   formData.append('photo', photoFile)
-  return api.post(`/driver/${driverId}/bookings/${bookingId}/end-trip-photo`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+  // Don't set Content-Type — axios fills in the multipart boundary automatically when given FormData.
+  return api.post(`/driver/${driverId}/bookings/${bookingId}/end-trip-photo`, formData, { timeout: 60000 })
+    .then(res => { invalidateCache('bookings'); return res })
 }
 export const getDriverLocation = (bookingId) => api.get(`/driver/location/${bookingId}`)
 export const updateDriverLocation = (data) => api.post(`/driver/location/update`, data)
@@ -136,21 +177,24 @@ export const updateDriverLocation = (data) => api.post(`/driver/location/update`
 export const getOwnerBookings = () => cachedGet('/owner/bookings')
 export const getAllReviews = () => cachedGet('/owner/reviews')
 export const getPendingPayments = () => cachedGet('/owner/payments/pending')
-export const verifyPayment = (paymentId) => api.post(`/owner/payments/${paymentId}/verify`)
-export const assignDriver = (bookingId, driverId) => api.post(`/owner/bookings/${bookingId}/assign-driver`, { driverId })
+export const verifyPayment = (paymentId) => api.post(`/owner/payments/${paymentId}/verify`).then(res => { invalidateCache('payments'); invalidateCache('bookings'); invalidateCache('revenue'); return res })
+export const assignDriver = (bookingId, driverId) => api.post(`/owner/bookings/${bookingId}/assign-driver`, { driverId }).then(res => { invalidateCache('bookings'); return res })
 export const setPricing = (pricePerKm, ownerId) => api.post(`/owner/pricing/set?pricePerKm=${pricePerKm}&ownerId=${ownerId}`)
 export const setHourlyPricing = (pricePerHour, ownerId) => api.post(`/owner/pricing/set-hourly?pricePerHour=${pricePerHour}&ownerId=${ownerId}`)
 export const getDriverTripPhoto = (bookingId) => api.get(`/owner/bookings/${bookingId}/driver-photo`)
 export const getCurrentPricing = () => cachedGet('/owner/pricing/current', 60000)
 export const getDailyRevenue = (date) => api.get(`/owner/revenue/daily?date=${date}`)
-export const getMonthlyRevenue = (year, month) => api.get(`/owner/revenue/monthly?year=${year}&month=${month}`)
+export const getMonthlyRevenue = (year, month, opts = {}) => api.get(`/owner/revenue/monthly?year=${year}&month=${month}`, opts.silent ? { _silent: true } : {})
 export const getYearlyRevenue = (year) => api.get(`/owner/revenue/yearly?year=${year}`)
-export const createDriver = (formData) => api.post('/owner/drivers', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+// Driver creation does multipart upload + DB writes + dispatches a welcome email — give it a
+// longer timeout than the default 15s and let axios pick the multipart boundary itself.
+export const createDriver = (formData) => api.post('/owner/drivers', formData, { timeout: 60000 })
+  .then(res => { invalidateCache('drivers'); return res })
 export const getOwnerDrivers = () => cachedGet('/owner/drivers')
 export const getOwnerDriverById = (driverId) => api.get(`/owner/drivers/${driverId}`)
 export const getDriverProfile = (driverId) => api.get(`/driver/${driverId}/profile`)
-export const toggleDriverAvailability = (driverId, status) => api.put(`/driver/${driverId}/availability`, { status })
-export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/profile`, data)
+export const toggleDriverAvailability = (driverId, status) => api.put(`/driver/${driverId}/availability`, { status }).then(res => { invalidateCache('driver'); return res })
+export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/profile`, data).then(res => { invalidateCache('profile'); return res })
 
 // Public APIs (silent — landing page has fallbacks)
 export const getPublicReviews = () => cachedGet('/public/reviews', 5000, true)

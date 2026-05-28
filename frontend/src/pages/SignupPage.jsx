@@ -30,6 +30,8 @@ export default function SignupPage() {
 
   const handleSignup = async (e) => {
     e.preventDefault()
+    if (!/^\d{6}$/.test(form.otp)) { setError('Please enter the full 6-digit OTP'); return }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
     if (form.password !== form.confirmPassword) { setError('Passwords do not match'); return }
     setLoading(true)
     setError('')

@@ -32,30 +32,35 @@ public class DriverController {
     @Autowired
     private LocationTrackingService locationTrackingService;
 
+    // SpEL guard reused on per-driver endpoints. Without it any logged-in driver could read
+    // or mutate another driver's bookings simply by changing the URL.
+    private static final String SAME_DRIVER = "hasRole('DRIVER') and #driverId.toString() == authentication.principal";
+
     @GetMapping("/{driverId}/bookings")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<List<TravelBookingResponse>> getAssignedBookings(@PathVariable Long driverId) {
         return ResponseEntity.ok(driverService.getAssignedBookings(driverId));
     }
 
     @PostMapping("/{driverId}/bookings/{bookingId}/action")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<TravelBookingResponse> handleBookingAction(
             @PathVariable Long driverId,
             @PathVariable String bookingId,
-            @RequestBody BookingActionRequest request) {
+            @RequestBody(required = false) BookingActionRequest request) {
 
-        if ("ACCEPT".equalsIgnoreCase(request.getAction())) {
+        String action = request != null ? request.getAction() : null;
+        if ("ACCEPT".equalsIgnoreCase(action)) {
             return ResponseEntity.ok(driverService.acceptBooking(driverId, bookingId));
-        } else if ("REJECT".equalsIgnoreCase(request.getAction())) {
+        } else if ("REJECT".equalsIgnoreCase(action)) {
             return ResponseEntity.ok(driverService.rejectBooking(driverId, bookingId));
         } else {
-            throw new RuntimeException("Invalid action. Use ACCEPT or REJECT");
+            throw new IllegalArgumentException("Invalid action. Use ACCEPT or REJECT");
         }
     }
 
     @PostMapping("/{driverId}/bookings/{bookingId}/end-trip")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<PaymentResponse> endTripAndGenerateQr(
             @PathVariable Long driverId,
             @PathVariable String bookingId) {
@@ -64,21 +69,23 @@ public class DriverController {
     }
 
     @PostMapping("/{driverId}/bookings/{bookingId}/end-trip-photo")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<Map<String, Object>> uploadEndTripPhoto(
             @PathVariable Long driverId,
             @PathVariable String bookingId,
             @RequestParam("photo") MultipartFile photo) {
         var saved = driverService.uploadEndTripPhoto(driverId, UUID.fromString(bookingId), photo);
-        return ResponseEntity.ok(Map.of(
-            "message", "Photo uploaded successfully",
-            "photoPath", saved.getPhotoPath(),
-            "capturedAt", saved.getCapturedAt().toString()
-        ));
+        // capturedAt is set by @CreationTimestamp at flush; on rare flushes that haven't happened
+        // yet (or legacy rows without it) we don't want a serialization NPE to mask the success.
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("message", "Photo uploaded successfully");
+        body.put("photoPath", saved.getPhotoPath());
+        body.put("capturedAt", saved.getCapturedAt() != null ? saved.getCapturedAt().toString() : null);
+        return ResponseEntity.ok(body);
     }
 
     @PostMapping("/{driverId}/bookings/{bookingId}/cash-payment")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<PaymentResponse> markCashReceived(
             @PathVariable Long driverId,
             @PathVariable String bookingId,
@@ -89,13 +96,13 @@ public class DriverController {
     }
 
     @GetMapping("/{driverId}/profile")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<DriverDetailsResponse> getDriverProfile(@PathVariable Long driverId) {
         return ResponseEntity.ok(driverService.getDriverProfile(driverId));
     }
 
     @PostMapping("/{driverId}/bookings/{bookingId}/start-trip")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<TravelBookingResponse> startTrip(
             @PathVariable Long driverId,
             @PathVariable String bookingId) {
@@ -115,15 +122,22 @@ public class DriverController {
     @PostMapping("/location/update")
     @PreAuthorize("hasRole('DRIVER')")
     public ResponseEntity<DriverLocationDTO> updateLocationRest(@RequestBody DriverLocationDTO dto) {
+        // The dto carries its own driverId; we just confirm it matches the JWT subject so a
+        // driver can't post location updates impersonating someone else.
+        String principal = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getName();
+        if (dto == null || dto.getDriverId() == null || !principal.equals(dto.getDriverId().toString())) {
+            throw new org.springframework.security.access.AccessDeniedException("Cannot update location for another driver");
+        }
         return ResponseEntity.ok(locationTrackingService.updateLocation(dto));
     }
 
     @PutMapping("/{driverId}/availability")
-    @PreAuthorize("hasRole('DRIVER')")
+    @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<java.util.Map<String, String>> toggleAvailability(
             @PathVariable Long driverId,
-            @RequestBody java.util.Map<String, String> request) {
-        String status = request.get("status");
+            @RequestBody(required = false) java.util.Map<String, String> request) {
+        String status = request != null ? request.get("status") : null;
         driverService.updateAvailability(driverId, status);
         return ResponseEntity.ok(java.util.Map.of("message", "Availability updated", "status", status));
     }

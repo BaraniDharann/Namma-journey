@@ -38,7 +38,10 @@ public class ReviewService {
         if (reviewRepository.findByBookingId(booking.getId()).isPresent()) {
             throw new RuntimeException("Review already submitted for this booking");
         }
-        
+
+        if (booking.getDriverId() == null) {
+            throw new RuntimeException("Cannot review a booking with no assigned driver");
+        }
         Driver driver = driverRepository.findById(booking.getDriverId())
             .orElseThrow(() -> new RuntimeException("Driver not found"));
         
@@ -82,13 +85,18 @@ public class ReviewService {
     private ReviewResponse mapToResponseWithBooking(Review review) {
         String fromPlace = null;
         String toPlace = null;
+        // findById can't throw a checked exception here; if Hibernate ever raises a runtime issue
+        // we log it instead of silently dropping it so a regression is investigable.
         try {
             TravelBooking booking = bookingRepository.findById(review.getBookingId()).orElse(null);
             if (booking != null) {
                 fromPlace = booking.getFromPlace();
                 toPlace = booking.getToPlace();
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ex) {
+            org.slf4j.LoggerFactory.getLogger(ReviewService.class)
+                .warn("Failed to load booking {} for review {}: {}", review.getBookingId(), review.getId(), ex.getMessage());
+        }
         return new ReviewResponse(
             review.getId(),
             review.getBookingId(),

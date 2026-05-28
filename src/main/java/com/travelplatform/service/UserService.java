@@ -39,8 +39,11 @@ public class UserService {
     
     @Transactional
     public TravelBookingResponse createBooking(UUID userId, TravelBookingRequest request) {
+        if (request.getFromDate() == null || request.getToDate() == null) {
+            throw new IllegalArgumentException("From date and to date are required");
+        }
         if (request.getToDate().isBefore(request.getFromDate())) {
-            throw new RuntimeException("To date cannot be before from date");
+            throw new IllegalArgumentException("To date cannot be before from date");
         }
         
         int travelDays = (int) ChronoUnit.DAYS.between(request.getFromDate(), request.getToDate()) + 1;
@@ -139,11 +142,14 @@ public class UserService {
         if (!booking.getUserId().equals(userId)) {
             throw new RuntimeException("Unauthorized access to booking");
         }
-        
-        if (request.getToDate().isBefore(request.getFromDate())) {
-            throw new RuntimeException("To date cannot be before from date");
+
+        if (request.getFromDate() == null || request.getToDate() == null) {
+            throw new IllegalArgumentException("From date and to date are required");
         }
-        
+        if (request.getToDate().isBefore(request.getFromDate())) {
+            throw new IllegalArgumentException("To date cannot be before from date");
+        }
+
         int travelDays = (int) ChronoUnit.DAYS.between(request.getFromDate(), request.getToDate()) + 1;
 
         RouteInfo routeInfo;
@@ -278,10 +284,10 @@ public class UserService {
         com.travelplatform.entity.User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         if (request.getName() != null && !request.getName().isBlank()) {
-            user.setName(request.getName());
+            user.setName(request.getName().trim());
         }
-        if (request.getPhone() != null) {
-            user.setPhone(request.getPhone());
+        if (request.getPhone() != null && !request.getPhone().isBlank()) {
+            user.setPhone(request.getPhone().trim());
         }
         return userRepository.save(user);
     }

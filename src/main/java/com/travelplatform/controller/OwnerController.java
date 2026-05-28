@@ -45,6 +45,9 @@ public class OwnerController {
     public ResponseEntity<Map<String, Object>> setPricePerKm(
             @RequestParam Double pricePerKm,
             @RequestParam Long ownerId) {
+        if (pricePerKm == null || pricePerKm <= 0) {
+            throw new IllegalArgumentException("Price per km must be greater than zero");
+        }
         return ResponseEntity.ok(ownerService.setPricePerKm(pricePerKm, ownerId));
     }
     
@@ -62,6 +65,9 @@ public class OwnerController {
     public ResponseEntity<Map<String, Object>> setPricePerHour(
             @RequestParam Double pricePerHour,
             @RequestParam Long ownerId) {
+        if (pricePerHour == null || pricePerHour <= 0) {
+            throw new IllegalArgumentException("Price per hour must be greater than zero");
+        }
         return ResponseEntity.ok(ownerService.setPricePerHour(pricePerHour, ownerId));
     }
 

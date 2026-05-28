@@ -55,6 +55,18 @@ export default function NewBooking() {
       setError('Please select both locations from the dropdown suggestions for accurate distance calculation.')
       return
     }
+    if (!form.fromDate || !form.toDate) {
+      setError('Please pick both a start date and an end date.')
+      return
+    }
+    if (new Date(form.toDate) < new Date(form.fromDate)) {
+      setError('End date cannot be before the start date.')
+      return
+    }
+    if (form.bookingType === 'HOUR_BASED' && (!form.bookingHours || Number(form.bookingHours) < 1)) {
+      setError('Please enter a valid number of hours for an hour-based booking.')
+      return
+    }
     setLoading(true)
     setError('')
     try {

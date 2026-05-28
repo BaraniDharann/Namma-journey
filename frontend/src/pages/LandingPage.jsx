@@ -29,32 +29,60 @@ const images = {
   gps: '/images/GPS navigator-cuate.png'
 }
 
+const destImg = (slug) => ({
+  webp: `/images/travel%20places/${slug}.webp`,
+  jpg:  `/images/travel%20places/${slug}.jpg`,
+  img:  `/images/travel%20places/${slug}.jpg`,
+})
+
 const allDestinations = [
-  { name: 'Alappuzha', location: 'Kerala', img: '/images/travel places/Alappuzha keralam.jpg' },
-  { name: 'Brihadisvara Temple', location: 'Thanjavur', img: '/images/travel places/Brihadisvara Temple thanjavur.jpg' },
-  { name: 'Hawa Mahal', location: 'Jaipur', img: '/images/travel places/Hawa Mahal jaipur.jpg' },
-  { name: 'India Gate', location: 'New Delhi', img: '/images/travel places/India Gate, an iconic war memorial located in New Delhi.jpg' },
-  { name: 'Kashmir Valley', location: 'Kashmir', img: '/images/travel places/Kashmir Valley.jpg' },
-  { name: 'Lodhi Gardens', location: 'New Delhi', img: '/images/travel places/Lodhi Gardens in New Delhi.jpg' },
-  { name: 'Mahabalipuram', location: 'Tamil Nadu', img: '/images/travel places/Mahabalipuram.jpg' },
-  { name: 'Matrimandir', location: 'Auroville, Tamil Nadu', img: '/images/travel places/Matrimandir, which is the spiritual heart of the experimental international township of Auroville, located in Tamil Nadu.jpg' },
-  { name: 'Mumbai Skyline', location: 'Maharashtra', img: '/images/travel places/Mumbai.jpg' },
-  { name: 'Murudeshwar Temple', location: 'Karnataka', img: '/images/travel places/Murudeshwar Temple located in Karnataka.jpg' },
-  { name: 'Mysore Palace', location: 'Karnataka', img: '/images/travel places/Mysore Palace.jpg' },
-  { name: 'Naqqar Khana', location: 'Jaipur', img: '/images/travel places/Naqqar Khana jaipur.jpg' },
-  { name: 'Nohkalikai Falls', location: 'Meghalaya', img: '/images/travel places/Nohkalikai Falls.jpg' },
-  { name: 'Pattadakal Temples', location: 'Karnataka', img: '/images/travel places/Pattadakal Temples in karnataka.jpg' },
-  { name: 'Ripple Waterfalls', location: 'India', img: '/images/travel places/Ripple Waterfalls.jpg' },
-  { name: 'Sree Padmanabhaswamy Temple', location: 'Thiruvananthapuram, Kerala', img: '/images/travel places/Sree Padmanabhaswamy Temple in Thiruvananthapuram, Kerala,.jpg' },
-  { name: 'Sripuram Golden Temple', location: 'Vellore', img: '/images/travel places/Sripuram Golden Temple (Sri Lakshmi Narayani Golden Temple) located in Vellore.jpg' },
-  { name: 'Taj Mahal', location: 'New Delhi', img: '/images/travel places/Taj Mahal , New Delhi.jpg' },
-  { name: 'Tamil Nadu Heritage', location: 'Tamil Nadu', img: '/images/travel places/Tamilnadu.jpg' },
-  { name: 'Thiruvalluvar Statue', location: 'Kanyakumari', img: '/images/travel places/Thiruvalluvar Statue and the Vivekananda Rock Memorial in Kanyakumari.jpg' },
-  { name: 'Varkala Beach', location: 'Kerala', img: '/images/travel places/Varkala Beach in Kerala.jpg' },
-  { name: 'Vijaya Vittala Temple', location: 'Hampi', img: '/images/travel places/Vijaya Vittala Temple complex in Hampi.jpg' },
-  { name: 'Kashi Vishwanath', location: 'Varanasi', img: '/images/travel places/kasi.jpg' },
-  { name: 'Mountain Peaks', location: 'Himalayas', img: '/images/travel places/mountianes.jpg' },
+  { name: 'Alappuzha', location: 'Kerala', ...destImg('alappuzha-kerala') },
+  { name: 'Brihadisvara Temple', location: 'Thanjavur', ...destImg('brihadisvara-temple-thanjavur') },
+  { name: 'Hawa Mahal', location: 'Jaipur', ...destImg('hawa-mahal-jaipur') },
+  { name: 'India Gate', location: 'New Delhi', ...destImg('india-gate-new-delhi') },
+  { name: 'Kashmir Valley', location: 'Kashmir', ...destImg('kashmir-valley') },
+  { name: 'Lodhi Gardens', location: 'New Delhi', ...destImg('lodhi-gardens-new-delhi') },
+  { name: 'Mahabalipuram', location: 'Tamil Nadu', ...destImg('mahabalipuram') },
+  { name: 'Matrimandir', location: 'Auroville, Tamil Nadu', ...destImg('matrimandir-auroville') },
+  { name: 'Mumbai Skyline', location: 'Maharashtra', ...destImg('mumbai-skyline') },
+  { name: 'Murudeshwar Temple', location: 'Karnataka', ...destImg('murudeshwar-temple-karnataka') },
+  { name: 'Mysore Palace', location: 'Karnataka', ...destImg('mysore-palace') },
+  { name: 'Naqqar Khana', location: 'Jaipur', ...destImg('naqqar-khana-jaipur') },
+  { name: 'Nohkalikai Falls', location: 'Meghalaya', ...destImg('nohkalikai-falls') },
+  { name: 'Pattadakal Temples', location: 'Karnataka', ...destImg('pattadakal-temples-karnataka') },
+  { name: 'Ripple Waterfalls', location: 'India', ...destImg('ripple-waterfalls') },
+  { name: 'Sree Padmanabhaswamy Temple', location: 'Thiruvananthapuram, Kerala', ...destImg('sree-padmanabhaswamy-temple') },
+  { name: 'Sripuram Golden Temple', location: 'Vellore', ...destImg('sripuram-golden-temple-vellore') },
+  { name: 'Taj Mahal', location: 'New Delhi', ...destImg('taj-mahal-new-delhi') },
+  { name: 'Tamil Nadu Heritage', location: 'Tamil Nadu', ...destImg('tamil-nadu-heritage') },
+  { name: 'Thiruvalluvar Statue', location: 'Kanyakumari', ...destImg('thiruvalluvar-statue-kanyakumari') },
+  { name: 'Varkala Beach', location: 'Kerala', ...destImg('varkala-beach-kerala') },
+  { name: 'Vijaya Vittala Temple', location: 'Hampi', ...destImg('vijaya-vittala-temple-hampi') },
+  { name: 'Kashi Vishwanath', location: 'Varanasi', ...destImg('kashi-vishwanath') },
+  { name: 'Mountain Peaks', location: 'Himalayas', ...destImg('mountain-peaks-himalayas') },
 ]
+
+function DestinationCard({ dest, eager, children }) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <div className={`dest-gallery-card${loaded ? '' : ' dest-skeleton'}`}>
+      <picture>
+        <source type="image/webp" srcSet={dest.webp} />
+        <img
+          src={dest.jpg}
+          alt={dest.name}
+          loading={eager ? 'eager' : 'lazy'}
+          fetchpriority={eager ? 'high' : 'low'}
+          decoding="async"
+          className={loaded ? 'dest-loaded' : ''}
+          onLoad={() => setLoaded(true)}
+          onError={() => setLoaded(true)}
+        />
+      </picture>
+      {children}
+    </div>
+  )
+}
 
 // Split into 3 sets of 8 for cycling
 const destinationSets = [
@@ -201,16 +229,28 @@ export default function LandingPage() {
       .catch(() => setReviews(defaultReviews))
   }, [])
 
-  // Cycle destination images every 3 seconds
+  // Cycle destination images every 7 seconds with a smooth crossfade
   useEffect(() => {
     const timer = setInterval(() => {
       setDestFading(true)
       setTimeout(() => {
         setDestSetIndex(prev => (prev + 1) % 3)
         setDestFading(false)
-      }, 150)
-    }, 90000)
+      }, 400)
+    }, 7000)
     return () => clearInterval(timer)
+  }, [])
+
+  // Warm browser cache for upcoming destination sets so cycling is instant
+  useEffect(() => {
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 200))
+    const supportsWebp = document.createElement('canvas').toDataURL('image/webp').startsWith('data:image/webp')
+    idle(() => {
+      allDestinations.slice(8).forEach(d => {
+        const img = new Image()
+        img.src = supportsWebp ? d.webp : d.jpg
+      })
+    })
   }, [])
 
   // Rotate hero highlight word
@@ -643,16 +683,35 @@ export default function LandingPage() {
       {/* Destinations - Floating Gallery */}
       <section id="destinations" className="landing-section" style={{ padding: '80px 24px', background: '#fff', overflow: 'hidden' }}>
         <style>{`
-          .dest-gallery-card { position:relative; border-radius:16px; overflow:hidden; cursor:pointer; aspect-ratio:3/4; box-shadow:0 2px 12px rgba(0,0,0,0.08); transition:transform 0.3s ease, box-shadow 0.3s ease; }
-          .dest-gallery-card:hover { transform:translateY(-6px); box-shadow:0 12px 32px rgba(0,0,0,0.15); }
-          .dest-gallery-card img { width:100%; height:100%; object-fit:cover; transition:transform 0.4s ease; }
-          .dest-gallery-card:hover img { transform:scale(1.06); }
-          .dest-gallery-card::after { content:''; position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 40%, transparent 100%); }
-          .dest-gallery-card .dest-info { position:absolute; bottom:0; left:0; right:0; padding:16px; z-index:2; }
-          .dest-gallery-card .dest-explore { opacity:0; transition:opacity 0.25s ease; }
-          .dest-gallery-card:hover .dest-explore { opacity:1; }
+          .dest-gallery-card { position:relative; border-radius:16px; overflow:hidden; cursor:pointer; aspect-ratio:3/4; box-shadow:0 2px 12px rgba(0,0,0,0.08); transition:transform 0.35s cubic-bezier(0.16,1,0.3,1), box-shadow 0.35s ease; background:#e2e8f0; animation:dest-card-in 0.55s cubic-bezier(0.16,1,0.3,1) both; }
+          .dest-gallery-card:nth-child(1) { animation-delay:0.00s }
+          .dest-gallery-card:nth-child(2) { animation-delay:0.06s }
+          .dest-gallery-card:nth-child(3) { animation-delay:0.12s }
+          .dest-gallery-card:nth-child(4) { animation-delay:0.18s }
+          .dest-gallery-card:nth-child(5) { animation-delay:0.24s }
+          .dest-gallery-card:nth-child(6) { animation-delay:0.30s }
+          .dest-gallery-card:nth-child(7) { animation-delay:0.36s }
+          .dest-gallery-card:nth-child(8) { animation-delay:0.42s }
+          @keyframes dest-card-in { from { opacity:0; transform:translateY(28px) scale(0.96); filter:blur(6px) } to { opacity:1; transform:translateY(0) scale(1); filter:blur(0) } }
+          .dest-gallery-card.dest-skeleton { background:linear-gradient(110deg,#e2e8f0 8%,#f1f5f9 18%,#e2e8f0 33%); background-size:200% 100%; animation:dest-card-in 0.55s cubic-bezier(0.16,1,0.3,1) both, dest-shimmer 1.2s linear infinite; }
+          @keyframes dest-shimmer { 0% { background-position:200% 0 } 100% { background-position:-200% 0 } }
+          .dest-gallery-card:hover { transform:translateY(-8px) scale(1.02); box-shadow:0 18px 40px rgba(15,23,42,0.18); z-index:2 }
+          .dest-gallery-card img { width:100%; height:100%; object-fit:cover; transition:transform 7s ease-out, opacity 0.45s ease; opacity:0; transform:scale(1.0); will-change:transform,opacity }
+          .dest-gallery-card img.dest-loaded { opacity:1; animation:dest-kenburns 7s ease-out both }
+          @keyframes dest-kenburns { 0% { transform:scale(1.0) translate(0,0) } 100% { transform:scale(1.12) translate(-2%,-1%) } }
+          .dest-gallery-card:hover img.dest-loaded { transform:scale(1.18) !important; transition:transform 0.6s ease }
+          .dest-gallery-card::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg, rgba(249,115,22,0) 0%, rgba(139,92,246,0) 100%); z-index:1; transition:background 0.4s ease; pointer-events:none; }
+          .dest-gallery-card:hover::before { background:linear-gradient(135deg, rgba(249,115,22,0.18) 0%, rgba(139,92,246,0.18) 100%) }
+          .dest-gallery-card::after { content:''; position:absolute; inset:0; background:linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.15) 45%, transparent 100%); pointer-events:none; z-index:1 }
+          .dest-gallery-card .dest-info { position:absolute; bottom:0; left:0; right:0; padding:16px; z-index:2; transform:translateY(0); transition:transform 0.35s cubic-bezier(0.16,1,0.3,1) }
+          .dest-gallery-card:hover .dest-info { transform:translateY(-4px) }
+          .dest-gallery-card .dest-explore { opacity:0; max-height:0; overflow:hidden; transition:opacity 0.3s ease, max-height 0.3s ease }
+          .dest-gallery-card:hover .dest-explore { opacity:1; max-height:40px }
+          .dest-pulse-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#fb923c; box-shadow:0 0 0 0 rgba(251,146,60,0.7); animation:dest-pulse 1.6s infinite }
+          @keyframes dest-pulse { 0% { box-shadow:0 0 0 0 rgba(251,146,60,0.7) } 70% { box-shadow:0 0 0 8px rgba(251,146,60,0) } 100% { box-shadow:0 0 0 0 rgba(251,146,60,0) } }
           @media(max-width:900px) { .dest-responsive-grid { grid-template-columns:repeat(2,1fr) !important; } }
           @media(max-width:500px) { .dest-responsive-grid { grid-template-columns:1fr !important; } }
+          @media(prefers-reduced-motion: reduce) { .dest-gallery-card, .dest-gallery-card img, .dest-gallery-card img.dest-loaded { animation:none !important; transition:opacity 0.2s ease !important } }
         `}</style>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div ref={el => observe('dest-header', el)} style={{ textAlign: 'center', marginBottom: 48, ...sectionStyle('dest-header') }}>
@@ -670,24 +729,25 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-          <div ref={el => observe('dest-grid', el)} className="dest-responsive-grid" style={{
+          <div ref={el => observe('dest-grid', el)} key={destSetIndex} className="dest-responsive-grid" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
             gridTemplateRows: 'repeat(2, 1fr)',
             gap: 16,
             opacity: destFading ? 0 : 1,
-            transition: 'opacity 0.15s ease',
+            transform: destFading ? 'translateY(8px)' : 'translateY(0)',
+            transition: 'opacity 0.4s ease, transform 0.4s ease',
           }}>
             {destinationSets[destSetIndex].map((dest, i) => (
-              <div key={`${destSetIndex}-${i}`} className="dest-gallery-card" style={{
-                opacity: visibleSections.has('dest-grid') ? 1 : 0,
-                transition: 'none',
-              }}>
-                <img src={dest.img} alt={dest.name} loading="lazy" decoding="async" />
+              <DestinationCard
+                key={`${destSetIndex}-${i}`}
+                dest={dest}
+                eager={destSetIndex === 0 && i < 4}
+              >
                 <div className="dest-info">
                   <h3 style={{ fontFamily: 'Poppins', fontWeight: 700, fontSize: 'clamp(14px,1.2vw,18px)', color: '#fff', marginBottom: 2, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{dest.name}</h3>
-                  <p style={{ fontSize: 13, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ color: '#fb923c' }}>&#9679;</span> {dest.location}
+                  <p style={{ fontSize: 13, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="dest-pulse-dot" /> {dest.location}
                   </p>
                   <div className="dest-explore" style={{ marginTop: 8 }}>
                     <Link to="/signup" style={{ fontSize: 12, padding: '5px 14px', borderRadius: 16, background: '#f97316', color: '#fff', fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
@@ -695,7 +755,7 @@ export default function LandingPage() {
                     </Link>
                   </div>
                 </div>
-              </div>
+              </DestinationCard>
             ))}
           </div>
         </div>
@@ -1018,10 +1078,16 @@ export default function LandingPage() {
           <div className="landing-footer-bottom" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 24, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>© 2024 Namma Journey. All rights reserved.</p>
             <div style={{ display: 'flex', gap: 8 }}>
-              {['🐦', '📘', '📸', '▶️'].map((icon, i) => (
-                <div key={i} style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, transition: 'all 0.3s' }}
+              {[
+                { label: 'Twitter',   href: 'https://twitter.com/nammajourney',         icon: '🐦' },
+                { label: 'Facebook',  href: 'https://www.facebook.com/nammajourney',    icon: '📘' },
+                { label: 'Instagram', href: 'https://www.instagram.com/nammajourney',   icon: '📸' },
+                { label: 'YouTube',   href: 'https://www.youtube.com/@nammajourney',    icon: '▶️' },
+              ].map(s => (
+                <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.label} title={s.label}
+                  style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, transition: 'all 0.3s', textDecoration: 'none', color: '#fff' }}
                   onMouseEnter={e => { e.currentTarget.style.background = 'rgba(249,115,22,0.3)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0)' }}>{icon}</div>
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.transform = 'translateY(0)' }}>{s.icon}</a>
               ))}
             </div>
           </div>

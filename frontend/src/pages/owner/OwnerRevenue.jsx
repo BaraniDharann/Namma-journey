@@ -257,8 +257,9 @@ export default function OwnerRevenue() {
 
   useEffect(() => {
     const fetchBars = async () => {
+      // Silent: 12 parallel calls — surface any backend issue once via fetchRevenue, not 12 toasts.
       const promises = Array.from({ length: 12 }, (_, i) =>
-        getMonthlyRevenue(params.year, i + 1).then(r => r.data?.totalRevenue || 0).catch(() => 0)
+        getMonthlyRevenue(params.year, i + 1, { silent: true }).then(r => r.data?.totalRevenue || 0).catch(() => 0)
       )
       setMonthlyBars(await Promise.all(promises))
     }

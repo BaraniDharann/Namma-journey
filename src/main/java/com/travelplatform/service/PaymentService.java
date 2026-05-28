@@ -9,6 +9,8 @@ import com.travelplatform.repository.PaymentRepository;
 import com.travelplatform.repository.TravelBookingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -117,11 +119,16 @@ public class PaymentService {
     }
     
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "dailyRevenue",   allEntries = true),
+            @CacheEvict(value = "monthlyRevenue", allEntries = true),
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true)
+    })
     public PaymentResponse markCashReceived(Long driverId, UUID bookingId, CashPaymentRequest request) {
         TravelBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
-        
-        if (!booking.getDriverId().equals(driverId)) {
+
+        if (booking.getDriverId() == null || !booking.getDriverId().equals(driverId)) {
             throw new RuntimeException("Unauthorized: Booking not assigned to you");
         }
         
@@ -155,6 +162,11 @@ public class PaymentService {
     }
     
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "dailyRevenue",   allEntries = true),
+            @CacheEvict(value = "monthlyRevenue", allEntries = true),
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true)
+    })
     public PaymentResponse verifyPayment(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
@@ -200,7 +212,7 @@ public class PaymentService {
     public PaymentResponse generateTripEndQr(Long driverId, UUID bookingId) {
         TravelBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
-        if (!booking.getDriverId().equals(driverId)) {
+        if (booking.getDriverId() == null || !booking.getDriverId().equals(driverId)) {
             throw new RuntimeException("Unauthorized: Booking not assigned to you");
         }
         java.util.Optional<Payment> existing = paymentRepository.findByBookingId(bookingId);

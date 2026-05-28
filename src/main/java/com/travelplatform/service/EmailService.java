@@ -34,7 +34,8 @@ public class EmailService {
             "</div><div style='background:#f5f5f5;padding:15px;text-align:center;border-radius:0 0 10px 10px;border:1px solid #e0e0e0;border-top:none;'>" +
             "<p style='color:#888;margin:0;font-size:12px;'>© Namma Journey. All rights reserved.</p></div></body></html>";
 
-    public boolean sendDriverCredentials(String toEmail, String driverName, String username, String password) {
+    @Async("emailExecutor")
+    public void sendDriverCredentials(String toEmail, String driverName, String username, String password) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
@@ -57,14 +58,37 @@ public class EmailService {
             ), true);
             mailSender.send(message);
             log.info("Driver credentials email sent successfully to: {}", toEmail);
-            return true;
-        } catch (jakarta.mail.MessagingException | java.io.UnsupportedEncodingException e) {
-            log.error("Failed to send driver credentials email: {}", e.getMessage());
-            return false;
+        } catch (Exception e) {
+            log.error("Failed to send driver credentials email to {}: {}", toEmail, e.getMessage());
         }
     }
 
-    @Async
+    @Async("emailExecutor")
+    public void sendOtpEmail(String toEmail, String otp, int expiryMinutes) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(toEmail);
+            helper.setSubject("Your OTP for Namma Journey");
+            helper.setText(String.format(
+                "<html><body>" +
+                "<h2>Your OTP Code</h2>" +
+                "<p>Your OTP for Namma Journey is: <strong style='font-size:24px;color:#007bff;'>%s</strong></p>" +
+                "<p>This OTP is valid for %d minutes.</p>" +
+                "<p>If you didn't request this OTP, please ignore this email.</p>" +
+                "<br><p>Best regards,<br>Namma Journey Team</p>" +
+                "</body></html>",
+                otp, expiryMinutes
+            ), true);
+            mailSender.send(message);
+            log.info("OTP email sent successfully to: {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send OTP email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    @Async("emailExecutor")
     public void sendTripAssignedEmail(String driverEmail, String driverName, com.travelplatform.entity.TravelBooking booking) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -93,7 +117,7 @@ public class EmailService {
         }
     }
 
-    @Async
+    @Async("emailExecutor")
     public void sendTripAcceptedEmail(String userEmail, String userName, com.travelplatform.entity.TravelBooking booking, com.travelplatform.entity.Driver driver) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -121,7 +145,7 @@ public class EmailService {
         }
     }
 
-    @Async
+    @Async("emailExecutor")
     public void sendTripRejectedEmail(String userEmail, String userName, com.travelplatform.entity.TravelBooking booking) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -147,7 +171,7 @@ public class EmailService {
         }
     }
 
-    @Async
+    @Async("emailExecutor")
     public void sendTripEndedEmail(String userEmail, String userName, com.travelplatform.entity.TravelBooking booking) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
@@ -174,7 +198,7 @@ public class EmailService {
         }
     }
 
-    @Async
+    @Async("emailExecutor")
     public void sendPaymentConfirmationEmail(String email, String name, com.travelplatform.entity.TravelBooking booking) {
         try {
             MimeMessage message = mailSender.createMimeMessage();

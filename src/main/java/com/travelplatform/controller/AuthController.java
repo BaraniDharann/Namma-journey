@@ -127,4 +127,19 @@ public class AuthController {
         Map<String, String> response = driverAuthService.resetPassword(request);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * DRIVER REQUEST RESET OTP - Send an OTP to the driver's registered email,
+     * looked up via the supplied mobile. Returns a generic message so this can't
+     * be used to enumerate registered drivers.
+     * POST /api/auth/driver/request-reset-otp
+     */
+    @PostMapping("/driver/request-reset-otp")
+    public ResponseEntity<Map<String, String>> driverRequestResetOtp(@RequestBody Map<String, String> body) {
+        String mobile = body != null ? body.get("mobile") : null;
+        if (mobile == null || mobile.isBlank()) {
+            throw new IllegalArgumentException("Mobile is required");
+        }
+        return ResponseEntity.ok(driverAuthService.sendPasswordResetOtp(mobile));
+    }
 }

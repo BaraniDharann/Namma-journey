@@ -37,9 +37,18 @@ public class DriverService {
     
     @Transactional
     public void updateAvailability(Long driverId, String status) {
+        if (status == null || status.isBlank()) {
+            throw new IllegalArgumentException("Status is required");
+        }
+        Driver.Status parsed;
+        try {
+            parsed = Driver.Status.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid status. Use ACTIVE or INACTIVE");
+        }
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
-        driver.setStatus(Driver.Status.valueOf(status));
+        driver.setStatus(parsed);
         driverRepository.save(driver);
     }
 
@@ -65,24 +74,21 @@ public class DriverService {
     }
 
     public List<TravelBookingResponse> getAssignedBookings(Long driverId) {
-        List<TravelBooking> bookings = bookingRepository.findAll().stream()
-                .filter(b -> b.getDriverId() != null && b.getDriverId().equals(driverId))
-                .collect(Collectors.toList());
-        
-        return bookings.stream()
+        // Indexed lookup; avoids a full table scan that previously degraded as the bookings table grew.
+        return bookingRepository.findByDriverId(driverId).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
-    
+
     @Transactional
     public TravelBookingResponse acceptBooking(Long driverId, String bookingId) {
         TravelBooking booking = bookingRepository.findById(java.util.UUID.fromString(bookingId))
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
-        
-        if (!booking.getDriverId().equals(driverId)) {
+
+        if (booking.getDriverId() == null || !booking.getDriverId().equals(driverId)) {
             throw new RuntimeException("This booking is not assigned to you");
         }
-        
+
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         TravelBooking updated = bookingRepository.save(booking);
 
@@ -97,11 +103,11 @@ public class DriverService {
     public TravelBookingResponse rejectBooking(Long driverId, String bookingId) {
         TravelBooking booking = bookingRepository.findById(java.util.UUID.fromString(bookingId))
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
-        
-        if (!booking.getDriverId().equals(driverId)) {
+
+        if (booking.getDriverId() == null || !booking.getDriverId().equals(driverId)) {
             throw new RuntimeException("This booking is not assigned to you");
         }
-        
+
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
 
@@ -113,13 +119,13 @@ public class DriverService {
 
         return mapToResponse(updated);
     }
-    
+
     @Transactional
     public TravelBookingResponse startTrip(Long driverId, String bookingId) {
         TravelBooking booking = bookingRepository.findById(java.util.UUID.fromString(bookingId))
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
-        if (!booking.getDriverId().equals(driverId)) {
+        if (booking.getDriverId() == null || !booking.getDriverId().equals(driverId)) {
             throw new RuntimeException("This booking is not assigned to you");
         }
 
@@ -137,7 +143,7 @@ public class DriverService {
         TravelBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
-        if (!booking.getDriverId().equals(driverId)) {
+        if (booking.getDriverId() == null || !booking.getDriverId().equals(driverId)) {
             throw new RuntimeException("This booking is not assigned to you");
         }
 

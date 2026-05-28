@@ -157,7 +157,9 @@ export default function OwnerBookings() {
                   <thead><tr><th>Customer</th><th>Route</th><th>Date</th><th>Type</th><th>Amount</th><th>Driver</th><th>Photo</th><th>Status</th><th>Action</th></tr></thead>
                   <tbody>
                     {paginatedItems.map(b => (
-                      <tr key={b.bookingId}>
+                      // GET /owner/bookings returns the raw TravelBooking entity (id), while the
+                      // assign-driver response is a TravelBookingResponse (bookingId). Use either.
+                      <tr key={b.id || b.bookingId}>
                         <td><div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A' }}>{b.userName}</div><div style={{ fontSize: 12, color: '#94a3b8' }}>{b.userPhone}</div></td>
                         <td><div style={{ fontSize: 13 }}>{b.fromPlace}</div><div style={{ fontSize: 12, color: '#94a3b8' }}>→ {b.toPlace}</div></td>
                         <td style={{ fontSize: 13 }}>{b.fromDate}</td>

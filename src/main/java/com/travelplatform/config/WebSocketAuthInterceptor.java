@@ -30,9 +30,11 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 if (jwtUtil.validateToken(token)) {
                     String userId = jwtUtil.extractUserId(token);
                     String role = jwtUtil.extractRole(token);
-                    UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                            userId, null, List.of(new SimpleGrantedAuthority(role)));
-                    accessor.setUser(auth);
+                    if (userId != null && role != null) {
+                        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                                userId, null, List.of(new SimpleGrantedAuthority(role)));
+                        accessor.setUser(auth);
+                    }
                 }
             }
         }

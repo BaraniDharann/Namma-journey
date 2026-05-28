@@ -1,14 +1,17 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { driverLogin, driverForgotPassword, driverVerifyOtp } from '../utils/api'
+import { driverLogin, driverForgotPassword, driverVerifyOtp, driverRequestResetOtp } from '../utils/api'
+
+const OTP_VALIDITY_SECONDS = 5 * 60
 
 export default function DriverLoginPage() {
   const [form, setForm] = useState({ mobile: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showForgot, setShowForgot] = useState(false)
-  const [forgotForm, setForgotForm] = useState({ mobile: '', newPassword: '', confirmPassword: '' })
+  const [forgotStep, setForgotStep] = useState(1) // 1 = enter mobile / send OTP, 2 = enter OTP + new password
+  const [forgotForm, setForgotForm] = useState({ mobile: '', otp: '', newPassword: '', confirmPassword: '' })
   const [forgotLoading, setForgotLoading] = useState(false)
   const [forgotMsg, setForgotMsg] = useState('')
   const [forgotError, setForgotError] = useState('')
@@ -18,8 +21,24 @@ export default function DriverLoginPage() {
   const [otpLoading, setOtpLoading] = useState(false)
   const [otpError, setOtpError] = useState('')
   const [otpMsg, setOtpMsg] = useState('')
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null)
+  const [secondsLeft, setSecondsLeft] = useState(0)
+  const [resendLoading, setResendLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!otpExpiresAt) return
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000))
+      setSecondsLeft(remaining)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [otpExpiresAt])
+
+  const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -30,6 +49,7 @@ export default function DriverLoginPage() {
       if (res.data.firstLogin) {
         setOtpEmail(res.data.email)
         setShowOtp(true)
+        setOtpExpiresAt(Date.now() + OTP_VALIDITY_SECONDS * 1000)
         return
       }
       login(res.data)
@@ -38,6 +58,23 @@ export default function DriverLoginPage() {
       setError(err.response?.data?.error || 'Invalid mobile or password')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleResendOtp = async () => {
+    setResendLoading(true)
+    setOtpError('')
+    setOtpMsg('')
+    try {
+      await driverLogin(form)
+      setOtpExpiresAt(Date.now() + OTP_VALIDITY_SECONDS * 1000)
+      setOtpForm({ otp: '', newPassword: '', confirmPassword: '' })
+      setOtpMsg('A new OTP has been sent to your email.')
+      setTimeout(() => setOtpMsg(''), 3000)
+    } catch (err) {
+      setOtpError(err.response?.data?.error || 'Failed to resend OTP. Please try again.')
+    } finally {
+      setResendLoading(false)
     }
   }
 
@@ -64,21 +101,39 @@ export default function DriverLoginPage() {
     }
   }
 
+  const handleSendForgotOtp = async (e) => {
+    e.preventDefault()
+    if (!/^\d{10}$/.test(forgotForm.mobile)) { setForgotError('Enter a 10-digit mobile number'); return }
+    setForgotLoading(true); setForgotError(''); setForgotMsg('')
+    try {
+      const res = await driverRequestResetOtp(forgotForm.mobile)
+      setForgotStep(2)
+      setForgotMsg(res.data?.message || 'If this mobile is registered, an OTP has been sent.')
+    } catch (err) {
+      setForgotError(err.response?.data?.error || 'Failed to send OTP. Try again.')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
   const handleForgot = async (e) => {
     e.preventDefault()
+    if (!/^\d{4,6}$/.test(forgotForm.otp)) { setForgotError('Enter the OTP you received'); return }
+    if (forgotForm.newPassword.length < 6) { setForgotError('Password must be at least 6 characters'); return }
     if (forgotForm.newPassword !== forgotForm.confirmPassword) {
-      setForgotError('Passwords do not match')
-      return
+      setForgotError('Passwords do not match'); return
     }
-    setForgotLoading(true)
-    setForgotError('')
-    setForgotMsg('')
+    setForgotLoading(true); setForgotError(''); setForgotMsg('')
     try {
       const res = await driverForgotPassword(forgotForm)
       setForgotMsg(res.data?.message || 'Password reset successful')
-      setTimeout(() => { setShowForgot(false); setForgotForm({ mobile: '', newPassword: '', confirmPassword: '' }); setForgotMsg('') }, 2000)
+      setTimeout(() => {
+        setShowForgot(false); setForgotStep(1)
+        setForgotForm({ mobile: '', otp: '', newPassword: '', confirmPassword: '' })
+        setForgotMsg('')
+      }, 2000)
     } catch (err) {
-      setForgotError(err.response?.data?.error || 'Reset failed. Check your mobile number.')
+      setForgotError(err.response?.data?.error || 'Reset failed. Check the OTP and try again.')
     } finally {
       setForgotLoading(false)
     }
@@ -95,7 +150,17 @@ export default function DriverLoginPage() {
         {showOtp ? (
           <>
             <h1 style={{ fontFamily: 'Poppins, sans-serif', fontSize: '1.5rem', fontWeight: 800, color: '#0F172A', marginBottom: 6 }}>📧 Verify & Set Password</h1>
-            <p style={{ color: '#64748b', marginBottom: 24, fontSize: 14 }}>OTP sent to <strong style={{ color: '#3b82f6' }}>{otpEmail}</strong>. Enter it below with your new password.</p>
+            <p style={{ color: '#64748b', marginBottom: 16, fontSize: 14 }}>OTP sent to <strong style={{ color: '#3b82f6' }}>{otpEmail}</strong>. Enter it below with your new password.</p>
+
+            <div style={{ marginBottom: 18, padding: '12px 16px', borderRadius: 10, background: secondsLeft > 0 ? '#eff6ff' : '#fef2f2', border: `1px solid ${secondsLeft > 0 ? '#bfdbfe' : '#fecaca'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <span style={{ fontSize: 13, color: secondsLeft > 0 ? '#1e40af' : '#dc2626', fontWeight: 600 }}>
+                {secondsLeft > 0 ? `⏱ OTP expires in ${formatTime(secondsLeft)}` : '⌛ OTP expired. Please resend.'}
+              </span>
+              <button type="button" onClick={handleResendOtp} disabled={resendLoading || secondsLeft > 0}
+                style={{ background: 'none', border: 'none', color: (resendLoading || secondsLeft > 0) ? '#94a3b8' : '#3b82f6', fontSize: 13, fontWeight: 700, cursor: (resendLoading || secondsLeft > 0) ? 'not-allowed' : 'pointer', padding: 0, whiteSpace: 'nowrap' }}>
+                {resendLoading ? 'Sending…' : 'Resend OTP'}
+              </button>
+            </div>
 
             {otpError && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13 }}>⚠ {otpError}</div>}
             {otpMsg && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: '#f0fdf4', color: '#15803d', fontSize: 13, fontWeight: 600 }}>✓ {otpMsg}</div>}
@@ -104,26 +169,26 @@ export default function DriverLoginPage() {
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>OTP</label>
                 <input type="text" className="input-field" placeholder="Enter OTP" maxLength={6} value={otpForm.otp}
-                  onChange={e => setOtpForm({ ...otpForm, otp: e.target.value })} required
-                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 18, width: '100%', boxSizing: 'border-box', letterSpacing: '0.3em', textAlign: 'center', fontWeight: 700 }} />
+                  onChange={e => setOtpForm({ ...otpForm, otp: e.target.value })} required disabled={secondsLeft === 0}
+                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 18, width: '100%', boxSizing: 'border-box', letterSpacing: '0.3em', textAlign: 'center', fontWeight: 700, background: secondsLeft === 0 ? '#f8fafc' : '#fff' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>New Password</label>
                 <input type="password" className="input-field" placeholder="Enter new password" value={otpForm.newPassword}
-                  onChange={e => setOtpForm({ ...otpForm, newPassword: e.target.value })} required
-                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
+                  onChange={e => setOtpForm({ ...otpForm, newPassword: e.target.value })} required disabled={secondsLeft === 0}
+                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box', background: secondsLeft === 0 ? '#f8fafc' : '#fff' }} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Confirm Password</label>
                 <input type="password" className="input-field" placeholder="Repeat password" value={otpForm.confirmPassword}
-                  onChange={e => setOtpForm({ ...otpForm, confirmPassword: e.target.value })} required
-                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
+                  onChange={e => setOtpForm({ ...otpForm, confirmPassword: e.target.value })} required disabled={secondsLeft === 0}
+                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box', background: secondsLeft === 0 ? '#f8fafc' : '#fff' }} />
               </div>
-              <button type="submit" disabled={otpLoading} className="btn-primary"
-                style={{ width: '100%', padding: '13px', borderRadius: 10, background: otpLoading ? '#93c5fd' : 'linear-gradient(135deg,#3b82f6,#06b6d4)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', cursor: otpLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <button type="submit" disabled={otpLoading || secondsLeft === 0} className="btn-primary"
+                style={{ width: '100%', padding: '13px', borderRadius: 10, background: (otpLoading || secondsLeft === 0) ? '#93c5fd' : 'linear-gradient(135deg,#3b82f6,#06b6d4)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', cursor: (otpLoading || secondsLeft === 0) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 {otpLoading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Verifying...</> : 'Verify & Set Password'}
               </button>
-              <button type="button" onClick={() => { setShowOtp(false); setOtpError('') }}
+              <button type="button" onClick={() => { setShowOtp(false); setOtpError(''); setOtpExpiresAt(null) }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#64748b', width: '100%', textAlign: 'center' }}>
                 ← Back to Login
               </button>
@@ -169,34 +234,54 @@ export default function DriverLoginPage() {
             {forgotError && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13 }}>⚠ {forgotError}</div>}
             {forgotMsg && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, background: '#f0fdf4', color: '#15803d', fontSize: 13, fontWeight: 600 }}>✓ {forgotMsg}</div>}
 
-            <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Mobile Number</label>
-                <input type="tel" className="input-field" placeholder="9876543210" maxLength={10} value={forgotForm.mobile}
-                  onChange={e => setForgotForm({ ...forgotForm, mobile: e.target.value })} required
-                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>New Password</label>
-                <input type="password" className="input-field" placeholder="Enter new password" value={forgotForm.newPassword}
-                  onChange={e => setForgotForm({ ...forgotForm, newPassword: e.target.value })} required
-                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Confirm Password</label>
-                <input type="password" className="input-field" placeholder="Repeat password" value={forgotForm.confirmPassword}
-                  onChange={e => setForgotForm({ ...forgotForm, confirmPassword: e.target.value })} required
-                  style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
-              </div>
-              <button type="submit" disabled={forgotLoading} className="btn-primary"
-                style={{ width: '100%', padding: '13px', borderRadius: 10, background: forgotLoading ? '#93c5fd' : 'linear-gradient(135deg,#3b82f6,#06b6d4)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                {forgotLoading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Resetting...</> : 'Reset Password'}
-              </button>
-              <button type="button" onClick={() => { setShowForgot(false); setForgotError(''); setForgotMsg('') }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#64748b', width: '100%', textAlign: 'center' }}>
-                ← Back to Login
-              </button>
-            </form>
+            {forgotStep === 1 ? (
+              <form onSubmit={handleSendForgotOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Mobile Number</label>
+                  <input type="tel" className="input-field" placeholder="9876543210" maxLength={10} value={forgotForm.mobile}
+                    onChange={e => setForgotForm({ ...forgotForm, mobile: e.target.value.replace(/\D/g, '') })} required
+                    style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <p style={{ fontSize: 12, color: '#94a3b8' }}>We'll send an OTP to the email registered with this mobile.</p>
+                <button type="submit" disabled={forgotLoading} className="btn-primary"
+                  style={{ width: '100%', padding: '13px', borderRadius: 10, background: forgotLoading ? '#93c5fd' : 'linear-gradient(135deg,#3b82f6,#06b6d4)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  {forgotLoading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Sending OTP...</> : 'Send OTP'}
+                </button>
+                <button type="button" onClick={() => { setShowForgot(false); setForgotError(''); setForgotMsg('') }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#64748b', width: '100%', textAlign: 'center' }}>
+                  ← Back to Login
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>OTP</label>
+                  <input type="text" className="input-field" placeholder="Enter OTP from email" maxLength={6} value={forgotForm.otp}
+                    onChange={e => setForgotForm({ ...forgotForm, otp: e.target.value.replace(/\D/g, '') })} required
+                    style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 18, width: '100%', boxSizing: 'border-box', letterSpacing: '0.3em', textAlign: 'center', fontWeight: 700 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>New Password</label>
+                  <input type="password" className="input-field" placeholder="Min 6 characters" value={forgotForm.newPassword}
+                    onChange={e => setForgotForm({ ...forgotForm, newPassword: e.target.value })} required
+                    style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Confirm Password</label>
+                  <input type="password" className="input-field" placeholder="Repeat password" value={forgotForm.confirmPassword}
+                    onChange={e => setForgotForm({ ...forgotForm, confirmPassword: e.target.value })} required
+                    style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
+                </div>
+                <button type="submit" disabled={forgotLoading} className="btn-primary"
+                  style={{ width: '100%', padding: '13px', borderRadius: 10, background: forgotLoading ? '#93c5fd' : 'linear-gradient(135deg,#3b82f6,#06b6d4)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  {forgotLoading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Resetting...</> : 'Reset Password'}
+                </button>
+                <button type="button" onClick={() => { setForgotStep(1); setForgotError(''); setForgotMsg('') }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: '#64748b', width: '100%', textAlign: 'center' }}>
+                  ← Use a different mobile
+                </button>
+              </form>
+            )}
           </>
         )}
 
