@@ -11,6 +11,7 @@ import com.travelplatform.service.AdminDriverService;
 import com.travelplatform.service.OwnerService;
 import com.travelplatform.service.PaymentService;
 import com.travelplatform.service.ReviewService;
+import com.travelplatform.service.TelegramLinkService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -33,6 +34,7 @@ public class OwnerController {
     private final AdminDriverService adminDriverService;
     private final ReviewService reviewService;
     private final PaymentService paymentService;
+    private final TelegramLinkService telegramLinkService;
     
     @GetMapping("/bookings")
     @PreAuthorize("hasRole('OWNER')")
@@ -92,6 +94,16 @@ public class OwnerController {
         return ResponseEntity.ok(ownerService.getMonthlyRevenue(year, month));
     }
     
+    /**
+     * All twelve months of a year in one call, for the revenue chart. Replaces twelve separate
+     * /revenue/monthly requests per page view.
+     */
+    @GetMapping("/revenue/monthly-series")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Map<String, Object>> getMonthlyRevenueSeries(@RequestParam int year) {
+        return ResponseEntity.ok(ownerService.getMonthlyRevenueSeries(year));
+    }
+
     @GetMapping("/revenue/yearly")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> getYearlyRevenue(@RequestParam int year) {
@@ -159,5 +171,27 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<DriverDetailsResponse> getDriverById(@PathVariable Long driverId) {
         return ResponseEntity.ok(ownerService.getDriverById(driverId));
+    }
+
+    @DeleteMapping("/drivers/{driverId}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Map<String, String>> deleteDriver(@PathVariable Long driverId) {
+        adminDriverService.deleteDriver(driverId);
+        return ResponseEntity.ok(Map.of("message", "Driver deleted successfully"));
+    }
+
+    /**
+     * Mints a one-time Telegram onboarding link for a driver.
+     *
+     * <p>Owner-only, and POST rather than GET, because the response is a credential: whoever
+     * opens it gets the ability to accept and reject that driver's trips until it is redeemed.
+     * Each call revokes the previous link for that driver.
+     */
+    @PostMapping("/drivers/{driverId}/telegram-link")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Map<String, String>> createTelegramLink(@PathVariable Long driverId) {
+        return ResponseEntity.ok(Map.of(
+                "linkUrl", telegramLinkService.createLinkUrl(driverId),
+                "expiresInHours", "24"));
     }
 }

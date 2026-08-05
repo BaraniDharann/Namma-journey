@@ -110,6 +110,65 @@ public class OwnerService {
         return buildRevenueResponse(bookings, "Monthly", year + "-" + String.format("%02d", month));
     }
 
+    /**
+     * Revenue for all twelve months of a year in a single query.
+     *
+     * <p>The revenue screen draws a twelve-bar chart. It used to build that by calling
+     * {@link #getMonthlyRevenue(int, int)} twelve times, so one page view cost 12 HTTP requests
+     * and 12 database round-trips — enough on its own to push a signed-in owner through the
+     * per-minute request budget. One scan of the year is both cheaper and atomic.
+     *
+     * <p>Months are assigned from each booking's own {@code bookingDate}. The per-month endpoint
+     * uses an inclusive-BETWEEN window, which double-counts a booking landing exactly on midnight
+     * of the first of a month; bucketing by the date itself cannot.
+     */
+    @Cacheable(value = "monthlyRevenueSeries", key = "#year")
+    public Map<String, Object> getMonthlyRevenueSeries(int year) {
+        LocalDateTime start = LocalDate.of(year, 1, 1).atStartOfDay();
+        LocalDateTime end = LocalDate.of(year + 1, 1, 1).atStartOfDay();
+        List<TravelBooking> bookings = travelBookingRepository.findCompletedBookingsBetween(
+                TravelBooking.BookingStatus.COMPLETED, start, end);
+
+        double[] revenueByMonth = new double[12];
+        double[] distanceByMonth = new double[12];
+        int[] tripsByMonth = new int[12];
+
+        for (TravelBooking booking : bookings) {
+            LocalDateTime bookedAt = booking.getBookingDate();
+            if (bookedAt == null || bookedAt.getYear() != year) {
+                continue;
+            }
+            int index = bookedAt.getMonthValue() - 1;
+            revenueByMonth[index] += booking.getTotalAmount() != null ? booking.getTotalAmount() : 0.0;
+            distanceByMonth[index] += booking.getDistanceKm() != null ? booking.getDistanceKm() : 0.0;
+            tripsByMonth[index] += 1;
+        }
+
+        List<Map<String, Object>> months = new ArrayList<>(12);
+        double totalRevenue = 0.0;
+        int totalTrips = 0;
+        for (int i = 0; i < 12; i++) {
+            Map<String, Object> month = new HashMap<>();
+            month.put("month", i + 1);
+            month.put("periodValue", year + "-" + String.format("%02d", i + 1));
+            month.put("totalTrips", tripsByMonth[i]);
+            month.put("totalRevenue", revenueByMonth[i]);
+            month.put("totalDistance", distanceByMonth[i]);
+            months.add(month);
+            totalRevenue += revenueByMonth[i];
+            totalTrips += tripsByMonth[i];
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("period", "MonthlySeries");
+        response.put("periodValue", String.valueOf(year));
+        response.put("year", year);
+        response.put("months", months);
+        response.put("totalRevenue", totalRevenue);
+        response.put("totalTrips", totalTrips);
+        return response;
+    }
+
     @Cacheable(value = "yearlyRevenue", key = "#year")
     public Map<String, Object> getYearlyRevenue(int year) {
         LocalDateTime start = LocalDate.of(year, 1, 1).atStartOfDay();
@@ -186,6 +245,7 @@ public class OwnerService {
         d.setRole(driver.getRole());
         d.setEmailVerified(driver.isEmailVerified());
         d.setFirstLogin(driver.isFirstLogin());
+        d.setTelegramLinked(driver.getTelegramChatId() != null);
         d.setCreatedAt(driver.getCreatedAt());
         return d;
     }
@@ -194,7 +254,8 @@ public class OwnerService {
     @Caching(evict = {
             @CacheEvict(value = "dailyRevenue",   allEntries = true),
             @CacheEvict(value = "monthlyRevenue", allEntries = true),
-            @CacheEvict(value = "yearlyRevenue",  allEntries = true)
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true),
+            @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
     })
     public TravelBookingResponse assignDriver(UUID bookingId, Long driverId) {
         TravelBooking booking = travelBookingRepository.findById(bookingId)

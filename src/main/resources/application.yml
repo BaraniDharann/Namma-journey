@@ -15,9 +15,27 @@ spring:
       max-lifetime: 1200000
       leak-detection-threshold: 60000
 
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # Adopting Flyway on databases that already exist: a populated schema with no history
+    # table is stamped as already being at V1 rather than having the baseline replayed
+    # over live tables. A fresh, empty database just runs V1 normally.
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: existing schema
+    # Refuse to start against a database whose applied migrations do not match these files,
+    # instead of silently drifting.
+    validate-on-migrate: true
+
   jpa:
     hibernate:
-      ddl-auto: update
+      # Flyway owns the schema. ddl-auto was 'update', which let Hibernate quietly alter
+      # live tables at boot: it never removes anything, cannot express a rename, applies no
+      # ordering and leaves every environment shaped by whatever ran there first. 'validate'
+      # keeps the safety net - startup fails loudly if entities and schema disagree - without
+      # granting Hibernate write access to the schema.
+      ddl-auto: ${JPA_DDL_AUTO:validate}
     show-sql: false
     open-in-view: false
     properties:
@@ -87,6 +105,55 @@ app:
   cache:
     type: ${APP_CACHE_TYPE:redis}
     default-ttl-minutes: 10
+  # Comma-separated origins allowed for REST (CORS) and the WebSocket handshake.
+  # Override in production, e.g. CORS_ALLOWED_ORIGINS=https://app.nammajourney.com
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173}
+
+  bootstrap:
+    # One-time secret for POST /api/auth/owner/create-admin, which creates the first owner
+    # account on a new deployment. That endpoint cannot require authentication (there is no
+    # account yet) and it returns an owner token — full control of the platform — so without
+    # this it is a race between the operator and anyone scanning the internet. Empty disables
+    # the endpoint, which is what every environment that already has an owner should use.
+    owner-secret: ${OWNER_BOOTSTRAP_SECRET:}
+
+  telegram:
+    # Dispatch pushes to drivers over a Telegram bot. A driver cannot read email or open a
+    # web app while driving, but Telegram's own client is already installed, already exempt
+    # from the OEM battery killers that make web push unreliable on budget Android, and can
+    # render an Accept button the driver taps without leaving the notification.
+    #
+    # Disabled by default: with no bot token configured every send must be a no-op rather
+    # than an error, so that existing deployments and the test suite keep working unchanged.
+    enabled: ${TELEGRAM_ENABLED:false}
+    # From @BotFather. A full credential - anyone holding it can post as your bot and read
+    # everything sent to it. Never commit it.
+    bot-token: ${TELEGRAM_BOT_TOKEN:}
+    # Bot's public @name, used to build the driver onboarding deep link. No leading '@'.
+    bot-username: ${TELEGRAM_BOT_USERNAME:}
+    # Echoed by Telegram in X-Telegram-Bot-Api-Secret-Token on every webhook call. The
+    # webhook has to be publicly reachable and unauthenticated - Telegram cannot present a
+    # JWT - so this shared secret is the ONLY thing distinguishing a real update from
+    # anyone on the internet POSTing a forged "accept" for someone else's booking.
+    webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
+    api-base-url: ${TELEGRAM_API_BASE_URL:https://api.telegram.org}
+
+  ratelimit:
+    # Proxies whose X-Forwarded-For / X-Real-IP headers may be believed, as literal
+    # addresses or CIDR blocks ("*" trusts every peer). EMPTY BY DEFAULT ON PURPOSE:
+    # these are ordinary request headers, so trusting them from any caller lets one
+    # client mint a new identity per request and walk through every limit below.
+    # Set this to your load balancer / ingress range in production, e.g.
+    #   RATELIMIT_TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12
+    trusted-proxies: ${RATELIMIT_TRUSTED_PROXIES:}
+    # Anonymous callers, per IP.
+    general-limit: ${RATELIMIT_GENERAL:100}
+    # Credential guessing on /api/auth, per IP. Kept tight deliberately.
+    auth-limit: ${RATELIMIT_AUTH:10}
+    # Signed-in callers, per account. A dashboard render is legitimately ~30 calls and
+    # many users share one egress address, so this is budgeted per identity, not per IP.
+    authenticated-limit: ${RATELIMIT_AUTHENTICATED:300}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -144,6 +211,17 @@ osm:
   file:
     path: src/india-latest.osm.pbf
 
+# Third-party geo services. BOTH DEFAULTS ARE PUBLIC DEMO/COMMUNITY ENDPOINTS: they are rate
+# limited, carry no availability guarantee, and their usage policies do not permit production
+# traffic. Point them at self-hosted or commercial instances before going live. Calls are
+# timeout-bounded (see ExternalHttpClients) and fall back to a local Haversine estimate.
+routing:
+  osrm:
+    base-url: ${OSRM_BASE_URL:http://router.project-osrm.org}
+places:
+  photon:
+    base-url: ${PHOTON_BASE_URL:https://photon.komoot.io}
+
 # Actuator & Monitoring
 management:
   endpoints:
@@ -155,6 +233,27 @@ management:
       show-details: when-authorized
       probes:
         enabled: true
+      group:
+        # Readiness deliberately covers only what the app cannot serve traffic without.
+        # A cache outage must not drain every instance out of the load balancer at once —
+        # that turns a degradation into an outage.
+        readiness:
+          include: readinessState, db
+  health:
+    mail:
+      # Off by default: this indicator opens a real SMTP connection to the mail provider on
+      # every health scrape and was measured taking 12.8s to respond. A health check that slow
+      # will itself trip load-balancer and probe timeouts, and outbound mail is asynchronous —
+      # the provider being briefly unreachable does not make this application unhealthy.
+      enabled: ${MANAGEMENT_HEALTH_MAIL_ENABLED:false}
+    redis:
+      # Off by default because the cache layer falls back to Caffeine when Redis is
+      # absent (see app.cache.type), so Redis being down is a performance concern, not an
+      # unhealthy app. Left on, the aggregate /actuator/health reports DOWN/503 in a
+      # perfectly supported configuration, which trips load balancers and uptime checks
+      # pointed at that path. Set MANAGEMENT_HEALTH_REDIS_ENABLED=true where Redis is
+      # provisioned and you want its state surfaced for alerting.
+      enabled: ${MANAGEMENT_HEALTH_REDIS_ENABLED:false}
   metrics:
     tags:
       application: travel-booking-platform

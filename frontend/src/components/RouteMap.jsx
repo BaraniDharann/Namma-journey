@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { OSRM_BASE_URL, TILE_URL, TILE_ATTRIBUTION } from '../config/mapServices'
 
 // Fix default marker icons (leaflet + bundler issue)
 delete L.Icon.Default.prototype._getIconUrl
@@ -56,7 +57,7 @@ export default function RouteMap({ fromLat, fromLon, toLat, toLon, fromPlace, to
       try {
         const coords = `${fromLon},${fromLat};${toLon},${toLat}`
         const res = await fetch(
-          `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`
+          `${OSRM_BASE_URL}/route/v1/driving/${coords}?overview=full&geometries=geojson`
         )
         const data = await res.json()
 
@@ -136,10 +137,7 @@ export default function RouteMap({ fromLat, fromLon, toLat, toLon, fromPlace, to
 
       <div style={{ borderRadius: 14, overflow: 'hidden', border: '2px solid #e2e8f0', height: 350 }}>
         <MapContainer center={center} zoom={7} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true}>
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
           <FitBounds bounds={bounds} />
 
           <Marker position={[fromLat, fromLon]} icon={pickupIcon}>

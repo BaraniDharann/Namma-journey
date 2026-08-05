@@ -25,30 +25,44 @@ function isTokenExpired(token) {
   return claims.exp * 1000 <= Date.now()
 }
 
+// localStorage can throw SecurityError (storage partitioning/blocked 3rd-party storage,
+// a document mid-teardown, etc). Uncaught, that would abort the hydration effect below
+// before setLoading(false) runs, leaving ProtectedRoute stuck on its loading screen forever.
+function safeStorage(fn, fallback) {
+  try {
+    return fn()
+  } catch {
+    return fallback
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('nj_token')
-    const savedUser = localStorage.getItem('nj_user')
-    if (savedToken && savedUser) {
-      if (isTokenExpired(savedToken)) {
-        // Stale session — clear it so ProtectedRoute kicks the user to /login instead of
-        // briefly rendering the dashboard and then 401-ing on the first XHR.
-        localStorage.removeItem('nj_token')
-        localStorage.removeItem('nj_user')
-      } else {
-        setToken(savedToken)
-        try {
-          setUser(JSON.parse(savedUser))
-        } catch {
-          localStorage.removeItem('nj_user')
+    try {
+      const savedToken = safeStorage(() => localStorage.getItem('nj_token'), null)
+      const savedUser = safeStorage(() => localStorage.getItem('nj_user'), null)
+      if (savedToken && savedUser) {
+        if (isTokenExpired(savedToken)) {
+          // Stale session — clear it so ProtectedRoute kicks the user to /login instead of
+          // briefly rendering the dashboard and then 401-ing on the first XHR.
+          safeStorage(() => localStorage.removeItem('nj_token'))
+          safeStorage(() => localStorage.removeItem('nj_user'))
+        } else {
+          setToken(savedToken)
+          try {
+            setUser(JSON.parse(savedUser))
+          } catch {
+            safeStorage(() => localStorage.removeItem('nj_user'))
+          }
         }
       }
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   // Listen for the api.js interceptor's "auth-expired" signal so we clear in-memory state too,
@@ -73,21 +87,21 @@ export function AuthProvider({ children }) {
     }
     setToken(authData.token)
     setUser(userData)
-    localStorage.setItem('nj_token', authData.token)
-    localStorage.setItem('nj_user', JSON.stringify(userData))
+    safeStorage(() => localStorage.setItem('nj_token', authData.token))
+    safeStorage(() => localStorage.setItem('nj_user', JSON.stringify(userData)))
   }
 
   const updateUser = (updates) => {
     const updated = { ...user, ...updates }
     setUser(updated)
-    localStorage.setItem('nj_user', JSON.stringify(updated))
+    safeStorage(() => localStorage.setItem('nj_user', JSON.stringify(updated)))
   }
 
   const logout = () => {
     setToken(null)
     setUser(null)
-    localStorage.removeItem('nj_token')
-    localStorage.removeItem('nj_user')
+    safeStorage(() => localStorage.removeItem('nj_token'))
+    safeStorage(() => localStorage.removeItem('nj_user'))
   }
 
   return (

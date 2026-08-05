@@ -33,7 +33,7 @@ These errors occur because **Lombok annotation processing is not enabled** in yo
 **Option A: Using the provided script**
 ```bash
 cd "c:\react project\Travel Booking Platform"
-rebuild-project.bat
+scripts/rebuild-project.bat
 ```
 
 **Option B: Manual Maven commands**

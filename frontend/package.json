@@ -10,8 +10,11 @@
   "dependencies": {
     "@react-leaflet/core": "^2.1.0",
     "@react-oauth/google": "^0.13.4",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
     "@stomp/stompjs": "^7.3.0",
     "axios": "^1.6.7",
+    "framer-motion": "^12.43.0",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "leaflet": "^1.9.4",
@@ -22,6 +25,7 @@
     "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.22.0",
     "sockjs-client": "^1.6.1",
+    "three": "^0.185.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

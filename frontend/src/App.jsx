@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
+import { motion } from 'framer-motion'
 import { AuthProvider, useAuth } from './context/AuthContext'
 
 // Lazy load all pages for faster initial load
@@ -36,10 +37,28 @@ function PageLoader() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#fff' }}>
       <div style={{ textAlign: 'center' }}>
-        <div className="spinner" style={{ margin: '0 auto 12px' }} />
-        <p style={{ color: '#94a3b8', fontSize: 14 }}>Loading...</p>
+        <div
+          className="spinner"
+          style={{ margin: '0 auto 12px', borderColor: '#ffedd5', borderTopColor: '#f97316' }}
+        />
+        <p style={{ color: '#94a3b8', fontSize: 14 }}>Starting the engine…</p>
       </div>
     </div>
+  )
+}
+
+/** Every route fades up on arrival — one shared entrance for the whole app. */
+function PageFade({ children }) {
+  const { pathname } = useLocation()
+  return (
+    <motion.div
+      key={pathname}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {children}
+    </motion.div>
   )
 }
 
@@ -62,6 +81,7 @@ function AppRoutes() {
   const { user } = useAuth()
   return (
     <Suspense fallback={<PageLoader />}>
+      <PageFade>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login"        element={user ? <Navigate to={getDashboard(user.role)} /> : <LoginPage />} />
@@ -93,6 +113,7 @@ function AppRoutes() {
         <Route path="/packages/:id" element={<PackageDetail />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </PageFade>
     </Suspense>
   )
 }

@@ -1,0 +1,158 @@
+name: End-to-End Suite
+
+# Deliberately NOT run on every pull request. The suite boots the real backend, a real
+# Vite server and a real Postgres, then walks a booking through its entire status machine —
+# it takes minutes, not seconds, and a single flaky network call would block unrelated PRs.
+# Run it nightly and on demand; treat a failure here as a release blocker, not a PR blocker.
+on:
+  schedule:
+    - cron: '0 18 * * *'   # 18:00 UTC nightly
+  workflow_dispatch:
+
+env:
+  JAVA_VERSION: '17'
+  NODE_VERSION: '20'
+
+jobs:
+  e2e:
+    name: Full-stack E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: travel_booking_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DB_URL: jdbc:postgresql://localhost:5432/travel_booking_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      PGPASSWORD: postgres
+      JWT_SECRET: ci-only-jwt-secret-not-used-anywhere-else-0123456789abcdef
+      JWT_EXPIRATION: '86400000'
+      # OTPs are read out of the `otps` table by the suite instead of being emailed.
+      OTP_TEST_MODE: 'true'
+      # otp.test.mode only covers OTPs. Without this, a run delivers "trip assigned" and
+      # driver-credential mail to whatever addresses are sitting in fixture data.
+      MAIL_DELIVERY_ENABLED: 'false'
+      MAIL_USERNAME: ci@example.com
+      MAIL_PASSWORD: unused
+      GOOGLE_CLIENT_ID: unused
+      GOOGLE_CLIENT_SECRET: unused
+      TELEGRAM_ENABLED: 'false'
+      # The suite fakes a client IP per browser context; X-Forwarded-For is only believed
+      # from a trusted peer, and loopback arrives as ::1 as well as 127.0.0.1.
+      RATELIMIT_TRUSTED_PROXIES: '127.0.0.1,::1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build backend
+        run: mvn -B clean package -DskipTests
+
+      - name: Start backend
+        run: |
+          java -jar target/travel-booking-platform-*.jar \
+            --mail.delivery.enabled=false \
+            --app.cache.type=redis \
+            > backend.log 2>&1 &
+          echo "Waiting for backend on :8080…"
+          for i in $(seq 1 120); do
+            if curl -sf http://localhost:8080/api/health > /dev/null; then
+              echo "backend up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "backend never came up"; tail -100 backend.log; exit 1
+
+      # Flyway has built the schema by now. The suite needs an OWNER it can mint a token
+      # for; it cannot sign one up through the API because owner creation is itself an
+      # owner-only endpoint.
+      - name: Seed test owner
+        id: owner
+        run: |
+          OWNER_ID=$(psql -h localhost -U postgres -d travel_booking_db -tAc \
+            "INSERT INTO owners (email, password, role, created_at)
+             VALUES ('ci-owner@example.com', '\$2a\$10\$ciplaceholderhashciplaceholderhashciplaceholderhashci', 'ROLE_OWNER', NOW())
+             ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+             RETURNING id;")
+          echo "owner_id=$OWNER_ID" >> "$GITHUB_OUTPUT"
+          echo "Seeded owner id=$OWNER_ID"
+
+      - name: Build & serve frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          npx vite preview --port 5173 --host > ../frontend.log 2>&1 &
+          echo "Waiting for frontend on :5173…"
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5173 > /dev/null; then
+              echo "frontend up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "frontend never came up"; tail -50 ../frontend.log; exit 1
+
+      - name: Install Playwright
+        working-directory: playwright-tests
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E suite
+        working-directory: playwright-tests
+        env:
+          E2E_API_BASE: http://localhost:8080
+          E2E_WEB_BASE: http://localhost:5173
+          E2E_OWNER_ID: ${{ steps.owner.outputs.owner_id }}
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: travel_booking_db
+        run: npx playwright test
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            playwright-tests/playwright-report/
+            playwright-tests/reports/
+            backend.log
+            frontend.log
+          retention-days: 7

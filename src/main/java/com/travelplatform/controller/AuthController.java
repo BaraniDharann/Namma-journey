@@ -103,8 +103,10 @@ public class AuthController {
      * POST /api/auth/owner/create-admin
      */
     @PostMapping("/owner/create-admin")
-    public ResponseEntity<AuthResponse> createAdmin(@Valid @RequestBody AdminCreateRequest request) {
-        AuthResponse response = authService.createAdmin(request);
+    public ResponseEntity<AuthResponse> createAdmin(
+            @Valid @RequestBody AdminCreateRequest request,
+            @RequestHeader(value = "X-Bootstrap-Secret", required = false) String bootstrapSecret) {
+        AuthResponse response = authService.createAdmin(request, bootstrapSecret);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
     

@@ -55,6 +55,33 @@ public class Driver {
     @Column(nullable = false)
     private String role = "ROLE_DRIVER";
 
+    /**
+     * Telegram chat id for dispatch pushes, or null while the driver has not opened the bot.
+     *
+     * <p>Telegram bots cannot initiate a conversation: until the driver taps the /start deep
+     * link there is no id to send to and this channel is silently unavailable for them. Treat
+     * null as "not reachable by Telegram", never as an error.
+     */
+    @Column(name = "telegram_chat_id", length = 32)
+    private String telegramChatId;
+
+    @Column(name = "telegram_linked_at")
+    private LocalDateTime telegramLinkedAt;
+
+    /**
+     * Single-use secret that binds the next Telegram account to present it to this driver.
+     *
+     * <p>Whoever redeems this token gains the ability to accept and reject this driver's
+     * trips, so it is a credential and is treated like one: random, expiring, and cleared on
+     * redemption. It deliberately is not derived from {@link #id}, which is sequential and
+     * therefore guessable.
+     */
+    @Column(name = "telegram_link_token", length = 64)
+    private String telegramLinkToken;
+
+    @Column(name = "telegram_link_token_expires_at")
+    private LocalDateTime telegramLinkTokenExpiresAt;
+
     public Long getId() {
         return id;
     }
@@ -157,6 +184,38 @@ public class Driver {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public String getTelegramChatId() {
+        return telegramChatId;
+    }
+
+    public void setTelegramChatId(String telegramChatId) {
+        this.telegramChatId = telegramChatId;
+    }
+
+    public LocalDateTime getTelegramLinkedAt() {
+        return telegramLinkedAt;
+    }
+
+    public void setTelegramLinkedAt(LocalDateTime telegramLinkedAt) {
+        this.telegramLinkedAt = telegramLinkedAt;
+    }
+
+    public String getTelegramLinkToken() {
+        return telegramLinkToken;
+    }
+
+    public void setTelegramLinkToken(String telegramLinkToken) {
+        this.telegramLinkToken = telegramLinkToken;
+    }
+
+    public LocalDateTime getTelegramLinkTokenExpiresAt() {
+        return telegramLinkTokenExpiresAt;
+    }
+
+    public void setTelegramLinkTokenExpiresAt(LocalDateTime telegramLinkTokenExpiresAt) {
+        this.telegramLinkTokenExpiresAt = telegramLinkTokenExpiresAt;
     }
 
     public Status getStatus() {

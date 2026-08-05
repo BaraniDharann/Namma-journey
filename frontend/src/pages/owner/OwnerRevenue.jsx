@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
-import { getDailyRevenue, getMonthlyRevenue, getYearlyRevenue, setPricing, setHourlyPricing, getCurrentPricing, getOwnerBookings, getOwnerDrivers } from '../../utils/api'
+import { getDailyRevenue, getMonthlyRevenue, getMonthlyRevenueSeries, getYearlyRevenue, setPricing, setHourlyPricing, getCurrentPricing, getOwnerBookings, getOwnerDrivers } from '../../utils/api'
 import { useAuth } from '../../context/AuthContext'
 // Lazy-load heavy libs on first download
 const getJsPDF = () => Promise.all([import('jspdf'), import('jspdf-autotable')]).then(([m]) => m.default)
@@ -257,11 +257,16 @@ export default function OwnerRevenue() {
 
   useEffect(() => {
     const fetchBars = async () => {
-      // Silent: 12 parallel calls — surface any backend issue once via fetchRevenue, not 12 toasts.
-      const promises = Array.from({ length: 12 }, (_, i) =>
-        getMonthlyRevenue(params.year, i + 1, { silent: true }).then(r => r.data?.totalRevenue || 0).catch(() => 0)
-      )
-      setMonthlyBars(await Promise.all(promises))
+      // One request for the whole year. This used to be 12 parallel calls, which on its own
+      // was most of a signed-in owner's per-minute request budget.
+      // Silent: surface any backend issue once via fetchRevenue rather than twice.
+      try {
+        const res = await getMonthlyRevenueSeries(params.year, { silent: true })
+        const months = res.data?.months || []
+        setMonthlyBars(Array.from({ length: 12 }, (_, i) => months[i]?.totalRevenue || 0))
+      } catch {
+        setMonthlyBars(Array.from({ length: 12 }, () => 0))
+      }
     }
     fetchBars()
   }, [params.year])

@@ -35,6 +35,7 @@ public class PaymentService {
     
     private final PaymentRepository paymentRepository;
     private final TravelBookingRepository bookingRepository;
+    private final com.travelplatform.repository.DriverRepository driverRepository;
     private final NotificationService notificationService;
     private final LocationTrackingService locationTrackingService;
     
@@ -122,7 +123,8 @@ public class PaymentService {
     @Caching(evict = {
             @CacheEvict(value = "dailyRevenue",   allEntries = true),
             @CacheEvict(value = "monthlyRevenue", allEntries = true),
-            @CacheEvict(value = "yearlyRevenue",  allEntries = true)
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true),
+            @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
     })
     public PaymentResponse markCashReceived(Long driverId, UUID bookingId, CashPaymentRequest request) {
         TravelBooking booking = bookingRepository.findById(bookingId)
@@ -165,7 +167,8 @@ public class PaymentService {
     @Caching(evict = {
             @CacheEvict(value = "dailyRevenue",   allEntries = true),
             @CacheEvict(value = "monthlyRevenue", allEntries = true),
-            @CacheEvict(value = "yearlyRevenue",  allEntries = true)
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true),
+            @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
     })
     public PaymentResponse verifyPayment(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
@@ -233,6 +236,14 @@ public class PaymentService {
         payment.setUpiLinkExpiresAt(LocalDateTime.now().plusMinutes(UPI_LINK_EXPIRY_MINUTES));
         payment.setStatus(Payment.PaymentStatus.PENDING);
         Payment saved = paymentRepository.save(payment);
+
+        // This call is the moment the trip actually ends on the ground, so it is where the
+        // passenger and owner get told - previously nobody was notified until payment landed,
+        // which for a UPI trip could be long after the passenger had walked away.
+        // notifyTripEnded is idempotent, so regenerating an expired QR does not re-notify.
+        driverRepository.findById(driverId)
+                .ifPresent(driver -> notificationService.notifyTripEnded(booking, driver));
+
         String deepLink = generateUpiDeepLink(saved.getAmount(), bookingId.toString());
         PaymentResponse response = mapToResponse(saved);
         response.setUpiDeepLink(deepLink);

@@ -24,6 +24,32 @@ public class EmailService {
     @Value("${mail.from.name:Namma Journey}")
     private String fromName;
 
+    /**
+     * Master switch for outbound delivery. Set false for test and CI runs.
+     *
+     * <p>{@code otp.test.mode} only stops OTP mail — every other notification (driver
+     * credentials, trip assigned/accepted/ended, payment confirmations) still went out over
+     * real SMTP. An end-to-end run therefore mailed real people: each pass delivered "Trip
+     * assigned" notices to live addresses held by fixture bookings. Suppressing here rather
+     * than at each call site means no future notification can be added and silently escape.
+     */
+    @Value("${mail.delivery.enabled:true}")
+    private boolean deliveryEnabled;
+
+    /**
+     * Hand a prepared message to the mail server, unless delivery is switched off. Callers use
+     * this instead of {@code mailSender.send} directly.
+     */
+    private boolean deliver(MimeMessage message) throws Exception {
+        if (!deliveryEnabled) {
+            log.info("mail.delivery.enabled=false — suppressed outbound email to {}",
+                    java.util.Arrays.toString(message.getAllRecipients()));
+            return false;
+        }
+        mailSender.send(message);
+        return true;
+    }
+
     private static final String HTML_HEADER =
             "<html><body style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;'>" +
             "<div style='background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:30px;text-align:center;border-radius:10px 10px 0 0;'>" +
@@ -56,8 +82,9 @@ public class EmailService {
                 "</body></html>",
                 driverName, username, password
             ), true);
-            mailSender.send(message);
-            log.info("Driver credentials email sent successfully to: {}", toEmail);
+            if (deliver(message)) {
+                log.info("Driver credentials email sent successfully to: {}", toEmail);
+            }
         } catch (Exception e) {
             log.error("Failed to send driver credentials email to {}: {}", toEmail, e.getMessage());
         }
@@ -81,8 +108,9 @@ public class EmailService {
                 "</body></html>",
                 otp, expiryMinutes
             ), true);
-            mailSender.send(message);
-            log.info("OTP email sent successfully to: {}", toEmail);
+            if (deliver(message)) {
+                log.info("OTP email sent successfully to: {}", toEmail);
+            }
         } catch (Exception e) {
             log.error("Failed to send OTP email to {}: {}", toEmail, e.getMessage());
         }
@@ -110,8 +138,9 @@ public class EmailService {
                     "</div>" +
                     "<p>Please log in to your account to accept or reject this trip.</p>" +
                     HTML_FOOTER, true);
-            mailSender.send(message);
-            log.info("Trip assigned email sent to driver: {}", driverEmail);
+            if (deliver(message)) {
+                log.info("Trip assigned email sent to driver: {}", driverEmail);
+            }
         } catch (Exception e) {
             log.error("Failed to send trip assigned email: {}", e.getMessage());
         }
@@ -138,8 +167,9 @@ public class EmailService {
                     "</div>" +
                     "<p>Have a safe and pleasant journey!</p>" +
                     HTML_FOOTER, true);
-            mailSender.send(message);
-            log.info("Trip accepted email sent to user: {}", userEmail);
+            if (deliver(message)) {
+                log.info("Trip accepted email sent to user: {}", userEmail);
+            }
         } catch (Exception e) {
             log.error("Failed to send trip accepted email: {}", e.getMessage());
         }
@@ -164,8 +194,9 @@ public class EmailService {
                     "</div>" +
                     "<p>We apologize for the inconvenience and will update you shortly.</p>" +
                     HTML_FOOTER, true);
-            mailSender.send(message);
-            log.info("Trip rejected email sent to user: {}", userEmail);
+            if (deliver(message)) {
+                log.info("Trip rejected email sent to user: {}", userEmail);
+            }
         } catch (Exception e) {
             log.error("Failed to send trip rejected email: {}", e.getMessage());
         }
@@ -178,21 +209,27 @@ public class EmailService {
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
             helper.setFrom(fromEmail, fromName);
             helper.setTo(userEmail);
-            helper.setSubject("Trip Completed - Namma Journey");
+            // Sent when the driver ends the trip, which is before the fare is settled — so this
+            // asks for payment rather than declaring the booking finished. The "all done"
+            // message is sendPaymentConfirmationEmail, which goes out once the money is in.
+            helper.setSubject("Trip Ended - Payment Due - Namma Journey");
             helper.setText(HTML_HEADER +
-                    "<h2 style='color:#667eea;'>Trip Completed!</h2>" +
+                    "<h2 style='color:#667eea;'>Your trip has ended</h2>" +
                     "<p>Dear " + userName + ",</p>" +
-                    "<p>Your trip has been completed successfully.</p>" +
+                    "<p>Your driver has ended the trip. Please complete the payment to close this booking.</p>" +
                     "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
                     "<p><strong>From:</strong> " + booking.getFromPlace() + "</p>" +
                     "<p><strong>To:</strong> " + booking.getToPlace() + "</p>" +
                     "<p><strong>Distance:</strong> " + String.format("%.1f", booking.getDistanceKm()) + " km</p>" +
-                    "<p><strong>Amount:</strong> ₹" + String.format("%.2f", booking.getTotalAmount()) + "</p>" +
+                    "<p><strong>Amount payable:</strong> ₹" + String.format("%.2f", booking.getTotalAmount()) + "</p>" +
                     "</div>" +
+                    "<p>Pay by scanning the driver's QR code, or hand the fare over in cash. " +
+                    "You will get a confirmation email once the payment is recorded.</p>" +
                     "<p>Thank you for choosing Namma Journey. We hope you had a great experience!</p>" +
                     HTML_FOOTER, true);
-            mailSender.send(message);
-            log.info("Trip ended email sent to user: {}", userEmail);
+            if (deliver(message)) {
+                log.info("Trip ended email sent to user: {}", userEmail);
+            }
         } catch (Exception e) {
             log.error("Failed to send trip ended email: {}", e.getMessage());
         }
@@ -217,8 +254,9 @@ public class EmailService {
                     "</div>" +
                     "<p>Thank you for your payment!</p>" +
                     HTML_FOOTER, true);
-            mailSender.send(message);
-            log.info("Payment confirmation email sent to: {}", email);
+            if (deliver(message)) {
+                log.info("Payment confirmation email sent to: {}", email);
+            }
         } catch (Exception e) {
             log.error("Failed to send payment confirmation email: {}", e.getMessage());
         }

@@ -109,7 +109,7 @@ Now OTPs will be sent via SMS! 📱
 
 ### Option 1: Windows Batch File
 ```bash
-test-api.bat
+scripts/test-api.bat
 ```
 
 ### Option 2: Postman
@@ -179,8 +179,8 @@ See `OTP_SETUP_GUIDE.md` for detailed commands
 
 - `OTP_SETUP_GUIDE.md` - Complete setup guide
 - `README.md` - Project overview
-- `test-api.bat` - Windows testing script
-- `test-api.sh` - Linux/Mac testing script
+- `scripts/test-api.bat` - Windows testing script
+- `scripts/test-api.sh` - Linux/Mac testing script
 - `Travel_Booking_API.postman_collection.json` - Postman collection
 
 ---

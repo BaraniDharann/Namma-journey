@@ -14,6 +14,9 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     long countByRecipientIdAndRecipientRoleAndReadFalse(String recipientId, String recipientRole);
     List<Notification> findByRecipientIdAndRecipientRole(String recipientId, String recipientRole);
 
+    /** Dedupe guard for notifications that must fire once per booking, however often the trigger is called. */
+    boolean existsByBookingIdAndType(String bookingId, String type);
+
     @Modifying
     @Query("UPDATE Notification n SET n.read = true WHERE n.recipientId = :recipientId AND n.recipientRole = :role AND n.read = false")
     int markAllAsReadBulk(@Param("recipientId") String recipientId, @Param("role") String role);

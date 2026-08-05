@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import Pagination, { usePagination } from '../../components/Pagination'
-import { createDriver, getOwnerDrivers, getOwnerDriverById } from '../../utils/api'
+import { createDriver, getOwnerDrivers, getOwnerDriverById, deleteOwnerDriver, createDriverTelegramLink } from '../../utils/api'
 
 const navItems = [
   { path: '/owner/dashboard', icon: '🏠', label: 'Dashboard' },
@@ -14,6 +14,77 @@ const navItems = [
   { path: '/owner/revenue', icon: '📊', label: 'Revenue' },
   { path: '/owner/profile', icon: '👤', label: 'Profile' },
 ]
+
+// An unlinked driver fails silently: trips are still assigned to them, they just never get
+// the alert while driving — which is the exact problem this channel exists to fix. So the
+// status is shown on the driver record, and connecting is one click away from it.
+function TelegramLinkPanel({ driver }) {
+  const [linkUrl, setLinkUrl] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  const generate = async () => {
+    setLoading(true); setError(''); setCopied(false)
+    try {
+      const res = await createDriverTelegramLink(driver.driverId)
+      setLinkUrl(res.data.linkUrl)
+    } catch (e) {
+      setError(e.response?.data?.message || 'Could not create a link. Check the bot settings.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(linkUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Copy failed — select the link and copy it manually.')
+    }
+  }
+
+  return (
+    <div style={{ padding: '12px 14px', borderRadius: 12, background: '#f8fafc', border: '1px solid #e2e8f0', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Telegram Alerts</span>
+        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: driver.telegramLinked ? '#dcfce7' : '#fef3c7', color: driver.telegramLinked ? '#15803d' : '#b45309' }}>
+          {driver.telegramLinked ? '✓ Connected' : 'Not connected'}
+        </span>
+      </div>
+
+      {!driver.telegramLinked && (
+        <p style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+          This driver will not be alerted on their phone when a trip is assigned. Send them the link below to connect.
+        </p>
+      )}
+
+      {error && <div className="alert-error" style={{ marginTop: 10, borderRadius: 10, fontSize: 12 }}>⚠️ {error}</div>}
+
+      {linkUrl ? (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+            One-time link, valid 24 hours. Anyone who opens it can accept trips as this driver — send it only to them.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input readOnly value={linkUrl} onFocus={(e) => e.target.select()}
+              style={{ flex: 1, padding: '8px 10px', borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12, color: '#374151', background: '#fff' }} />
+            <button onClick={copy} className="btn-ghost" style={{ borderRadius: 10, fontSize: 12, padding: '8px 12px' }}>
+              {copied ? '✓ Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={generate} disabled={loading} className="btn-ghost"
+          style={{ marginTop: 10, borderRadius: 10, fontSize: 13, padding: '8px 12px', cursor: loading ? 'not-allowed' : 'pointer' }}>
+          {loading ? 'Creating link...' : driver.telegramLinked ? 'Create a new link' : 'Create connect link'}
+        </button>
+      )}
+    </div>
+  )
+}
 
 function DriverDetailModal({ driver, onClose }) {
   const imgUrl = (path) => {
@@ -41,6 +112,7 @@ function DriverDetailModal({ driver, onClose }) {
               <div style={{ marginTop: 4, display: 'flex', gap: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: driver.status === 'ACTIVE' ? '#dcfce7' : '#fee2e2', color: driver.status === 'ACTIVE' ? '#15803d' : '#b91c1c' }}>{driver.status}</span>
                 {driver.emailVerified && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#f3e8ff', color: '#8b5cf6' }}>✓ Verified</span>}
+                {driver.telegramLinked && <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#e0f2fe', color: '#0369a1' }}>✈ Telegram</span>}
               </div>
             </div>
           </div>
@@ -52,6 +124,7 @@ function DriverDetailModal({ driver, onClose }) {
               </div>
             ))}
           </div>
+          <TelegramLinkPanel driver={driver} />
           <div className="driver-image-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
             {[['photo', '👤', 'Driver Photo'], ['licensePhoto', '📄', 'License'], ['aadhaarPhoto', '🪪', 'Aadhaar']].map(([key, icon, label]) => (
               <div key={key} style={{ textAlign: 'center' }}>
@@ -70,11 +143,35 @@ function DriverDetailModal({ driver, onClose }) {
   )
 }
 
+function DeleteConfirmModal({ driver, deleting, error, onConfirm, onClose }) {
+  return (
+    <div className="modal-overlay">
+      <div className="modal-box" style={{ maxWidth: 420, borderRadius: 20, padding: 24 }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, margin: '0 auto 16px' }}>🗑️</div>
+        <h3 style={{ fontFamily: 'Poppins', fontWeight: 800, fontSize: 18, color: '#0F172A', textAlign: 'center', marginBottom: 8 }}>Delete Driver?</h3>
+        <p style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 16 }}>
+          Are you sure you want to permanently delete <strong style={{ color: '#0F172A' }}>{driver.name}</strong> ({driver.mobile})? This cannot be undone.
+        </p>
+        {error && <div className="alert-error" style={{ marginBottom: 16, borderRadius: 12, fontSize: 13 }}>⚠️ {error}</div>}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onClose} disabled={deleting} className="btn-ghost" style={{ flex: 1, justifyContent: 'center', borderRadius: 12 }}>Cancel</button>
+          <button onClick={onConfirm} disabled={deleting} style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 6, padding: '12px', borderRadius: 12, fontSize: 14, fontWeight: 700, color: '#fff', border: 'none', cursor: deleting ? 'not-allowed' : 'pointer', background: 'linear-gradient(135deg,#ef4444,#b91c1c)', boxShadow: '0 4px 14px rgba(239,68,68,0.3)' }}>
+            {deleting ? <><div className="spinner" style={{ width: 16, height: 16 }} /> Deleting...</> : 'Delete'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DriverList() {
   const [drivers, setDrivers] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [confirmTarget, setConfirmTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     getOwnerDrivers().then(r => setDrivers(r.data || [])).catch(() => {}).finally(() => setLoading(false))
@@ -89,6 +186,20 @@ function DriverList() {
     setDetailLoading(false)
   }
 
+  const askDelete = (driver) => { setDeleteError(''); setConfirmTarget(driver) }
+
+  const handleDelete = async () => {
+    if (!confirmTarget) return
+    setDeleting(true); setDeleteError('')
+    try {
+      await deleteOwnerDriver(confirmTarget.driverId)
+      setDrivers(prev => prev.filter(d => d.driverId !== confirmTarget.driverId))
+      setConfirmTarget(null)
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || err.response?.data?.message || 'Failed to delete driver')
+    } finally { setDeleting(false) }
+  }
+
   const { currentPage, totalPages, paginatedItems, setCurrentPage } = usePagination(drivers, 10)
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}><div className="spinner" /></div>
@@ -97,6 +208,7 @@ function DriverList() {
   return (
     <>
       {selected && <DriverDetailModal driver={selected} onClose={() => setSelected(null)} />}
+      {confirmTarget && <DeleteConfirmModal driver={confirmTarget} deleting={deleting} error={deleteError} onConfirm={handleDelete} onClose={() => !deleting && setConfirmTarget(null)} />}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {paginatedItems.map(d => (
           <div key={d.driverId} style={{ background: '#fff', borderRadius: 16, padding: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', transition: 'all 0.2s' }}>
@@ -111,6 +223,7 @@ function DriverList() {
               <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: d.status === 'ACTIVE' ? '#dcfce7' : '#fee2e2', color: d.status === 'ACTIVE' ? '#15803d' : '#b91c1c' }}>{d.status}</span>
               {d.emailVerified && <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, background: '#f3e8ff', color: '#8b5cf6' }}>✓ Email</span>}
               <button onClick={() => openDetail(d.driverId)} disabled={detailLoading} style={{ padding: '7px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: '#f8fafc', color: '#f97316', border: '1px solid #ffedd5', cursor: 'pointer', transition: 'all 0.15s' }}>View Details</button>
+              <button onClick={() => askDelete(d)} title="Delete driver" style={{ padding: '7px 16px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', cursor: 'pointer', transition: 'all 0.15s' }}>Delete</button>
             </div>
           </div>
         ))}

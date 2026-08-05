@@ -19,16 +19,15 @@
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&display=swap" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
-    <!-- Preload hero images so they start downloading before JS parses -->
-    <link rel="preload" as="image" href="/images/indian-hindu-temple-singapore.jpg" fetchpriority="high" />
-    <link rel="preload" as="image" href="/images/indian-city-buildings-scene.jpg" fetchpriority="high" />
+    <!-- Preload the journey's opening chapter + the car model it drives -->
+    <link rel="preload" as="image" href="/images/travel%20places/kashmir-valley.webp" type="image/webp" fetchpriority="high" />
 
     <!-- Inline critical CSS — shows a spinner instantly, before the JS bundle parses -->
     <style>
       html, body, #root { height: 100%; margin: 0; padding: 0; background: #ffffff; }
       body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
       .app-boot { display:flex; align-items:center; justify-content:center; height:100vh; background:#fff; }
-      .app-boot .spinner { width:40px; height:40px; border:3px solid #e2e8f0; border-top-color:#0f172a; border-radius:50%; animation: spin 0.9s linear infinite; }
+      .app-boot .spinner { width:40px; height:40px; border:3px solid #ffedd5; border-top-color:#f97316; border-radius:50%; animation: spin 0.9s linear infinite; }
       @keyframes spin { to { transform: rotate(360deg); } }
     </style>
   </head>

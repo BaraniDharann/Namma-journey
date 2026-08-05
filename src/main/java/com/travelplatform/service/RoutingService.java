@@ -5,6 +5,7 @@ import com.graphhopper.ResponsePath;
 import com.graphhopper.config.Profile;
 import com.graphhopper.util.PointList;
 import com.graphhopper.util.CustomModel;
+import com.travelplatform.config.ExternalHttpClients;
 import com.travelplatform.dto.RouteInfo;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -35,9 +36,18 @@ public class RoutingService {
     @Value("${graphhopper.enabled:false}")
     private boolean graphhopperEnabled;
     
+    /**
+     * Base URL of the OSRM route service. Defaults to the public demo server, which is rate
+     * limited and explicitly not intended for production traffic — point this at a self-hosted
+     * OSRM (or an equivalent provider) before going live.
+     */
+    @Value("${routing.osrm.base-url:http://router.project-osrm.org}")
+    private String osrmBaseUrl;
+
     private GraphHopper hopper;
     private boolean initialized = false;
-    private final RestTemplate restTemplate = new RestTemplate();
+    // Timeout-bounded: a hanging third party must not pin a request thread. See ExternalHttpClients.
+    private final RestTemplate restTemplate = ExternalHttpClients.forThirdPartyApis();
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     @PostConstruct
@@ -166,8 +176,8 @@ public class RoutingService {
     
     private RouteInfo calculateRoadDistanceOSRM(double[] fromCoords, double[] toCoords) throws Exception {
         String url = String.format(
-            "http://router.project-osrm.org/route/v1/driving/%f,%f;%f,%f?overview=false",
-            fromCoords[1], fromCoords[0], toCoords[1], toCoords[0]
+            "%s/route/v1/driving/%f,%f;%f,%f?overview=false",
+            osrmBaseUrl, fromCoords[1], fromCoords[0], toCoords[1], toCoords[0]
         );
         
         String response = restTemplate.getForObject(url, String.class);

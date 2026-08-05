@@ -19,6 +19,8 @@ release.properties
 
 # Logs
 *.log
+*.log.*
+logs/
 
 # Node
 node_modules/
@@ -42,3 +44,10 @@ maven-wrapper.jar
 src/india-latest.osm.pbf/
 *.osm.pbf
 *.pbf
+
+# Test output (regenerated on every run — never committed)
+playwright-tests/playwright-report/
+playwright-tests/test-results/
+playwright-tests/reports/
+playwright-tests/screenshots-walkthrough/
+e2e-test/*-report.json

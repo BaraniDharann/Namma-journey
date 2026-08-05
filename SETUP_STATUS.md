@@ -17,7 +17,7 @@
 ### Option 1: Quick Start (if PostgreSQL is installed)
 ```bash
 # Just run this:
-start.bat
+scripts/start.bat
 ```
 
 ### Option 2: Manual Setup
@@ -39,7 +39,7 @@ start.bat
 
 4. **Run the application**:
    ```bash
-   start.bat
+   scripts/start.bat
    ```
 
 ## Alternative: Run without PostgreSQL (H2 In-Memory)
@@ -53,7 +53,7 @@ If you want to test without PostgreSQL, I can configure H2 database instead.
 
 ## Files Created:
 - `.env` - Environment variables
-- `start.bat` - Startup script
+- `scripts/start.bat` - Startup script
 - `apache-maven-3.9.6/` - Maven installation
 
 ## What's Working:

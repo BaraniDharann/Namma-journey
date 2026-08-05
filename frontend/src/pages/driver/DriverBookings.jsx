@@ -158,8 +158,15 @@ export default function DriverBookings() {
     setActionLoading(bookingId + action)
     try {
       await driverBookingAction(user.userId, bookingId, action)
-      const newStatus = action === 'ACCEPT' ? 'CONFIRMED' : 'CANCELLED'
-      setBookings(prev => prev.map(b => b.bookingId === bookingId ? { ...b, status: newStatus } : b))
+      if (action === 'ACCEPT') {
+        setBookings(prev => prev.map(b => b.bookingId === bookingId ? { ...b, status: 'CONFIRMED' } : b))
+      } else {
+        // Rejecting unassigns the trip — it goes to another driver, not to CANCELLED, and it
+        // leaves this driver's list entirely. Showing a status the booking never enters was
+        // misleading, so drop the card and reconcile with the server.
+        setBookings(prev => prev.filter(b => b.bookingId !== bookingId))
+        load()
+      }
     } catch { /* ignore */ }
     setActionLoading(null)
   }

@@ -1,6 +1,7 @@
 package com.travelplatform.config;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,14 +23,18 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-    
+
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
-    
+
+    // Injected from app.cors.allowed-origins (comma-separated); overridable per environment.
+    @Value("${app.cors.allowed-origins}")
+    private List<String> allowedOrigins;
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://localhost:4173"));
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
@@ -53,6 +58,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/user/forgot-password").permitAll()
                 .requestMatchers("/api/user/route-preview").permitAll()
                 .requestMatchers("/api/public/**").permitAll()
+                // Called by Telegram's servers, which cannot present a JWT. Authenticated
+                // instead by the shared secret Telegram echoes in a request header - see
+                // TelegramWebhookController, which refuses outright if that secret is unset.
+                .requestMatchers("/api/telegram/webhook").permitAll()
                 .requestMatchers("/api/public/packages/**").permitAll()
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/api/v1/health").permitAll()

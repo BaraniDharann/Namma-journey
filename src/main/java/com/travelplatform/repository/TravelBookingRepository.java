@@ -27,5 +27,9 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
     @Query("SELECT b FROM TravelBooking b WHERE b.driverId = :driverId")
     List<TravelBooking> findByDriverId(@Param("driverId") Long driverId);
 
+    @Query("SELECT COUNT(b) FROM TravelBooking b WHERE b.driverId = :driverId " +
+           "AND b.status IN ('PENDING', 'CONFIRMED', 'STARTED')")
+    long countActiveBookingsByDriverId(@Param("driverId") Long driverId);
+
     Page<TravelBooking> findAll(Pageable pageable);
 }

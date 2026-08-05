@@ -25,6 +25,7 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final EmailService emailService;
     private final UserRepository userRepository;
+    private final TelegramDispatchService telegramDispatchService;
 
     public void notifyBookingCreated(TravelBooking booking) {
         Notification notification = new Notification();
@@ -57,6 +58,19 @@ public class NotificationService {
         if (driver.getEmail() != null) {
             emailService.sendTripAssignedEmail(driver.getEmail(), driver.getName(), booking);
         }
+
+        // The point of the whole Telegram channel: a driver at the wheel will not read an
+        // email or open the web app, but their phone does alert for Telegram, and the card
+        // carries an Accept button they can hit without navigating anywhere. Best-effort by
+        // design - the assignment is already committed and the rows above remain the record
+        // of it, so a Telegram outage must not fail the caller.
+        try {
+            telegramDispatchService.sendTripAssigned(booking, driver);
+        } catch (Exception e) {
+            log.warn("Telegram dispatch failed for driver {} on booking {}: {}",
+                    driver.getId(), booking.getId(), e.toString());
+        }
+
         log.info("Notification sent to driver {} for booking: {}", driver.getId(), booking.getId());
     }
 
@@ -79,16 +93,26 @@ public class NotificationService {
         log.info("Notification sent to user {} for trip accepted: {}", booking.getUserId(), booking.getId());
     }
 
-    public void notifyTripRejected(TravelBooking booking, Driver driver) {
+    /**
+     * @param replacement the driver the trip was automatically handed to, or null when no
+     *                    available driver was left and the owner has to step in. The two cases
+     *                    need materially different messages: one is progress, the other is a
+     *                    task for the owner.
+     */
+    public void notifyTripRejected(TravelBooking booking, Driver driver, Driver replacement) {
+        String route = booking.getFromPlace() + " to " + booking.getToPlace();
+
         // Notify user
         Notification userNotification = new Notification();
         userNotification.setRecipientId(booking.getUserId().toString());
         userNotification.setRecipientRole("ROLE_USER");
         userNotification.setType("TRIP_REJECTED");
-        userNotification.setTitle("Trip Reassignment in Progress");
-        userNotification.setMessage("Driver " + driver.getName() + " was unable to take your trip from " +
-                booking.getFromPlace() + " to " + booking.getToPlace() +
-                ". We are reassigning a new driver.");
+        userNotification.setTitle(replacement != null ? "New Driver Assigned" : "Trip Reassignment in Progress");
+        userNotification.setMessage(replacement != null
+                ? "Driver " + driver.getName() + " was unable to take your trip from " + route +
+                  ". Driver " + replacement.getName() + " has been assigned and will confirm shortly."
+                : "Driver " + driver.getName() + " was unable to take your trip from " + route +
+                  ". We are arranging another driver for you.");
         userNotification.setBookingId(booking.getId().toString());
         userNotification.setCreatedAt(LocalDateTime.now());
         notificationRepository.save(userNotification);
@@ -102,27 +126,49 @@ public class NotificationService {
         ownerNotification.setRecipientId("owner");
         ownerNotification.setRecipientRole("ROLE_OWNER");
         ownerNotification.setType("TRIP_REJECTED");
-        ownerNotification.setTitle("Driver Rejected Trip");
-        ownerNotification.setMessage("Driver " + driver.getName() + " rejected booking from " +
-                booking.getFromPlace() + " to " + booking.getToPlace() +
-                ". Booking needs reassignment.");
+        ownerNotification.setTitle(replacement != null ? "Trip Reassigned Automatically" : "Trip Needs a Driver");
+        ownerNotification.setMessage(replacement != null
+                ? "Driver " + driver.getName() + " rejected booking from " + route +
+                  ". Automatically reassigned to " + replacement.getName() + "."
+                : "Driver " + driver.getName() + " rejected booking from " + route +
+                  ". No available driver remains — assign one manually.");
         ownerNotification.setBookingId(booking.getId().toString());
         ownerNotification.setCreatedAt(LocalDateTime.now());
         notificationRepository.save(ownerNotification);
 
-        log.info("Trip rejected notifications sent for booking: {}", booking.getId());
+        log.info("Trip rejected notifications sent for booking {} (reassigned to {})",
+                booking.getId(), replacement != null ? replacement.getId() : "nobody");
     }
 
+    /**
+     * The driver has dropped the passenger off and the fare is now due.
+     *
+     * <p>Deliberately not worded as "completed": the booking is still STARTED at this point
+     * and only reaches COMPLETED once the money is in (driver marks cash, or the owner
+     * verifies the UPI transfer). Telling the passenger the trip is finished while their
+     * payment screen still shows an outstanding amount is how support tickets are made.
+     *
+     * <p>Idempotent. The driver can tap End Trip more than once - an expired QR is
+     * regenerated by the same call - and nobody should be notified twice for one trip.
+     */
     public void notifyTripEnded(TravelBooking booking, Driver driver) {
+        String bookingRef = booking.getId().toString();
+        if (notificationRepository.existsByBookingIdAndType(bookingRef, "TRIP_ENDED")) {
+            return;
+        }
+
+        String route = booking.getFromPlace() + " to " + booking.getToPlace();
+        String amount = String.format("%.2f", booking.getTotalAmount());
+
         // Notify user
         Notification userNotification = new Notification();
         userNotification.setRecipientId(booking.getUserId().toString());
         userNotification.setRecipientRole("ROLE_USER");
         userNotification.setType("TRIP_ENDED");
-        userNotification.setTitle("Trip Completed");
-        userNotification.setMessage("Your trip from " + booking.getFromPlace() + " to " +
-                booking.getToPlace() + " has been completed. Thank you for traveling with Namma Journey!");
-        userNotification.setBookingId(booking.getId().toString());
+        userNotification.setTitle("Trip Ended — Payment Due");
+        userNotification.setMessage("Your trip from " + route + " has ended. Amount payable: ₹" +
+                amount + ". Complete the payment to close the booking.");
+        userNotification.setBookingId(bookingRef);
         userNotification.setCreatedAt(LocalDateTime.now());
         notificationRepository.save(userNotification);
 
@@ -135,11 +181,10 @@ public class NotificationService {
         ownerNotification.setRecipientId("owner");
         ownerNotification.setRecipientRole("ROLE_OWNER");
         ownerNotification.setType("TRIP_ENDED");
-        ownerNotification.setTitle("Trip Completed");
-        ownerNotification.setMessage("Trip from " + booking.getFromPlace() + " to " +
-                booking.getToPlace() + " completed by driver " + driver.getName() +
-                ". Amount: ₹" + String.format("%.2f", booking.getTotalAmount()));
-        ownerNotification.setBookingId(booking.getId().toString());
+        ownerNotification.setTitle("Trip Ended — Awaiting Payment");
+        ownerNotification.setMessage("Trip from " + route + " was ended by driver " + driver.getName() +
+                ". ₹" + amount + " awaiting payment.");
+        ownerNotification.setBookingId(bookingRef);
         ownerNotification.setCreatedAt(LocalDateTime.now());
         notificationRepository.save(ownerNotification);
 

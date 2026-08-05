@@ -2,7 +2,9 @@ package com.travelplatform.service;
 
 import com.travelplatform.dto.DriverCreationResponse;
 import com.travelplatform.entity.Driver;
+import com.travelplatform.exception.ResourceNotFoundException;
 import com.travelplatform.repository.DriverRepository;
+import com.travelplatform.repository.TravelBookingRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
@@ -19,6 +21,9 @@ public class AdminDriverService {
 
     @Autowired
     private DriverRepository driverRepository;
+
+    @Autowired
+    private TravelBookingRepository travelBookingRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -82,6 +87,27 @@ public class AdminDriverService {
                 driver.getMobile(),
                 "Driver created successfully. Login credentials sent to driver's email."
         );
+    }
+
+    @Caching(evict = {
+            @CacheEvict(value = "allDrivers", allEntries = true),
+            @CacheEvict(value = "driverById", key = "#driverId")
+    })
+    public void deleteDriver(Long driverId) {
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
+
+        // Block deletion while the driver is tied to a live trip — removing them would orphan
+        // an active booking (a passenger expecting this driver) with no way to reassign.
+        long activeBookings = travelBookingRepository.countActiveBookingsByDriverId(driverId);
+        if (activeBookings > 0) {
+            throw new IllegalArgumentException(
+                    "Cannot delete driver with " + activeBookings + " active booking(s). "
+                            + "Complete or cancel those trips first.");
+        }
+
+        driverRepository.delete(driver);
+        log.info("Driver deleted with ID: {}", driverId);
     }
 
     // Spring Data JPA's repository.save() is already transactional; a single insert needs no outer @Transactional.

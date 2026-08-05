@@ -28,7 +28,7 @@ public class AuthService {
         return ownerAuthService.login(request);
     }
     
-    public AuthResponse createAdmin(AdminCreateRequest request) {
-        return ownerAuthService.createAdmin(request);
+    public AuthResponse createAdmin(AdminCreateRequest request, String bootstrapSecret) {
+        return ownerAuthService.createAdmin(request, bootstrapSecret);
     }
 }

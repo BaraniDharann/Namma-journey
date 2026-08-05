@@ -110,7 +110,10 @@ public class DriverController {
     }
 
     @GetMapping("/location/{bookingId}")
-    @PreAuthorize("hasRole('DRIVER') or hasRole('USER')")
+    // Only the booking's customer, its assigned driver, or an owner may read the
+    // live location — matches the WebSocket topic guard so both polling and push
+    // enforce the same rule.
+    @PreAuthorize("@bookingAccessGuard.canAccess(authentication, #bookingId)")
     public ResponseEntity<DriverLocationDTO> getDriverLocation(@PathVariable String bookingId) {
         DriverLocationDTO location = locationTrackingService.getLocation(bookingId);
         if (location == null) {

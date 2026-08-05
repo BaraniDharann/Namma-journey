@@ -1,0 +1,53 @@
+name: Feature Request
+description: Suggest an idea or improvement
+labels: ["enhancement", "needs triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: >
+        Describe the situation you're in, not just the feature you want. Understanding the
+        problem often turns up a simpler solution than the one first imagined.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which part of the platform?
+      multiple: true
+      options:
+        - Booking flow
+        - Driver allocation
+        - Live tracking
+        - Payments
+        - Reviews & ratings
+        - Owner dashboard
+        - Authentication
+        - Telegram dispatch
+        - Deployment / operations
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Including "do nothing" — sometimes that's the right answer.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to work on this myself

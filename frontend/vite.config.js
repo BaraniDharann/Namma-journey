@@ -40,6 +40,8 @@ export default defineConfig(({ mode }) => {
             http: ['axios'],
             maps: ['leaflet', 'react-leaflet'],
             pdf: ['jspdf', 'jspdf-autotable'],
+            motion: ['framer-motion'],
+            three: ['three', '@react-three/fiber', '@react-three/drei'],
           }
         }
       }

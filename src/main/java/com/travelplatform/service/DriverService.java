@@ -2,9 +2,11 @@ package com.travelplatform.service;
 
 import com.travelplatform.dto.DriverDetailsResponse;
 import com.travelplatform.dto.TravelBookingResponse;
+import com.travelplatform.entity.BookingDriverRejection;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.entity.TravelBooking;
 import com.travelplatform.entity.TripDriverPhoto;
+import com.travelplatform.repository.BookingDriverRejectionRepository;
 import com.travelplatform.repository.DriverRepository;
 import com.travelplatform.repository.TravelBookingRepository;
 import com.travelplatform.repository.TripDriverPhotoRepository;
@@ -19,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -31,6 +34,7 @@ public class DriverService {
     private final DriverRepository driverRepository;
     private final NotificationService notificationService;
     private final TripDriverPhotoRepository tripDriverPhotoRepository;
+    private final BookingDriverRejectionRepository rejectionRepository;
 
     @Value("${file.upload-dir:uploads}")
     private String uploadDir;
@@ -99,6 +103,18 @@ public class DriverService {
         return mapToResponse(updated);
     }
 
+    /**
+     * A driver declines a trip, and the trip is immediately offered to someone else.
+     *
+     * <p>Rejection used to leave the booking PENDING with no driver and nothing scheduled to
+     * pick it back up: it sat there until the owner happened to read the notification. The
+     * booking now goes to the next available driver in the same transaction, and only falls
+     * back to the owner when there genuinely is nobody left to offer it to.
+     *
+     * <p>The replacement is offered the trip, not given it - the booking stays PENDING with a
+     * new {@code driverId}, exactly as it does when a booking is first created, so the new
+     * driver still has to accept.
+     */
     @Transactional
     public TravelBookingResponse rejectBooking(Long driverId, String bookingId) {
         TravelBooking booking = bookingRepository.findById(java.util.UUID.fromString(bookingId))
@@ -111,11 +127,35 @@ public class DriverService {
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
 
-        booking.setDriverId(null);
+        // Record the refusal before looking for a replacement. Availability is "no overlapping
+        // active trip", which this driver satisfies again the moment their id leaves the
+        // booking - so this row is the only thing stopping the trip bouncing back to them.
+        if (!rejectionRepository.existsByBookingIdAndDriverId(booking.getId(), driverId)) {
+            BookingDriverRejection rejection = new BookingDriverRejection();
+            rejection.setBookingId(booking.getId());
+            rejection.setDriverId(driverId);
+            rejectionRepository.save(rejection);
+        }
+
+        List<Long> declined = new ArrayList<>(rejectionRepository.findDriverIdsByBookingId(booking.getId()));
+        if (!declined.contains(driverId)) {
+            declined.add(driverId);
+        }
+
+        Driver replacement = driverRepository
+                .findAvailableDriversExcluding(booking.getFromDate(), booking.getToDate(), declined)
+                .stream()
+                .findFirst()
+                .orElse(null);
+
+        booking.setDriverId(replacement != null ? replacement.getId() : null);
         booking.setStatus(TravelBooking.BookingStatus.PENDING);
         TravelBooking updated = bookingRepository.save(booking);
 
-        notificationService.notifyTripRejected(updated, driver);
+        notificationService.notifyTripRejected(updated, driver, replacement);
+        if (replacement != null) {
+            notificationService.notifyDriverAssigned(updated, replacement);
+        }
 
         return mapToResponse(updated);
     }

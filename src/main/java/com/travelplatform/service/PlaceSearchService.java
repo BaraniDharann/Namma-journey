@@ -2,6 +2,8 @@ package com.travelplatform.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.travelplatform.config.ExternalHttpClients;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -22,7 +24,16 @@ public class PlaceSearchService {
     private static final String INDIA_LAT = "20.5937";
     private static final String INDIA_LON = "78.9629";
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    /**
+     * Geocoding provider. The default is Komoot's public Photon instance, which is a free
+     * community service with no availability guarantee and no traffic entitlement — point this
+     * at a self-hosted Photon or a commercial provider before going live.
+     */
+    @Value("${places.photon.base-url:https://photon.komoot.io}")
+    private String photonBaseUrl;
+
+    // Timeout-bounded: a hanging third party must not pin a request thread. See ExternalHttpClients.
+    private final RestTemplate restTemplate = ExternalHttpClients.forThirdPartyApis();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -34,8 +45,8 @@ public class PlaceSearchService {
         try {
             String encoded = URLEncoder.encode(q.trim(), StandardCharsets.UTF_8);
             String url = String.format(
-                    "https://photon.komoot.io/api/?q=%s&lang=en&limit=8&bbox=%s&lat=%s&lon=%s",
-                    encoded, INDIA_BBOX, INDIA_LAT, INDIA_LON
+                    "%s/api/?q=%s&lang=en&limit=8&bbox=%s&lat=%s&lon=%s",
+                    photonBaseUrl, encoded, INDIA_BBOX, INDIA_LAT, INDIA_LON
             );
 
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);

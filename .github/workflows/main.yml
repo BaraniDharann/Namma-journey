@@ -12,6 +12,19 @@ env:
   NODE_VERSION: '20'
 
 jobs:
+  secrets:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gitleaks scans history, not just the tip
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   backend:
     name: Build & Test Backend
     runs-on: ubuntu-latest
@@ -68,11 +81,32 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
+  # Publishing needs Docker Hub credentials, which forks and outside contributors
+  # never have. Without this gate the docker job below fails on every fork PR and the
+  # repository looks broken to the exact people we want opening pull requests.
+  docker-credentials:
+    name: Check Docker Credentials
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - id: check
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DOCKERHUB_USERNAME / DOCKERHUB_TOKEN are not set — skipping image publish."
+          fi
+
   docker:
     name: Build & Push Docker Images
-    needs: [backend, frontend]
+    needs: [backend, frontend, docker-credentials]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.docker-credentials.outputs.available == 'true'
     steps:
       - uses: actions/checkout@v4
 

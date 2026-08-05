@@ -3,9 +3,9 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.marker.slideto'
-import { createStompClient } from '../utils/websocket'
-import { getDriverLocation } from '../utils/api'
 import useDriverLocationSender from '../hooks/useDriverLocationSender'
+import useLiveDriverLocation from '../hooks/useLiveDriverLocation'
+import { OSRM_BASE_URL, TILE_URL, TILE_ATTRIBUTION } from '../config/mapServices'
 
 const pickupIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
@@ -44,6 +44,17 @@ function getBearing(from, to) {
   return (toDeg(Math.atan2(y, x)) + 360) % 360
 }
 
+// Straight-line fallback so the route (and the animated/real car) always render
+// even when the external OSRM routing service is slow, rate-limited or offline.
+function buildStraightRoute(fromLat, fromLon, toLat, toLon, steps = 60) {
+  const pts = []
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    pts.push([fromLat + (toLat - fromLat) * t, fromLon + (toLon - fromLon) * t])
+  }
+  return pts
+}
+
 function findNearestRouteIndex(routeCoords, pos) {
   if (!routeCoords || !pos) return 0
   let minDist = Infinity
@@ -72,61 +83,44 @@ function FollowDriver({ driverPos, active }) {
   return null
 }
 
-function DriverMarker({ position, heading, map }) {
+function DriverMarker({ position, heading }) {
   const markerRef = useRef(null)
+  const icon = useMemo(() => createCarIcon(heading), [heading])
 
+  // Smoothly slide the leaflet marker toward each new position instead of the
+  // instant jump react-leaflet does on a position prop change.
   useEffect(() => {
-    if (!map || !position) return
-    if (!markerRef.current) {
-      markerRef.current = L.marker(position, { icon: createCarIcon(heading), zIndexOffset: 1000 }).addTo(map)
-    } else {
-      markerRef.current.setIcon(createCarIcon(heading))
-      if (markerRef.current.slideTo) {
-        markerRef.current.slideTo(position, { duration: 2000 })
-      } else {
-        markerRef.current.setLatLng(position)
-      }
-    }
-    return () => {}
-  }, [position, heading, map])
+    const m = markerRef.current
+    if (m && m.slideTo) m.slideTo(position, { duration: 2000 })
+    else if (m) m.setLatLng(position)
+  }, [position])
 
-  useEffect(() => {
-    return () => {
-      if (markerRef.current && map) {
-        map.removeLayer(markerRef.current)
-      }
-    }
-  }, [map])
-
-  return null
+  return <Marker position={position} icon={icon} zIndexOffset={1000} ref={markerRef} />
 }
 
 // Rapido-style animated car that moves along the route from pickup to drop
-function AnimatedRouteCarMarker({ routeCoords, map, speedFactor = 1 }) {
+function AnimatedRouteCarMarker({ routeCoords, speedFactor = 1 }) {
   const markerRef = useRef(null)
   const animFrameRef = useRef(null)
-  const indexRef = useRef(0)
-  const progressRef = useRef(0)
+  const icon = useMemo(() => createCarIcon(0), [])
 
   useEffect(() => {
-    if (!map || !routeCoords || routeCoords.length < 2) return
-
-    const icon = createCarIcon(0)
-    markerRef.current = L.marker(routeCoords[0], { icon, zIndexOffset: 1000 }).addTo(map)
+    if (!routeCoords || routeCoords.length < 2) return
 
     const stepsPerSegment = 60 // frames per segment for smoothness
     let currentIndex = 0
     let currentStep = 0
+    let lastHeading = -1
 
     const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
 
     const animate = () => {
-      if (!markerRef.current || !routeCoords) return
+      const marker = markerRef.current
+      if (!marker) { animFrameRef.current = requestAnimationFrame(animate); return }
 
       const from = routeCoords[currentIndex]
       const to = routeCoords[currentIndex + 1]
       if (!from || !to) {
-        // Loop back to start
         currentIndex = 0
         currentStep = 0
         animFrameRef.current = requestAnimationFrame(animate)
@@ -134,37 +128,26 @@ function AnimatedRouteCarMarker({ routeCoords, map, speedFactor = 1 }) {
       }
 
       const t = currentStep / stepsPerSegment
-      const pos = lerp(from, to, t)
-      const heading = getBearing(from, to)
-
-      markerRef.current.setLatLng(pos)
-      markerRef.current.setIcon(createCarIcon(heading))
-
-      // Update progress for trail effect
-      indexRef.current = currentIndex
-      progressRef.current = t
+      marker.setLatLng(lerp(from, to, t))
+      const heading = Math.round(getBearing(from, to))
+      if (heading !== lastHeading) { marker.setIcon(createCarIcon(heading)); lastHeading = heading }
 
       currentStep += speedFactor
       if (currentStep >= stepsPerSegment) {
         currentStep = 0
         currentIndex++
-        if (currentIndex >= routeCoords.length - 1) {
-          currentIndex = 0 // loop
-        }
+        if (currentIndex >= routeCoords.length - 1) currentIndex = 0 // loop
       }
 
       animFrameRef.current = requestAnimationFrame(animate)
     }
 
     animFrameRef.current = requestAnimationFrame(animate)
+    return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current) }
+  }, [routeCoords, speedFactor])
 
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
-      if (markerRef.current && map) map.removeLayer(markerRef.current)
-    }
-  }, [map, routeCoords, speedFactor])
-
-  return null
+  if (!routeCoords || routeCoords.length < 2) return null
+  return <Marker position={routeCoords[0]} icon={icon} zIndexOffset={1000} ref={markerRef} />
 }
 
 function MapInstance({ setMap, onUserDrag }) {
@@ -188,26 +171,28 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
   const [map, setMap] = useState(null)
   const [waitingForLocation, setWaitingForLocation] = useState(true)
   const [followDriver, setFollowDriver] = useState(true)
-  const etaTimerRef = useRef(null)
+  const [secondsAgo, setSecondsAgo] = useState(null)
   const lastEtaCalcRef = useRef(0)
-  const clientRef = useRef(null)
   const prevPosRef = useRef(null)
 
-  // Driver side: send location every 3s via WebSocket/REST
-  useDriverLocationSender({ bookingId, driverId, active: isDriver })
-
-  // Fetch route on mount
+  // Fetch route on mount, falling back to a straight line if OSRM is unavailable
   useEffect(() => {
     if (!fromLat || !toLat) return
+    let cancelled = false
+    const fallback = () => { if (!cancelled) setRouteCoords(buildStraightRoute(fromLat, fromLon, toLat, toLon)) }
     const coords = `${fromLon},${fromLat};${toLon},${toLat}`
-    fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`)
+    fetch(`${OSRM_BASE_URL}/route/v1/driving/${coords}?overview=full&geometries=geojson`)
       .then(r => r.json())
       .then(data => {
+        if (cancelled) return
         if (data.code === 'Ok' && data.routes?.length > 0) {
           setRouteCoords(data.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]))
+        } else {
+          fallback()
         }
       })
-      .catch(() => {})
+      .catch(fallback)
+    return () => { cancelled = true }
   }, [fromLat, fromLon, toLat, toLon])
 
   const updateDriverPos = useCallback((lat, lon, serverHeading) => {
@@ -222,52 +207,32 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
     setWaitingForLocation(false)
   }, [])
 
-  // User side: WebSocket + REST polling every 5s for real driver location
+  // Driver side: drive the car along the route (or real GPS) and publish it.
+  // onPosition keeps the driver's own marker in sync with what we send.
+  useDriverLocationSender({ bookingId, driverId, active: isDriver, routeCoords, onPosition: updateDriverPos })
+
+  // User side: live driver location via WebSocket push + 5s REST poll fallback.
+  // The hook only updates React state, so the marker auto-refreshes and moves
+  // without any page reload (Rapido/Zomato style).
+  const { location: liveLoc, lastUpdate, socketLive } = useLiveDriverLocation({
+    bookingId,
+    active: !isDriver,
+  })
+
+  // Feed each live update into the shared marker sink.
   useEffect(() => {
-    if (isDriver) return
+    if (isDriver || !liveLoc) return
+    updateDriverPos(liveLoc.latitude, liveLoc.longitude, liveLoc.heading)
+  }, [liveLoc, isDriver, updateDriverPos])
 
-    const token = localStorage.getItem('nj_token')
-    const client = createStompClient(token)
-    clientRef.current = client
-
-    client.onConnect = () => {
-      client.subscribe(`/topic/booking/${bookingId}/location`, (message) => {
-        const loc = JSON.parse(message.body)
-        updateDriverPos(loc.latitude, loc.longitude, loc.heading)
-      })
-    }
-
-    client.onStompError = () => {}
-    client.activate()
-
-    const pollLocation = () => {
-      getDriverLocation(bookingId).then(r => {
-        if (r.data) {
-          updateDriverPos(r.data.latitude, r.data.longitude, r.data.heading)
-        }
-      }).catch(() => {})
-    }
-    pollLocation()
-    const pollInterval = setInterval(pollLocation, 3000)
-
-    return () => {
-      if (clientRef.current) clientRef.current.deactivate()
-      if (pollInterval) clearInterval(pollInterval)
-    }
-  }, [bookingId, isDriver, updateDriverPos])
-
-  // Driver side: watch own GPS and show on map
+  // Tick a "last updated Ns ago" freshness counter once per second.
   useEffect(() => {
-    if (!isDriver) return
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        updateDriverPos(pos.coords.latitude, pos.coords.longitude, pos.coords.heading)
-      },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
-    )
-    return () => navigator.geolocation.clearWatch(watchId)
-  }, [isDriver, updateDriverPos])
+    if (isDriver || !lastUpdate) return
+    const tick = () => setSecondsAgo(Math.floor((Date.now() - lastUpdate) / 1000))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [isDriver, lastUpdate])
 
   // ETA calculation - throttled to every 10s, triggered by position changes
   useEffect(() => {
@@ -277,7 +242,7 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
     if (now - lastEtaCalcRef.current < 10000) return
     lastEtaCalcRef.current = now
 
-    const url = `https://router.project-osrm.org/route/v1/driving/${driverPos[1]},${driverPos[0]};${toLon},${toLat}?overview=false`
+    const url = `${OSRM_BASE_URL}/route/v1/driving/${driverPos[1]},${driverPos[0]};${toLon},${toLat}?overview=false`
     fetch(url).then(r => r.json()).then(data => {
       if (data.code === 'Ok' && data.routes?.length > 0) {
         setEta(Math.ceil(data.routes[0].duration / 60))
@@ -324,6 +289,13 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="live-dot" />
           <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1 }}>LIVE TRACKING</span>
+          {!isDriver && (
+            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500 }}>
+              {secondsAgo == null
+                ? 'connecting…'
+                : `${socketLive ? '● ' : ''}updated ${secondsAgo}s ago`}
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 16, fontSize: 13, alignItems: 'center' }}>
           {distRemaining && <span style={{ color: '#94a3b8' }}>{distRemaining} km left</span>}
@@ -394,10 +366,7 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
       {/* Map */}
       <div style={{ borderRadius: 14, overflow: 'hidden', border: '2px solid #e2e8f0', height: 400, position: 'relative' }}>
         <MapContainer center={center} zoom={7} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true} zoomControl={false}>
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
           <FitBounds bounds={bounds} />
           <MapInstance setMap={setMap} onUserDrag={() => setFollowDriver(false)} />
 
@@ -436,14 +405,14 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
           )}
 
           {/* Animated car along route when waiting for real GPS */}
-          {routeCoords && !driverPos && map && (
-            <AnimatedRouteCarMarker routeCoords={routeCoords} map={map} speedFactor={1.5} />
+          {routeCoords && !driverPos && (
+            <AnimatedRouteCarMarker routeCoords={routeCoords} speedFactor={1.5} />
           )}
 
           {/* Real driver car - shows when we have actual driver GPS */}
-          {driverPos && map && (
+          {driverPos && (
             <>
-              <DriverMarker position={driverPos} heading={driverHeading} map={map} />
+              <DriverMarker position={driverPos} heading={driverHeading} />
               <FollowDriver driverPos={driverPos} active={followDriver} />
             </>
           )}

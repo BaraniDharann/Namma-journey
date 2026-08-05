@@ -47,6 +47,7 @@ public class CacheConfig {
         ttls.put("dailyRevenue",        Duration.ofMinutes(3));
         ttls.put("monthlyRevenue",      Duration.ofMinutes(10));
         ttls.put("yearlyRevenue",       Duration.ofMinutes(30));
+        ttls.put("monthlyRevenueSeries", Duration.ofMinutes(10));
         ttls.put("placeSearch",         Duration.ofHours(24));   // External API — cache aggressively
         return ttls;
     }

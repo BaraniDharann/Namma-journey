@@ -10,7 +10,10 @@ const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('nj_token')
+  // localStorage can throw SecurityError (storage partitioning, blocked 3rd-party storage);
+  // an uncaught throw here would reject every outgoing request.
+  let token = null
+  try { token = localStorage.getItem('nj_token') } catch { /* treat as logged out */ }
   if (token) config.headers.Authorization = `Bearer ${token}`
   // The axios instance defaults to Content-Type: application/json. When the caller passes
   // FormData (multipart upload), that default suppresses axios's auto-boundary detection,
@@ -29,8 +32,10 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       const isAuthRequest = err.config?.url?.includes('/auth/')
       if (!isAuthRequest) {
-        localStorage.removeItem('nj_token')
-        localStorage.removeItem('nj_user')
+        try {
+          localStorage.removeItem('nj_token')
+          localStorage.removeItem('nj_user')
+        } catch { /* storage unavailable — in-memory clear below still runs */ }
         // Notify AuthContext so in-memory user/token are cleared before the navigation;
         // otherwise the dashboard renders one stale frame before /login mounts.
         try { window.dispatchEvent(new Event('nj_auth_expired')) } catch { /* SSR safety */ }
@@ -185,6 +190,8 @@ export const getDriverTripPhoto = (bookingId) => api.get(`/owner/bookings/${book
 export const getCurrentPricing = () => cachedGet('/owner/pricing/current', 60000)
 export const getDailyRevenue = (date) => api.get(`/owner/revenue/daily?date=${date}`)
 export const getMonthlyRevenue = (year, month, opts = {}) => api.get(`/owner/revenue/monthly?year=${year}&month=${month}`, opts.silent ? { _silent: true } : {})
+// All 12 months in one request — the chart used to fire getMonthlyRevenue twelve times per view.
+export const getMonthlyRevenueSeries = (year, opts = {}) => api.get(`/owner/revenue/monthly-series?year=${year}`, opts.silent ? { _silent: true } : {})
 export const getYearlyRevenue = (year) => api.get(`/owner/revenue/yearly?year=${year}`)
 // Driver creation does multipart upload + DB writes + dispatches a welcome email — give it a
 // longer timeout than the default 15s and let axios pick the multipart boundary itself.
@@ -192,6 +199,13 @@ export const createDriver = (formData) => api.post('/owner/drivers', formData, {
   .then(res => { invalidateCache('drivers'); return res })
 export const getOwnerDrivers = () => cachedGet('/owner/drivers')
 export const getOwnerDriverById = (driverId) => api.get(`/owner/drivers/${driverId}`)
+export const deleteOwnerDriver = (driverId) => api.delete(`/owner/drivers/${driverId}`)
+  .then(res => { invalidateCache('drivers'); return res })
+// Mints a one-time Telegram onboarding link. POST, not GET, because the response is a
+// credential — whoever opens it can accept and reject that driver's trips until redeemed.
+// Each call revokes the previous link, so it must never be issued speculatively on render.
+export const createDriverTelegramLink = (driverId) => api.post(`/owner/drivers/${driverId}/telegram-link`)
+  .then(res => { invalidateCache('drivers'); return res })
 export const getDriverProfile = (driverId) => api.get(`/driver/${driverId}/profile`)
 export const toggleDriverAvailability = (driverId, status) => api.put(`/driver/${driverId}/availability`, { status }).then(res => { invalidateCache('driver'); return res })
 export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/profile`, data).then(res => { invalidateCache('profile'); return res })
