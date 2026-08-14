@@ -34,7 +34,7 @@ curl -X POST http://localhost:8080/api/auth/otp/send \
 ### Step 2: Check Your Email Inbox
 
 1. Open your email inbox (check spam/junk folder too)
-2. Look for email from: **Namma Journey** (tlokeshthiru123@gmail.com)
+2. Look for email from: **Namma Journey** (demo.user@example.com)
 3. Subject: **"Your OTP for Namma Journey"**
 4. Copy the 6-digit OTP code
 
@@ -227,12 +227,12 @@ curl --request POST \
   --url https://api.sendgrid.com/v3/mail/send \
   --header "Authorization: Bearer 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" \
   --header 'Content-Type: application/json' \
-  --data '{"personalizations":[{"to":[{"email":"test@example.com"}]}],"from":{"email":"tlokeshthiru123@gmail.com"},"subject":"Test","content":[{"type":"text/plain","value":"Test"}]}'
+  --data '{"personalizations":[{"to":[{"email":"test@example.com"}]}],"from":{"email":"demo.user@example.com"},"subject":"Test","content":[{"type":"text/plain","value":"Test"}]}'
 ```
 
 **Check 2: Verify SendGrid Sender**
 - Go to: https://app.sendgrid.com/settings/sender_auth
-- Ensure `tlokeshthiru123@gmail.com` is verified
+- Ensure `demo.user@example.com` is verified
 
 **Check 3: Check Application Logs**
 ```bash

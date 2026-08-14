@@ -563,10 +563,9 @@ ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT false;
 ### Complete Documentation
 
 📚 **Detailed Guides:**
-- **[Driver Creation Workflow](DRIVER_CREATION_WORKFLOW.md)** - Complete workflow documentation
-- **[Setup Guide](DRIVER_SETUP_GUIDE.md)** - Step-by-step setup instructions
-- **[Quick Reference](DRIVER_QUICK_REFERENCE.md)** - Quick command reference
-- **[Implementation Summary](DRIVER_IMPLEMENTATION_SUMMARY.md)** - Technical details
+- **[Driver Creation Workflow](guides/DRIVER_CREATION_WORKFLOW.md)** - Complete workflow documentation
+- **[Setup Guide](guides/DRIVER_SETUP_GUIDE.md)** - Step-by-step setup instructions
+- **[Quick Reference](api/DRIVER_QUICK_REFERENCE.md)** - Quick command reference
 
 📦 **Testing:**
 - **Postman Collection:** `Driver-Creation-Workflow.postman_collection.json`
@@ -648,7 +647,7 @@ Users can rate completed journeys and provide feedback about driver attitude. Ow
 ✅ Owner dashboard for all reviews  
 ✅ Sorted by date (newest first)  
 
-📚 **Full Documentation:** [Review & Rating API](REVIEW_RATING_API.md)
+📚 **Full Documentation:** [Review & Rating API](api/REVIEW_RATING_API.md)
 
 ---
 
@@ -771,6 +770,6 @@ Dual payment system supporting UPI and cash payments with owner verification wor
 ✅ RCM calculation trigger  
 ✅ Complete payment history  
 
-📚 **Full Documentation:** [Payment System API](PAYMENT_API_DOCUMENTATION.md)
+📚 **Full Documentation:** [Payment System API](api/PAYMENT_API_DOCUMENTATION.md)
 
 ---

@@ -26,6 +26,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Local development scripts moved from the repository root into `scripts/`
 - README rewritten as a full-stack entry point; the endpoint reference moved to
   `docs/API_REFERENCE.md`
+- **Documentation reorganised.** The repository root went from 55 markdown files to 9. Build
+  logs, superseded migration notes and IDE-specific fix guides were removed; the remaining
+  reference material moved into `docs/api/`, `docs/guides/` and `docs/postman/`
+- `.env.example` now documents every variable the application reads, including CORS, caching,
+  rate limiting and the owner bootstrap secret
+- Playwright videos and E2E screenshots are no longer tracked in git (21 MB); they are
+  regenerated on every run
 
 ### Fixed
 - Frontend login flows for user, driver and owner roles
@@ -34,6 +41,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Security
 - `JWT_SECRET` no longer has a fallback default — the application will not start without it
 - Placeholder values substituted for real credentials in `.env.example`
+- Personal contact details (name, email address and mobile number) removed from documentation
+  and E2E test fixtures, which now use `demo.user@example.com`
 
 ## [1.0.0] - Initial
 

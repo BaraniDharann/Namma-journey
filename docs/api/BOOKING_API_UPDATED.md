@@ -25,7 +25,7 @@
 ```json
 {
   "userName": "Rajesh Kumar",
-  "userPhone": "9597965911",
+  "userPhone": "9000000000",
   "fromPlace": "Bangalore",
   "toPlace": "Tirupati",
   "fromDate": "2024-03-15",
@@ -40,7 +40,7 @@
 {
   "bookingId": "0ff04487-be30-4383-912c-36a498f76619",
   "userName": "Rajesh Kumar",
-  "userPhone": "9597965911",
+  "userPhone": "9000000000",
   "fromPlace": "Bangalore",
   "toPlace": "Tirupati",
   "fromDate": "2024-03-15",
@@ -68,7 +68,7 @@ curl --request POST \
   --header 'content-type: application/json' \
   --data '{
     "userName": "Rajesh Kumar",
-    "userPhone": "9597965911",
+    "userPhone": "9000000000",
     "fromPlace": "Bangalore",
     "toPlace": "Tirupati",
     "fromDate": "2024-03-15",
@@ -85,7 +85,7 @@ curl --request POST \
 | Field | Type | Validation | Example |
 |-------|------|------------|---------|
 | userName | String | Required, Not blank | "Rajesh Kumar" |
-| userPhone | String | Required, 10-digit Indian mobile (6-9 start) | "9597965911" |
+| userPhone | String | Required, 10-digit Indian mobile (6-9 start) | "9000000000" |
 | fromPlace | String | Required, Not blank | "Bangalore" |
 | toPlace | String | Required, Not blank | "Tirupati" |
 | fromDate | LocalDate | Required, ISO format (YYYY-MM-DD) | "2024-03-15" |

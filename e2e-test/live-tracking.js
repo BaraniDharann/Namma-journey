@@ -46,7 +46,7 @@ function mintToken(userId, role) {
 }
 
 const ACCOUNTS = {
-  user: { userId: 'f54882fa-50ff-40b1-86b4-6500d573f5bd', role: 'ROLE_USER', name: 'Lokesh Lokesh', email: 'tlokeshthiru123@gmail.com', mobile: '9597965911' },
+  user: { userId: 'f54882fa-50ff-40b1-86b4-6500d573f5bd', role: 'ROLE_USER', name: 'Demo User', email: 'demo.user@example.com', mobile: '9000000000' },
   driver: { userId: '10', role: 'ROLE_DRIVER', name: 'Sarathi', email: 'sarasarathy86@gmail.com', mobile: '8220667367' },
 };
 

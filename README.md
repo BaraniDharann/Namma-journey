@@ -4,7 +4,7 @@ A full-stack car travel booking platform built for the Indian market — temple 
 trips, tours and long-distance travel. Customers book a trip, an owner assigns a driver, and the
 customer watches that driver approach in real time.
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/main.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/main.yml)
+[![CI](https://github.com/BaraniDharann/Namma-journey/actions/workflows/main.yml/badge.svg)](https://github.com/BaraniDharann/Namma-journey/actions/workflows/main.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -44,8 +44,8 @@ stream their location; owners manage drivers, pricing, packages and revenue.
 Everything — Postgres, Redis, backend and frontend — comes up together.
 
 ```bash
-git clone https://github.com/OWNER/REPO.git
-cd REPO
+git clone https://github.com/BaraniDharann/Namma-journey.git
+cd Namma-journey
 cp .env.example .env     # then fill in the values, see Configuration below
 docker compose up --build
 ```
@@ -144,7 +144,14 @@ on every pull request, because it takes minutes and needs a live database.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to set up, branch, test and submit changes |
 | [SECURITY.md](SECURITY.md) | Reporting a vulnerability |
 
-Postman collections for the API are in the repository root (`*.postman_collection.json`).
+Deeper reference material lives under [docs/](docs/):
+
+- [docs/api/](docs/api/) — per-feature API documentation (booking, driver allocation, payments, reviews, RCM)
+- [docs/guides/](docs/guides/) — setup and testing walkthroughs with cURL examples
+- [docs/postman/](docs/postman/) — Postman collections
+
+> These are working notes kept from the build and are **not** all current — [docs/API_REFERENCE.md](docs/API_REFERENCE.md)
+> is the authoritative endpoint reference.
 
 ---
 

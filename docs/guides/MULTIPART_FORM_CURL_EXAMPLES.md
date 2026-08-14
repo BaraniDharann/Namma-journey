@@ -24,7 +24,7 @@ curl -X POST http://localhost:8080/api/owner/drivers \
   -H "Authorization: Bearer YOUR_OWNER_TOKEN" \
   -F "name=Suresh Sharma" \
   -F "mobile=9123456789" \
-  -F "email=tlokeshthiru123@gmail.com" \
+  -F "email=demo.user@example.com" \
   -F "licenseNumber=DL1420110012345" \
   -F "aadhaarNumber=123456789012" \
   -F "photo=@/path/to/driver_photo.jpg" \
@@ -41,7 +41,7 @@ curl -X POST http://localhost:8080/api/owner/drivers ^
   -H "Authorization: Bearer YOUR_OWNER_TOKEN" ^
   -F "name=Suresh Sharma" ^
   -F "mobile=9123456789" ^
-  -F "email=tlokeshthiru123@gmail.com" ^
+  -F "email=demo.user@example.com" ^
   -F "licenseNumber=DL1420110012345" ^
   -F "aadhaarNumber=123456789012" ^
   -F "photo=@C:\path\to\driver_photo.jpg" ^
@@ -58,7 +58,7 @@ curl -X POST http://localhost:8080/api/owner/drivers \
   -H "Authorization: Bearer YOUR_OWNER_TOKEN" \
   -F "name=Suresh Sharma" \
   -F "mobile=9123456789" \
-  -F "email=tlokeshthiru123@gmail.com" \
+  -F "email=demo.user@example.com" \
   -F "licenseNumber=DL1420110012345" \
   -F "aadhaarNumber=123456789012"
 ```
@@ -71,7 +71,7 @@ curl -X POST http://localhost:8080/api/owner/drivers \
 curl -X POST http://localhost:8080/api/owner/drivers/verify \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_OWNER_TOKEN" \
-  -d '{"email":"tlokeshthiru123@gmail.com","otp":"123456"}'
+  -d '{"email":"demo.user@example.com","otp":"123456"}'
 ```
 
 ---
@@ -111,7 +111,7 @@ curl -X POST http://localhost:8080/api/auth/driver/change-password \
 |-----|------|-------|
 | name | Text | Suresh Sharma |
 | mobile | Text | 9123456789 |
-| email | Text | tlokeshthiru123@gmail.com |
+| email | Text | demo.user@example.com |
 | licenseNumber | Text | DL1420110012345 |
 | aadhaarNumber | Text | 123456789012 |
 | photo | File | Select image file |
@@ -148,7 +148,7 @@ Examples:
 {
   "id": 1,
   "name": "Suresh Sharma",
-  "email": "tlokeshthiru123@gmail.com",
+  "email": "demo.user@example.com",
   "mobile": "9123456789",
   "message": "Driver created successfully. OTP sent to driver's email for verification."
 }

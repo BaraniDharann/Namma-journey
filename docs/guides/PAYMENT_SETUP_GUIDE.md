@@ -442,9 +442,9 @@ Body: {"action":"ACCEPT"}
 ## 🆘 Support
 
 **Documentation:**
-- [Payment API Documentation](PAYMENT_API_DOCUMENTATION.md)
-- [Payment Flow Diagrams](PAYMENT_FLOW_DIAGRAMS.md)
-- [Quick Reference](PAYMENT_QUICK_REFERENCE.md)
+- [Payment API Documentation](../api/PAYMENT_API_DOCUMENTATION.md)
+- [Payment Flow Diagrams](../api/PAYMENT_FLOW_DIAGRAMS.md)
+- [Quick Reference](../api/PAYMENT_QUICK_REFERENCE.md)
 
 **Need Help?**
 - Check troubleshooting section above

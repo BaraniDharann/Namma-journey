@@ -51,3 +51,7 @@ playwright-tests/test-results/
 playwright-tests/reports/
 playwright-tests/screenshots-walkthrough/
 e2e-test/*-report.json
+
+# Playwright videos and E2E screenshots — regenerated on every run
+playwright-tests/videos-ui/
+e2e-test/screenshots/
