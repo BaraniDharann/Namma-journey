@@ -270,11 +270,14 @@ test.describe('Telegram driver dispatch', () => {
     const press = await postWebhook(anon, callbackUpdate(chatId, `reject:${bookingId}`), SECRET);
     expect(press.status()).toBe(200);
 
-    // rejectBooking releases the driver and returns the trip to the pool for reassignment.
-    // The status is PENDING either way, so the driver being cleared is what proves it landed.
+    // rejectBooking records the refusal, then hands the trip to the next available driver
+    // excluding everyone who has already declined — so the driver_id is either a replacement
+    // or null, never the driver who just declined. The status is PENDING either way, so it is
+    // the declining driver losing the trip that proves the callback landed.
     const row = await bookingRow(c.owner, bookingId);
     expect(row?.status).toBe('PENDING');
-    expect(row?.driverId ?? null, 'declining must release the driver').toBeNull();
+    expect(String(row?.driverId ?? ''), 'the declining driver must not keep the trip')
+      .not.toBe(String(driverId));
   });
 
   test('an unlinked Telegram account cannot accept somebody else\'s trip', async () => {

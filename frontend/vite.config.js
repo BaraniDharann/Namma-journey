@@ -12,6 +12,10 @@ export default defineConfig(({ mode }) => {
 
     server: {
       port: 5173,
+      // Fail loudly instead of silently moving to 5174. The E2E suite targets 5173 by
+      // hard-coded baseURL, so a silent fallback leaves it testing whatever else happens
+      // to hold that port — which reads as dozens of unrelated frontend failures.
+      strictPort: true,
       proxy: {
         '/api': {
           target: backendUrl,

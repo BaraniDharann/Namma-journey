@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readAccounts } from '../helpers/env';
 import { contexts, disposeAll, bookingPayload, createStartedBooking, Ctxs } from '../helpers/booking';
+import { query } from '../helpers/db';
 
 const acc = readAccounts();
 const U = acc.user.userId;
@@ -103,7 +104,10 @@ test.describe('Driver API', () => {
   test('an unassigned driver cannot start someone else\'s booking', async () => {
     const created = await c.user.post(`/api/user/${U}/bookings`, { data: bookingPayload() });
     const b = await created.json();
-    // Never assigned to anyone.
+    // Booking creation auto-allocates whichever driver is free, which can be this very
+    // driver — so detach it explicitly. Without this the request trips the CONFIRMED check
+    // first and never reaches the authorization branch this test exists to cover.
+    await query('UPDATE travel_bookings SET driver_id = NULL WHERE id = $1', [b.bookingId]);
     const res = await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/start-trip`);
     expect(res.status()).toBeGreaterThanOrEqual(400);
     expect((await res.text()).toLowerCase()).toContain('not assigned');
