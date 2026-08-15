@@ -55,6 +55,18 @@ function buildStraightRoute(fromLat, fromLon, toLat, toLon, steps = 60) {
   return pts
 }
 
+// Great-circle distance in km. Mirrors RoutingService.haversineDistance on the backend,
+// including its 6371 km radius, so a client-side estimate never contradicts a server one.
+function haversineKm(from, to) {
+  const toRad = (d) => (d * Math.PI) / 180
+  const R = 6371
+  const dLat = toRad(to[0] - from[0])
+  const dLon = toRad(to[1] - from[1])
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(from[0])) * Math.cos(toRad(to[0])) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 function findNearestRouteIndex(routeCoords, pos) {
   if (!routeCoords || !pos) return 0
   let minDist = Infinity
@@ -168,6 +180,9 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
   const [driverHeading, setDriverHeading] = useState(0)
   const [eta, setEta] = useState(null)
   const [distRemaining, setDistRemaining] = useState(null)
+  // True when the figures came from the straight-line fallback rather than a real route,
+  // so the UI can label them instead of passing a guess off as a routed ETA.
+  const [etaIsEstimate, setEtaIsEstimate] = useState(false)
   const [map, setMap] = useState(null)
   const [waitingForLocation, setWaitingForLocation] = useState(true)
   const [followDriver, setFollowDriver] = useState(true)
@@ -242,13 +257,27 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
     if (now - lastEtaCalcRef.current < 10000) return
     lastEtaCalcRef.current = now
 
+    // OSRM defaults to a shared community demo server that is rate-limited and regularly
+    // unreachable. Swallowing that failure leaves the passenger staring at a moving car with
+    // no distance and no ETA at all, which reads as the tracking being broken. Fall back to a
+    // straight-line estimate at 60 km/h — the same assumption RoutingService makes server-side.
+    const straightLineEstimate = () => {
+      const km = haversineKm(driverPos, [toLat, toLon])
+      setDistRemaining(km.toFixed(1))
+      setEta(Math.max(1, Math.ceil(km)))
+      setEtaIsEstimate(true)
+    }
+
     const url = `${OSRM_BASE_URL}/route/v1/driving/${driverPos[1]},${driverPos[0]};${toLon},${toLat}?overview=false`
     fetch(url).then(r => r.json()).then(data => {
       if (data.code === 'Ok' && data.routes?.length > 0) {
         setEta(Math.ceil(data.routes[0].duration / 60))
         setDistRemaining((data.routes[0].distance / 1000).toFixed(1))
+        setEtaIsEstimate(false)
+      } else {
+        straightLineEstimate()
       }
-    }).catch(() => {})
+    }).catch(straightLineEstimate)
   }, [driverPos, toLat, toLon])
 
   // Travelled route (green portion behind driver)
@@ -299,7 +328,17 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
         </div>
         <div style={{ display: 'flex', gap: 16, fontSize: 13, alignItems: 'center' }}>
           {distRemaining && <span style={{ color: '#94a3b8' }}>{distRemaining} km left</span>}
-          <span>ETA: <strong style={{ color: '#60a5fa' }}>{formatEta(eta)}</strong></span>
+          <span>
+            ETA: <strong style={{ color: '#60a5fa' }}>{formatEta(eta)}</strong>
+            {etaIsEstimate && (
+              <span
+                title="Routing service unavailable — showing a straight-line estimate"
+                style={{ marginLeft: 4, color: '#94a3b8', fontSize: 11 }}
+              >
+                ~est
+              </span>
+            )}
+          </span>
         </div>
       </div>
 
