@@ -171,7 +171,7 @@ export default function PackageDetail() {
           {/* Sidebar */}
           <div style={{ position: 'sticky', top: 20 }}>
             <div style={{ background: '#fff', borderRadius: 14, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 16 }}>What's Included</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', marginBottom: 16 }}>What&apos;s Included</h3>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {[
                   { ok: pkg.foodIncluded, label: '🍽️ Food', detail: pkg.foodDetails },
@@ -265,7 +265,7 @@ export default function PackageDetail() {
           <div style={{ background: '#fff', borderRadius: 18, maxWidth: 420, width: '100%', padding: '40px 32px', textAlign: 'center' }}>
             <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
             <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', marginBottom: 8, fontFamily: 'Poppins, sans-serif' }}>Booking Confirmed!</h2>
-            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>Your booking for <strong>{pkg.name}</strong> has been submitted. We'll confirm it shortly!</p>
+            <p style={{ color: '#64748b', fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>Your booking for <strong>{pkg.name}</strong> has been submitted. We&apos;ll confirm it shortly!</p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => navigate('/user/package-bookings')}
                 style={{ flex: 1, padding: '12px 0', background: 'linear-gradient(135deg, #f97316, #ea580c)', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>

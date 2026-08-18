@@ -71,7 +71,7 @@ function DriverPhotoModal({ bookingId, onClose }) {
       <div className="modal-box" style={{ maxWidth: 420, textAlign: 'center', borderRadius: 20, overflow: 'hidden', padding: 0 }}>
         <div style={{ background: 'linear-gradient(135deg, #0F172A, #1e293b)', padding: '20px 24px' }}>
           <h3 style={{ fontFamily: 'Poppins', fontWeight: 800, fontSize: 18, color: '#fff', marginBottom: 4 }}>Driver Trip Photo</h3>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>Review driver's appearance & professionalism</p>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>Review driver&apos;s appearance & professionalism</p>
         </div>
         <div style={{ padding: 24 }}>
           {loading ? (

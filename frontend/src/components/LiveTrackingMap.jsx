@@ -398,7 +398,7 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
           background: 'linear-gradient(135deg, #eff6ff, #f0fdf4)', border: '1px solid #bfdbfe', fontSize: 12, color: '#1e40af',
         }}>
           <span className="waiting-spinner" />
-          Connecting to driver's live location...
+          Connecting to driver&apos;s live location...
         </div>
       )}
 

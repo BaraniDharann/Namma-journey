@@ -242,7 +242,7 @@ export default function DriverLoginPage() {
                     onChange={e => setForgotForm({ ...forgotForm, mobile: e.target.value.replace(/\D/g, '') })} required
                     style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
                 </div>
-                <p style={{ fontSize: 12, color: '#94a3b8' }}>We'll send an OTP to the email registered with this mobile.</p>
+                <p style={{ fontSize: 12, color: '#94a3b8' }}>We&apos;ll send an OTP to the email registered with this mobile.</p>
                 <button type="submit" disabled={forgotLoading} className="btn-primary"
                   style={{ width: '100%', padding: '13px', borderRadius: 10, background: forgotLoading ? '#93c5fd' : 'linear-gradient(135deg,#3b82f6,#06b6d4)', color: '#fff', fontWeight: 700, fontSize: 15, border: 'none', cursor: forgotLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   {forgotLoading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Sending OTP...</> : 'Send OTP'}

@@ -8,7 +8,6 @@ export default function SignupPage() {
   const [form, setForm] = useState({ email: '', name: '', mobile: '', otp: '', password: '', confirmPassword: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [otpSent, setOtpSent] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -19,7 +18,6 @@ export default function SignupPage() {
     setError('')
     try {
       await sendOtp(form.email)
-      setOtpSent(true)
       setStep(2)
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to send OTP')

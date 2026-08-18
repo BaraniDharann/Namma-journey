@@ -39,7 +39,7 @@ export default function OwnerPackageBookings() {
 
   const handleConfirm = async (id) => {
     setActionLoading(id)
-    try { await confirmPackageBooking(id); fetchBookings() } catch {}
+    try { await confirmPackageBooking(id); fetchBookings() } catch { /* already surfaced by the api error toast */ }
     setActionLoading(null)
   }
 
@@ -47,13 +47,13 @@ export default function OwnerPackageBookings() {
     const reason = prompt('Cancellation reason:')
     if (!reason) return
     setActionLoading(id)
-    try { await cancelOwnerPackageBooking(id, reason); fetchBookings() } catch {}
+    try { await cancelOwnerPackageBooking(id, reason); fetchBookings() } catch { /* already surfaced by the api error toast */ }
     setActionLoading(null)
   }
 
   const handleComplete = async (id) => {
     setActionLoading(id)
-    try { await completePackageBooking(id); fetchBookings() } catch {}
+    try { await completePackageBooking(id); fetchBookings() } catch { /* already surfaced by the api error toast */ }
     setActionLoading(null)
   }
 

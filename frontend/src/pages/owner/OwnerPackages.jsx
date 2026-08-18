@@ -111,12 +111,12 @@ export default function OwnerPackages() {
   }
 
   const handleToggle = async (id) => {
-    try { await togglePackage(id); fetchPackages() } catch {}
+    try { await togglePackage(id); fetchPackages() } catch { /* already surfaced by the api error toast */ }
   }
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this package permanently?')) return
-    try { await deletePackage(id); fetchPackages() } catch {}
+    try { await deletePackage(id); fetchPackages() } catch { /* already surfaced by the api error toast */ }
   }
 
   // Dynamic list field helpers

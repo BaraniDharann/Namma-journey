@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { getDailyRevenue, getMonthlyRevenue, getMonthlyRevenueSeries, getYearlyRevenue, setPricing, setHourlyPricing, getCurrentPricing, getOwnerBookings, getOwnerDrivers } from '../../utils/api'
 import { useAuth } from '../../context/AuthContext'
@@ -19,7 +19,6 @@ const navItems = [
 ]
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-const FULL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
 // Excel download helper
 async function downloadExcel(headers, rows, filename, sheetName = 'Report') {

@@ -47,7 +47,7 @@ export default function JourneyHero({ onStart, children }) {
             transition={{ duration: 0.6, ease: EASE }}
           >
             <i className="hero-badge-dot" />
-            India's temple &amp; outstation cab service
+            India&apos;s temple &amp; outstation cab service
           </motion.span>
 
           <h1 className="hero-title">

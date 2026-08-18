@@ -58,7 +58,8 @@ export default function DashboardLayout({ children, navItems, role }) {
       ])
       setNotifications(notifRes.data || [])
       setUnreadCount(countRes.data?.count ?? countRes.data ?? 0)
-    } catch (err) {
+    } catch {
+      /* already surfaced by the api error toast */
     }
   }, [user?.userId, user?.role])
 
@@ -84,7 +85,7 @@ export default function DashboardLayout({ children, navItems, role }) {
         await markNotificationAsRead(notif.id)
         setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n))
         setUnreadCount(prev => Math.max(0, prev - 1))
-      } catch (err) { /* ignore */ }
+      } catch { /* already surfaced by the api error toast */ }
     }
     if (notif.bookingId && BOOKING_ROUTES[user?.role]) {
       setDropdownOpen(false)
@@ -99,7 +100,7 @@ export default function DashboardLayout({ children, navItems, role }) {
       await markAllNotificationsAsRead(recipientId, user.role)
       setNotifications(prev => prev.map(n => ({ ...n, read: true })))
       setUnreadCount(0)
-    } catch (err) { /* ignore */ }
+    } catch { /* already surfaced by the api error toast */ }
   }
 
   return (

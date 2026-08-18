@@ -36,7 +36,7 @@ export default function DriverProfile() {
     try {
       await toggleDriverAvailability(user.userId, newStatus)
       setProfile(prev => ({ ...prev, status: newStatus }))
-    } catch (err) {
+    } catch {
       alert('Failed to update availability')
     } finally {
       setToggling(false)

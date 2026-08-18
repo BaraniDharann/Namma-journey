@@ -35,7 +35,7 @@ function CameraModal({ bookingId, driverId, onPhotoCaptured, onClose }) {
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream
         }
-      } catch (err) {
+      } catch {
         setError('Camera access denied. Please allow camera permission to take your photo.')
       }
     }
@@ -66,7 +66,7 @@ function CameraModal({ bookingId, driverId, onPhotoCaptured, onClose }) {
       await uploadEndTripPhoto(driverId, bookingId, file)
       if (stream) stream.getTracks().forEach(t => t.stop())
       onPhotoCaptured()
-    } catch (err) {
+    } catch {
       setError('Failed to upload photo. Please try again.')
     }
     setUploading(false)

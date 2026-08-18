@@ -37,7 +37,7 @@ export default function UserPackageBookings() {
   const handleCancel = async (id) => {
     const reason = prompt('Reason for cancellation:')
     if (!reason) return
-    try { await cancelPackageBooking(user.userId, id, reason); fetchBookings() } catch {}
+    try { await cancelPackageBooking(user.userId, id, reason); fetchBookings() } catch { /* already surfaced by the api error toast */ }
   }
 
   const filtered = filter === 'ALL' ? bookings : bookings.filter(b => b.status === filter)

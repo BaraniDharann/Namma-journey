@@ -71,7 +71,7 @@ export default function UserDashboard() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
               <div className="animate-fadeInLeft">
                 <h1 style={{ fontFamily: 'Poppins', fontWeight: 900, fontSize: 28, color: '#fff', marginBottom: 6 }}>Welcome back! 👋</h1>
-                <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.8)' }}>Here's your travel overview</p>
+                <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.8)' }}>Here&apos;s your travel overview</p>
               </div>
               <Link to="/user/bookings/new" className="btn-primary animate-fadeInRight" style={{ background: 'rgba(249,115,22,0.9)', backdropFilter: 'blur(8px)', boxShadow: '0 8px 24px rgba(249,115,22,0.3)' }}>➕ New Booking</Link>
             </div>

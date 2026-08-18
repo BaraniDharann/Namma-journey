@@ -15,15 +15,6 @@ const navItems = [
   { path: '/owner/profile', icon: '👤', label: 'Profile' },
 ]
 
-function Stars({ rating }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1,2,3,4,5].map(s => (
-        <span key={s} className={s <= rating ? 'star' : 'star-empty'}>★</span>
-      ))}
-    </div>
-  )
-}
 
 export default function OwnerReviews() {
   const [reviews, setReviews] = useState([])

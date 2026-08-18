@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -75,7 +75,7 @@ export default function RouteMap({ fromLat, fromLon, toLat, toLon, fromPlace, to
           distanceKm: (route.distance / 1000).toFixed(1),
           durationMinutes: Math.ceil(route.duration / 60),
         })
-      } catch (err) {
+      } catch {
         setError('Failed to fetch route. Please try again.')
         setRouteCoords(null)
         setRouteInfo(null)

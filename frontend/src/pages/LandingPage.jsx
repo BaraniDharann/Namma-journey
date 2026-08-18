@@ -168,11 +168,11 @@ function FleetSection() {
         <div style={{ textAlign: 'center', marginBottom: 44 }}>
           <Reveal><span className="jp-eyebrow">🚘 The garage</span></Reveal>
           <Reveal delay={0.06}>
-            <h2 className="jp-h2">Pick the car, <em>we'll bring the driver</em></h2>
+            <h2 className="jp-h2">Pick the car, <em>we&apos;ll bring the driver</em></h2>
           </Reveal>
           <Reveal delay={0.12}>
             <p className="jp-lead" style={{ margin: '0 auto' }}>
-              Every vehicle is serviced, insured and driven by someone we've verified in person.
+              Every vehicle is serviced, insured and driven by someone we&apos;ve verified in person.
               Rates below are all-inclusive — fuel, tolls and driver bata.
             </p>
           </Reveal>
@@ -523,7 +523,7 @@ export default function LandingPage() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, justifyContent: 'center' }}>
                 <Link to="/signup" className="btn-journey">
                   <span className="btn-journey-shine" />
-                  🚀 Book now — it's free
+                  🚀 Book now — it&apos;s free
                 </Link>
                 <Link to="/driver/login" className="btn-outline">
                   🚗 Become a driver
@@ -544,7 +544,7 @@ export default function LandingPage() {
                 <span className="jn-name">Namma <b>Journey</b></span>
               </Link>
               <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.75, marginTop: 12 }}>
-                India's trusted platform for booking rides to any destination — and the long-haul
+                India&apos;s trusted platform for booking rides to any destination — and the long-haul
                 routes that carry on from there.
               </p>
             </div>

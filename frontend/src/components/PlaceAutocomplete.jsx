@@ -67,7 +67,6 @@ export default function PlaceAutocomplete({ value, onChange, placeholder, requir
   const [selected, setSelected] = useState(!!value)
   const debounceRef = useRef(null)
   const wrapperRef = useRef(null)
-  const abortRef = useRef(null)
 
   useEffect(() => {
     if (!value && query) {
