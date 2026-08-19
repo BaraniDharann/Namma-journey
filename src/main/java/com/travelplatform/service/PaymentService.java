@@ -39,7 +39,7 @@ public class PaymentService {
     private final NotificationService notificationService;
     private final LocationTrackingService locationTrackingService;
     
-    @Value("${payment.upi.id:sarasarathy86@okicici}")
+    @Value("${payment.upi.id}")
     private String ownerUpiId;
     
     @Value("${payment.upi.name:Namma Journey}")

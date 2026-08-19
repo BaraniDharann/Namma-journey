@@ -108,7 +108,7 @@ app:
   # Comma-separated origins allowed for REST (CORS) and the WebSocket handshake.
   # Override in production, e.g. CORS_ALLOWED_ORIGINS=https://app.nammajourney.com
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost,http://localhost:5173,http://localhost:4173}
 
   bootstrap:
     # One-time secret for POST /api/auth/owner/create-admin, which creates the first owner
@@ -193,7 +193,7 @@ file:
 # Payment Configuration
 payment:
   upi:
-    id: ${OWNER_UPI_ID:sarasarathy86@okicici}
+    id: ${OWNER_UPI_ID}
     name: ${OWNER_UPI_NAME:Namma Journey}
 
 logging:

@@ -92,7 +92,7 @@ Nothing sensitive has a default; the application refuses to start without the re
 | `GOOGLE_CLIENT_ID` / `_SECRET` | ➖ | Only needed for Google sign-in |
 | `TELEGRAM_*` | ➖ | Leave `TELEGRAM_ENABLED=false` to disable entirely — see [TELEGRAM_SETUP.md](TELEGRAM_SETUP.md) |
 | `REDIS_HOST`, `REDIS_PORT` | ➖ | Defaults to `localhost:6379` |
-| `OWNER_UPI_ID`, `OWNER_UPI_NAME` | ➖ | Payment collection details |
+| `OWNER_UPI_ID` | ✅ | Account that receives customer payments — no fallback, by design |
 
 > **Never commit your `.env`.** It is gitignored, and CI runs a secret scan over the full history.
 

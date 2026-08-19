@@ -701,7 +701,7 @@ Ordered by value-vs-effort:
 | `OTP_TEST_MODE` | `false` | If `true`, returns OTP in API response (dev only) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | — | Google OAuth |
 | `FILE_UPLOAD_DIR` | `uploads/drivers` | Local filesystem upload root |
-| `OWNER_UPI_ID` | `sarasarathy86@okicici` | UPI VPA receiving payments |
+| `OWNER_UPI_ID` | `your-upi-id@yourbank` | UPI VPA receiving payments |
 | `SERVER_PORT` | `8080` | Backend port |
 
 ## Appendix B — Ports (default)

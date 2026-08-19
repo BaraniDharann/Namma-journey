@@ -272,7 +272,7 @@ USER                DRIVER              SYSTEM              OWNER
 │                  UPI DEEP LINK FORMAT                            │
 └─────────────────────────────────────────────────────────────────┘
 
-upi://pay?pa=sarasarathy86@okicici&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567
+upi://pay?pa=your-upi-id@yourbank&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567
 
 │         │  │                        │ │                │  │       │  │                      │
 │         │  │                        │ │                │  │       │  │                      │

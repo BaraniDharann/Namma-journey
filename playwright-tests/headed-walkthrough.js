@@ -167,7 +167,7 @@ async function visit(page, route, label) {
     localStorage.setItem('nj_user', u);
   }, [acc.owner.token, JSON.stringify({
     token: acc.owner.token, userId: acc.owner.ownerId, role: 'ROLE_OWNER',
-    name: 'Owner', email: 'nammajourney06@gmail.com', mobile: '', message: 'ok',
+    name: 'Owner', email: 'owner@example.com', mobile: '', message: 'ok',
   })]);
   const ownPage = await ownCtx.newPage();
 

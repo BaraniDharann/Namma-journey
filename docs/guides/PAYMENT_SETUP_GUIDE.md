@@ -10,7 +10,7 @@ psql -U postgres -d travel_booking_db -f database-migration-payments.sql
 ### Step 2: Update Environment Variables
 Edit `.env` file:
 ```env
-OWNER_UPI_ID=sarasarathy86@okicici
+OWNER_UPI_ID=your-upi-id@yourbank
 OWNER_UPI_NAME=Namma Journey
 ```
 
@@ -88,7 +88,7 @@ JWT_SECRET=your_jwt_secret
 JWT_EXPIRATION=86400000
 
 # Payment Configuration (ADD THESE)
-OWNER_UPI_ID=sarasarathy86@okicici
+OWNER_UPI_ID=your-upi-id@yourbank
 OWNER_UPI_NAME=Namma Journey
 
 # Server Configuration
@@ -206,7 +206,7 @@ curl -X POST http://localhost:8080/api/user/{USER_ID}/bookings/{BOOKING_ID}/paym
 ```json
 {
   "paymentId": "987e6543-e21b-12d3-a456-426614174999",
-  "upiDeepLink": "upi://pay?pa=sarasarathy86@okicici&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567",
+  "upiDeepLink": "upi://pay?pa=your-upi-id@yourbank&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567",
   "message": "Open UPI app to complete payment..."
 }
 ```
@@ -457,6 +457,6 @@ Body: {"action":"ACCEPT"}
 
 Your payment system is now ready to process UPI and cash payments!
 
-**Owner UPI ID:** sarasarathy86@okicici  
+**Owner UPI ID:** your-upi-id@yourbank  
 **Payment Methods:** UPI, CASH  
 **Cost:** FREE (no payment gateway fees)

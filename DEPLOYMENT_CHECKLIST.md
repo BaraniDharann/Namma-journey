@@ -11,20 +11,24 @@
 ### Database
 - [ ] Backup existing database
 - [ ] Test database migration on staging
-- [ ] Verify new columns will be added automatically (ddl-auto: update)
+- [ ] New Flyway migration added under `src/main/resources/db/migration` for any schema change
+- [ ] `JPA_DDL_AUTO` is `validate` — Hibernate must never alter tables itself
 
 ### Environment Variables
-- [ ] `SENDGRID_API_KEY` configured
-- [ ] `SENDGRID_FROM_EMAIL` configured
-- [ ] `SENDGRID_FROM_NAME` configured
+- [ ] `MAIL_USERNAME` configured (Gmail SMTP account)
+- [ ] `MAIL_PASSWORD` configured (Gmail app password, not the account password)
+- [ ] `MAIL_FROM_NAME` configured
 - [ ] `DB_URL` configured
 - [ ] `DB_USERNAME` configured
 - [ ] `DB_PASSWORD` configured
 - [ ] `JWT_SECRET` configured
 - [ ] `JWT_EXPIRATION` configured
+- [ ] `OWNER_UPI_ID` configured — the app refuses to start without it
+- [ ] `CORS_ALLOWED_ORIGINS` lists the real frontend origin
+- [ ] `OTP_TEST_MODE` is `false`
+- [ ] `OWNER_BOOTSTRAP_SECRET` cleared again after the first owner was created
 
 ### Dependencies
-- [ ] SendGrid dependency in pom.xml
 - [ ] Spring Security dependency in pom.xml
 - [ ] JWT dependencies in pom.xml
 - [ ] Run `mvn clean install` successfully
@@ -95,7 +99,7 @@ DESCRIBE drivers;
 # Test owner login
 curl -X POST http://localhost:8080/api/auth/owner/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@travelplatform.com","password":"owner@123"}'
+  -d '{"email":"YOUR_OWNER_EMAIL","password":"YOUR_OWNER_PASSWORD"}'
 
 # Test driver creation endpoint exists
 curl -X POST http://localhost:8080/api/owner/drivers \

@@ -37,16 +37,24 @@ which points to a stock library rather than original photography:
 - `car image.jpeg`
 - `india-3d-map.jfif`
 
-The 22 destination photographs under `frontend/public/images/travel places/` (each shipped as a
-`.webp` with a `.jpg` fallback) were renamed from descriptive originals by
-`frontend/scripts/optimize-destinations.mjs`, so their filenames no longer carry any clue to
-their source.
+The multi-word, hyphen-separated style of those names is characteristic of Freepik and
+similar libraries. None has been confirmed.
+
+### Destination photographs
+
+The 22 destination photographs under `frontend/public/images/travel places/` (each shipped as
+a `.webp` with a `.jpg` fallback) were renamed from descriptive originals.
+
+**Their original filenames are not lost.** The full mapping is the `SLUGS` table in
+[frontend/scripts/optimize-destinations.mjs](frontend/scripts/optimize-destinations.mjs) —
+`taj-mahal-new-delhi` was `Taj Mahal , New Delhi.jpg`, `kashi-vishwanath` was `kasi.jpg`, and
+so on for all 22. Those descriptive names are the starting point for a reverse-image or
+filename search against the stock libraries.
 
 ## Unverified
 
 **Provenance for every photograph above still needs to be confirmed by the repository owner.**
-Nobody but the person who downloaded them can say where they came from. Until each row is
-filled in, treat the image set as *not* redistributable under MIT.
+Until each row is filled in, treat the image set as *not* redistributable under MIT.
 
 For each file, one of the following resolves it:
 
@@ -57,6 +65,22 @@ For each file, one of the following resolves it:
 3. **Remove it.** If a photograph is decorative and unattributable, dropping it costs less than
    shipping it.
 
-Assets found to be unused have already been removed rather than researched — a 3D car model
-(`car.glb`, from Sketchfab, where the standard licence requires attribution) and six map
-screenshots, none of which were referenced by any code.
+## A note on git history
+
+Removing a file from the working tree does not remove it from the repository. The ~138 MB of
+unoptimised originals under `frontend/images/` were untracked, but every one of them is still
+reachable in the object database and is still downloaded by `git clone`. Among them:
+
+- six files named `<photographer>-<id>-unsplash.jpg`, which identify both the source
+  (Unsplash) and the individual photograph;
+- `Mazda RX-7 by IvOfficial - SnIoWlh7S2.glb`, a Sketchfab model whose standard licence
+  requires attribution, and which depicts a trademarked vehicle design;
+- a set of map screenshots of unknown origin.
+
+So the licensing exposure described above is not limited to what is currently served — it
+covers everything the history still carries. Rewriting history to drop those blobs is what
+actually resolves it. See [CONTRIBUTING.md](CONTRIBUTING.md) before attempting that, since it
+invalidates every existing clone and fork.
+
+Assets found to be unused were removed rather than researched — the 3D car model above and six
+map screenshots, none of which were referenced by any code.

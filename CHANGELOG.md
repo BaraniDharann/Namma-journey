@@ -37,12 +37,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - Frontend login flows for user, driver and owner roles
 - Live tracking map and driver location streaming reliability
+- **Live tracking under Docker Compose.** The SPA opened its SockJS connection against
+  `localhost:8080` rather than its own origin, and nginx proxied `/api/` but had no `/ws/` rule
+  and no `Upgrade` headers, so the handshake never reached the backend. The client is now
+  same-origin by default, and nginx and the Vite dev server both carry `/ws/` through
+- `.env.example` pointed `DB_URL` at port 5433 and database `postgres`, matching neither the
+  README quick start nor the Compose service
+- `DEPLOYMENT_CHECKLIST.md` required three `SENDGRID_*` variables the project has never used, told
+  deployers to rely on `ddl-auto: update` after the schema had moved to Flyway, and published a
+  default owner password
 
 ### Security
 - `JWT_SECRET` no longer has a fallback default — the application will not start without it
 - Placeholder values substituted for real credentials in `.env.example`
 - Personal contact details (name, email address and mobile number) removed from documentation
   and E2E test fixtures, which now use `demo.user@example.com`
+- **`OWNER_UPI_ID` no longer has a default.** A personal UPI ID was hardcoded as the fallback in
+  `PaymentService`, `TestController` and `application.yml`, so any deployment that did not set the
+  variable collected customer payments into that account. The application now refuses to start
+  without it, matching how `JWT_SECRET` already behaved
+- `/actuator/**` is no longer `permitAll()`. Only `/actuator/health`, its sub-paths and
+  `/actuator/info` are anonymous; `metrics`, `prometheus` and `caches` now require authentication
+  — `/actuator/caches` accepts DELETE, so cache eviction was anonymously reachable
+- Removed `TestController`, a debug endpoint that echoed the owner UPI ID back to the caller
+- Removed the remaining real personal email address and mobile number from committed test
+  fixtures, and deleted the superseded `e2e-test/` suite that carried them
+- Resolved the two critical `websocket-driver` advisories reached through `sockjs-client`
+- Recorded the two remaining `npm audit` findings, and why they are accepted, in `SECURITY.md`
+- Spring Boot 3.4.1 → 3.4.13
 
 ## [1.0.0] - Initial
 

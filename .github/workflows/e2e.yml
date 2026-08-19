@@ -60,6 +60,9 @@ jobs:
       MAIL_PASSWORD: unused
       GOOGLE_CLIENT_ID: unused
       GOOGLE_CLIENT_SECRET: unused
+      # OWNER_UPI_ID has no default — the app refuses to start without it, so a deployment
+      # can never silently collect payments into whatever account was baked into the source.
+      OWNER_UPI_ID: ci-only@examplebank
       TELEGRAM_ENABLED: 'false'
       # The suite fakes a client IP per browser context; X-Forwarded-For is only believed
       # from a trusted peer, and loopback arrives as ::1 as well as 127.0.0.1.

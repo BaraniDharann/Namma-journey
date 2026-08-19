@@ -15,7 +15,7 @@ const driverSession: Session = {
 };
 const ownerSession: Session = {
   token: acc.owner.token, userId: acc.owner.ownerId, role: 'ROLE_OWNER',
-  name: 'Owner', email: 'nammajourney06@gmail.com', mobile: '',
+  name: 'Owner', email: 'owner@example.com', mobile: '',
 };
 
 test.describe('Frontend — public pages and real login', () => {

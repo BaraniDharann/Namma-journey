@@ -9,7 +9,7 @@ psql -U postgres -d travel_booking_db -f database-migration-payments.sql
 
 2. **Update .env:**
 ```env
-OWNER_UPI_ID=sarasarathy86@okicici
+OWNER_UPI_ID=your-upi-id@yourbank
 OWNER_UPI_NAME=Namma Journey
 ```
 
@@ -75,7 +75,7 @@ GET /api/user/{userId}/payments
 ## UPI Deep Link Example
 
 ```
-upi://pay?pa=sarasarathy86@okicici&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567
+upi://pay?pa=your-upi-id@yourbank&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567
 ```
 
 **Opens:** Google Pay / PhonePe / Paytm automatically
@@ -118,7 +118,7 @@ POST /api/owner/payments/{paymentId}/verify
 
 ## Configuration
 
-**UPI ID:** sarasarathy86@okicici  
+**UPI ID:** your-upi-id@yourbank  
 **UPI Name:** Namma Journey  
 **Payment Methods:** UPI, CASH  
 **Payment Status:** PENDING, VERIFIED, FAILED  

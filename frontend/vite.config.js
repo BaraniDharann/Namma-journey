@@ -22,6 +22,15 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        // SockJS opens /ws/tracking on the page origin, so the dev server has to carry it
+        // through to the backend as well — ws:true covers the upgrade, and the SockJS
+        // XHR-polling fallback rides the same rule.
+        '/ws': {
+          target: backendUrl,
+          changeOrigin: true,
+          secure: false,
+          ws: true,
+        },
         '/uploads': {
           target: backendUrl,
           changeOrigin: true,

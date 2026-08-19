@@ -661,7 +661,7 @@ Dual payment system supporting UPI and cash payments with owner verification wor
 #### 1. UPI Payment (Digital)
 - User gets UPI deep link
 - Auto-opens Google Pay / PhonePe / Paytm
-- Direct payment to owner UPI: `sarasarathy86@okicici`
+- Direct payment to owner UPI: `your-upi-id@yourbank`
 - Driver calls owner to verify
 - Owner verifies → Trip completed
 
@@ -692,7 +692,7 @@ Dual payment system supporting UPI and cash payments with owner verification wor
   "amount": 2500.00,
   "paymentMethod": "UPI",
   "status": "PENDING",
-  "upiDeepLink": "upi://pay?pa=sarasarathy86@okicici&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567",
+  "upiDeepLink": "upi://pay?pa=your-upi-id@yourbank&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567",
   "message": "Open UPI app to complete payment. After payment, driver will call owner to verify."
 }
 ```

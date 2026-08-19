@@ -52,7 +52,11 @@ public class SecurityConfig {
                 .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/uploads/**").permitAll()
                 .requestMatchers("/driverphoto/**").permitAll()
-                .requestMatchers("/actuator/**").permitAll()
+                // Only the probes a load balancer or orchestrator needs before it has any
+                // credentials. metrics, prometheus and caches stay authenticated: they expose
+                // request volumes, endpoint names and internal timings, and /actuator/caches
+                // accepts DELETE, which would let an anonymous caller evict every cache.
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/places/**").permitAll()
                 .requestMatchers("/api/user/forgot-password").permitAll()

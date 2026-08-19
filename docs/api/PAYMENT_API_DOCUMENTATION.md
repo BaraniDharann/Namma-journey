@@ -65,7 +65,7 @@ After payment verification by owner, trip is marked as COMPLETED and RCM calcula
   "amount": 2500.00,
   "paymentMethod": "UPI",
   "status": "PENDING",
-  "upiDeepLink": "upi://pay?pa=sarasarathy86@okicici&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567-e89b-12d3-a456-426614174000",
+  "upiDeepLink": "upi://pay?pa=your-upi-id@yourbank&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567-e89b-12d3-a456-426614174000",
   "createdAt": "2024-01-15T10:30:00",
   "message": "Open UPI app to complete payment. After payment, driver will call owner to verify."
 }
@@ -186,7 +186,7 @@ upi://pay?pa={UPI_ID}&pn={NAME}&am={AMOUNT}&cu=INR&tn={NOTE}
 ```
 
 **Parameters:**
-- `pa` - Payee UPI ID (sarasarathy86@okicici)
+- `pa` - Payee UPI ID (your-upi-id@yourbank)
 - `pn` - Payee Name (Namma Journey)
 - `am` - Amount (e.g., 2500.00)
 - `cu` - Currency (INR)
@@ -194,7 +194,7 @@ upi://pay?pa={UPI_ID}&pn={NAME}&am={AMOUNT}&cu=INR&tn={NOTE}
 
 **Example:**
 ```
-upi://pay?pa=sarasarathy86@okicici&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567
+upi://pay?pa=your-upi-id@yourbank&pn=Namma%20Journey&am=2500.00&cu=INR&tn=Booking%3A123e4567
 ```
 
 When user clicks this link on mobile:
@@ -208,7 +208,7 @@ When user clicks this link on mobile:
 
 ### Environment Variables (.env)
 ```env
-OWNER_UPI_ID=sarasarathy86@okicici
+OWNER_UPI_ID=your-upi-id@yourbank
 OWNER_UPI_NAME=Namma Journey
 ```
 
@@ -216,7 +216,7 @@ OWNER_UPI_NAME=Namma Journey
 ```yaml
 payment:
   upi:
-    id: ${OWNER_UPI_ID:sarasarathy86@okicici}
+    id: ${OWNER_UPI_ID:your-upi-id@yourbank}
     name: ${OWNER_UPI_NAME:Namma Journey}
 ```
 

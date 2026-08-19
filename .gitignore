@@ -50,11 +50,9 @@ playwright-tests/playwright-report/
 playwright-tests/test-results/
 playwright-tests/reports/
 playwright-tests/screenshots-walkthrough/
-e2e-test/*-report.json
 
-# Playwright videos and E2E screenshots — regenerated on every run
+# Playwright videos — regenerated on every run
 playwright-tests/videos-ui/
-e2e-test/screenshots/
 
 # Original unoptimised source photos. The versions actually served are the .webp files
 # under frontend/public/images/, so these 138 MB of originals are kept locally only.
