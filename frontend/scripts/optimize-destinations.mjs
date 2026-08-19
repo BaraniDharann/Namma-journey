@@ -1,6 +1,13 @@
 import sharp from 'sharp'
 import fs from 'fs/promises'
 import path from 'path'
+// One-off asset pipeline: converts the unoptimised source photos into the .webp +
+// .jpg pairs actually served from public/images/.
+//
+// SRC is frontend/images/, which is NOT in git — it is ~138 MB of originals kept on
+// the author's machine only (see .gitignore). This script therefore does not run on a
+// fresh clone, and does not need to: its output is committed. It is kept for the next
+// time the destination set changes.
 
 const SRC = path.resolve('images/travel places')
 const DST = path.resolve('public/images/travel places')

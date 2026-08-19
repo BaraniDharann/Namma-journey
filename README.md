@@ -143,6 +143,7 @@ on every pull request, because it takes minutes and needs a live database.
 | [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) | Pre-production checklist |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to set up, branch, test and submit changes |
 | [SECURITY.md](SECURITY.md) | Reporting a vulnerability |
+| [ASSETS.md](ASSETS.md) | Licensing of the bundled images — read before redistributing |
 
 Deeper reference material lives under [docs/](docs/):
 
@@ -188,4 +189,7 @@ how to report it privately.
 
 ## License
 
-Released under the [MIT License](LICENSE).
+Source code is released under the [MIT License](LICENSE).
+
+The bundled photographs and illustrations under `frontend/public/images/` are third-party works
+and are **not** covered by that licence — see [ASSETS.md](ASSETS.md) before redistributing them.
