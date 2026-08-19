@@ -139,8 +139,8 @@ The driver will receive an email with:
 curl -X POST http://localhost:8080/api/auth/owner/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@travelplatform.com",
-    "password": "owner@123"
+    "email": "owner@example.com",
+    "password": "YOUR_OWNER_PASSWORD"
   }'
 ```
 
@@ -272,7 +272,7 @@ com.travelplatform
 
 ✅ Only OWNER role can create drivers  
 ✅ Auto-generated secure 10-character passwords  
-✅ Credentials sent via email (SendGrid)  
+✅ Credentials sent via email (Gmail SMTP)  
 ✅ All sensitive fields (mobile, email, license, aadhaar) are unique  
 ✅ Passwords encrypted with BCrypt  
 ✅ JWT-based authentication for all roles  
@@ -303,10 +303,10 @@ If you have existing drivers created via old signup endpoint:
 ## Environment Variables Required
 
 ```env
-# SendGrid (for email)
-SENDGRID_API_KEY=your_sendgrid_api_key
-SENDGRID_FROM_EMAIL=noreply@travelplatform.com
-SENDGRID_FROM_NAME=Namma Journey
+# Gmail SMTP (for OTP and driver-credential email)
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_gmail_app_password
+MAIL_FROM_NAME=Namma Journey
 
 # Database
 DB_URL=jdbc:postgresql://localhost:5432/travel_booking_db

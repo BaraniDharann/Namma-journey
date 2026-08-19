@@ -5,7 +5,7 @@
 - Java 17+
 - Maven 3.6+
 - PostgreSQL 14+
-- SendGrid Account (for email)
+- Gmail SMTP Account (for email)
 - Running Travel Booking Platform backend
 
 ---
@@ -31,15 +31,15 @@ CREATE INDEX IF NOT EXISTS idx_drivers_email_verified ON drivers(email_verified)
 
 ---
 
-## Step 2: SendGrid Configuration
+## Step 2: Gmail SMTP Configuration
 
-### 2.1 Create SendGrid Account
-1. Go to https://sendgrid.com
+### 2.1 Create Gmail SMTP Account
+1. Go to https://Gmail SMTP.com
 2. Sign up for free account (100 emails/day free tier)
 3. Verify your email address
 
 ### 2.2 Create API Key
-1. Login to SendGrid Dashboard
+1. Login to Gmail SMTP Dashboard
 2. Go to **Settings** → **API Keys**
 3. Click **Create API Key**
 4. Name: `Travel-Platform-API`
@@ -73,10 +73,10 @@ DB_PASSWORD=your_password
 JWT_SECRET=your_jwt_secret_key_minimum_32_characters_long
 JWT_EXPIRATION=86400000
 
-# SendGrid Email Configuration
-SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-SENDGRID_FROM_EMAIL=noreply@yourdomain.com
-SENDGRID_FROM_NAME=Namma Journey
+# Gmail SMTP Email Configuration
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_gmail_app_password
+MAIL_FROM_NAME=Namma Journey
 
 # OTP Configuration
 OTP_EXPIRY_MINUTES=5
@@ -89,12 +89,12 @@ SERVER_PORT=8080
 
 ## Step 4: Verify Dependencies
 
-Check `pom.xml` includes SendGrid:
+Check `pom.xml` includes Gmail SMTP:
 
 ```xml
 <dependency>
-    <groupId>com.sendgrid</groupId>
-    <artifactId>sendgrid-java</artifactId>
+    <groupId>com.Gmail SMTP</groupId>
+    <artifactId>Gmail SMTP-java</artifactId>
     <version>4.10.2</version>
 </dependency>
 ```
@@ -122,17 +122,20 @@ Started TravelPlatformApplication in X seconds
 
 If not already created:
 
-```sql
-INSERT INTO owners (email, password, role, created_at) 
-VALUES (
-  'admin@travelplatform.com', 
-  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 
-  'ROLE_OWNER',
-  NOW()
-);
+```bash
+# Set OWNER_BOOTSTRAP_SECRET in .env, restart, then:
+curl -X POST http://localhost:8080/api/auth/owner/create-admin \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Secret: $OWNER_BOOTSTRAP_SECRET" \
+  -d '{"email":"owner@example.com","password":"YOUR_OWNER_PASSWORD","name":"Owner"}'
 ```
 
-Password: `owner@123`
+Clear `OWNER_BOOTSTRAP_SECRET` again afterwards — while it is set, that endpoint mints owner
+tokens, which is full control of the platform. Do not insert the row by hand: the password
+column holds a BCrypt hash, and copying one out of a guide gives every deployment that followed
+the same guide the same known password.
+
+Password: `YOUR_OWNER_PASSWORD`
 
 ---
 
@@ -144,8 +147,8 @@ Password: `owner@123`
 curl -X POST http://localhost:8080/api/auth/owner/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@travelplatform.com",
-    "password": "owner@123"
+    "email": "owner@example.com",
+    "password": "YOUR_OWNER_PASSWORD"
   }'
 ```
 
@@ -291,15 +294,15 @@ curl -X POST http://localhost:8080/api/auth/driver/login \
 ### Issue: OTP Email Not Received
 
 **Check:**
-1. SendGrid API key is correct in `.env`
-2. Sender email is verified in SendGrid
+1. Gmail SMTP API key is correct in `.env`
+2. Sender email is verified in Gmail SMTP
 3. Check application logs for errors
-4. Check SendGrid Activity Feed for delivery status
+4. Check Gmail SMTP Activity Feed for delivery status
 5. Check spam folder
 
 **Solution:**
 ```bash
-# Test SendGrid connection
+# Test mail delivery connection
 curl -X POST http://localhost:8080/api/auth/otp/send \
   -H "Content-Type: application/json" \
   -d '{"email": "your-test-email@example.com"}'
@@ -310,7 +313,7 @@ curl -X POST http://localhost:8080/api/auth/otp/send \
 **Check:**
 1. OTP verification was successful
 2. Driver email is correct in database
-3. Check application logs for SendGrid errors
+3. Check application logs for Gmail SMTP errors
 
 **Solution:**
 ```sql
@@ -342,12 +345,12 @@ WHERE email = 'testdriver@example.com';
 psql -U postgres -d travel_booking_db -f database-migration-driver-verification.sql
 ```
 
-### Issue: SendGrid 401 Unauthorized
+### Issue: Gmail SMTP 401 Unauthorized
 
 **Cause:** Invalid API key
 
 **Solution:**
-1. Generate new API key in SendGrid
+1. Generate new API key in Gmail SMTP
 2. Update `.env` file
 3. Restart application
 
@@ -440,7 +443,7 @@ Driver credentials email sent successfully to: driver@example.com
 
 ## Production Checklist
 
-- [ ] SendGrid production API key configured
+- [ ] Gmail SMTP production API key configured
 - [ ] Custom domain for sender email
 - [ ] SPF/DKIM/DMARC records configured
 - [ ] Database migration applied

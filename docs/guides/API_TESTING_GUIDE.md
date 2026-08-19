@@ -5,7 +5,7 @@
 1. **PostgreSQL Running**: Database `namma_journey` exists
 2. **Spring Boot Running**: `mvn spring-boot:run`
 3. **Environment Variables**: `.env` file loaded with:
-   - ✅ SendGrid API Key configured
+   - ✅ Gmail SMTP API Key configured
    - ✅ Google OAuth credentials configured
    - ✅ Database credentials set
 
@@ -221,23 +221,23 @@ curl -X POST http://localhost:8080/api/auth/user/login \
 
 ### OTP Email Not Received?
 
-**Check 1: SendGrid API Key Valid?**
+**Check 1: Gmail SMTP API Key Valid?**
 ```bash
 curl --request POST \
-  --url https://api.sendgrid.com/v3/mail/send \
+  --url https://api.Gmail SMTP.com/v3/mail/send \
   --header "Authorization: Bearer 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" \
   --header 'Content-Type: application/json' \
   --data '{"personalizations":[{"to":[{"email":"test@example.com"}]}],"from":{"email":"demo.user@example.com"},"subject":"Test","content":[{"type":"text/plain","value":"Test"}]}'
 ```
 
-**Check 2: Verify SendGrid Sender**
-- Go to: https://app.sendgrid.com/settings/sender_auth
+**Check 2: Verify Gmail SMTP Sender**
+- Go to: https://app.Gmail SMTP.com/settings/sender_auth
 - Ensure `demo.user@example.com` is verified
 
 **Check 3: Check Application Logs**
 ```bash
 # Look for errors in console
-grep -i "sendgrid\|otp" logs/spring.log
+grep -i "Gmail SMTP\|otp" logs/spring.log
 ```
 
 **Check 4: Database OTP Entry**
@@ -271,11 +271,11 @@ SELECT * FROM otps ORDER BY created_at DESC LIMIT 5;
 
 ```bash
 # Windows
-echo %SENDGRID_API_KEY%
+echo %MAIL_USERNAME%
 echo %GOOGLE_CLIENT_ID%
 
 # Or check in application
-curl http://localhost:8080/actuator/env | grep -i sendgrid
+curl http://localhost:8080/actuator/env | grep -i Gmail SMTP
 ```
 
 ### Check Database Connection
@@ -350,7 +350,7 @@ curl -X POST http://localhost:8080/api/auth/user/login \
 
 1. **OTP expires in 5 minutes** - Test quickly after receiving email
 2. **Google tokens expire in 1 hour** - Get fresh token if expired
-3. **SendGrid free tier**: 100 emails/day limit
+3. **Gmail SMTP free tier**: 100 emails/day limit
 4. **Check spam folder** if email not in inbox
 5. **Use real email addresses** for testing (not temp emails)
 

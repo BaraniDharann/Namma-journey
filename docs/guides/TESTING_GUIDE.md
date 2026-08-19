@@ -3,7 +3,7 @@
 ## Prerequisites
 - Application running on `http://localhost:8080`
 - Owner account exists in database
-- SendGrid configured for email
+- Gmail SMTP configured for email
 
 ---
 
@@ -15,8 +15,8 @@
 curl -X POST http://localhost:8080/api/auth/owner/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@travelplatform.com",
-    "password": "owner@123"
+    "email": "owner@example.com",
+    "password": "YOUR_OWNER_PASSWORD"
   }'
 ```
 
@@ -258,7 +258,7 @@ curl -X POST http://localhost:8080/api/owner/drivers \
         "header": [{"key": "Content-Type", "value": "application/json"}],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"admin@travelplatform.com\",\n  \"password\": \"owner@123\"\n}"
+          "raw": "{\n  \"email\": \"owner@example.com\",\n  \"password\": \"YOUR_OWNER_PASSWORD\"\n}"
         },
         "url": "http://localhost:8080/api/auth/owner/login"
       }
@@ -322,8 +322,8 @@ SELECT password FROM drivers WHERE mobile = '9876543210';
 
 ### Problem: Email not received
 **Solution**: 
-1. Check SendGrid API key in environment variables
-2. Check SendGrid dashboard for email status
+1. Check Gmail SMTP API key in environment variables
+2. Check Gmail SMTP dashboard for email status
 3. Check spam folder
 4. Verify email address is valid
 
@@ -340,7 +340,7 @@ SELECT password FROM drivers WHERE mobile = '9876543210';
 - [ ] PostgreSQL running on port 5432
 - [ ] Database `travel_booking_db` created
 - [ ] Owner account exists in database
-- [ ] SendGrid API key configured
+- [ ] MAIL_USERNAME / MAIL_PASSWORD configured
 - [ ] Application running on port 8080
 - [ ] All environment variables set
 
@@ -348,16 +348,19 @@ SELECT password FROM drivers WHERE mobile = '9876543210';
 
 ## Quick Commands
 
-### Create Owner Account (SQL)
-```sql
-INSERT INTO owners (email, password, role, created_at) 
-VALUES (
-  'admin@travelplatform.com', 
-  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
-  'ROLE_OWNER',
-  NOW()
-);
+### Create the first owner account
+```bash
+# Set OWNER_BOOTSTRAP_SECRET in .env, restart, then:
+curl -X POST http://localhost:8080/api/auth/owner/create-admin \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Secret: $OWNER_BOOTSTRAP_SECRET" \
+  -d '{"email":"owner@example.com","password":"YOUR_OWNER_PASSWORD","name":"Owner"}'
 ```
+
+Clear `OWNER_BOOTSTRAP_SECRET` again afterwards — while it is set, that endpoint mints owner
+tokens, which is full control of the platform. Do not insert the row by hand: the password
+column holds a BCrypt hash, and copying one out of a guide gives every deployment that followed
+the same guide the same known password.
 
 ### View All Drivers (SQL)
 ```sql

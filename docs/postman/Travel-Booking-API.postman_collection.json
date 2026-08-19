@@ -145,7 +145,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@travelplatform.com\",\n  \"password\": \"owner@123\"\n}"
+              "raw": "{\n  \"email\": \"owner@example.com\",\n  \"password\": \"YOUR_OWNER_PASSWORD\"\n}"
             },
             "url": {
               "raw": "http://localhost:8080/api/auth/owner/login",

@@ -354,7 +354,11 @@ erDiagram
     }
 ```
 
-> **Schema evolution:** The application currently uses Hibernate `ddl-auto: update` (no Flyway migrations on disk). For production stability, this should be migrated to a versioned Flyway baseline before any schema-breaking change. See §18.
+> **Schema evolution:** The schema is owned by **Flyway**. Versioned migrations live in
+> `src/main/resources/db/migration` and run at startup, and `spring.jpa.hibernate.ddl-auto` is
+> `validate`, so the application refuses to boot if the entities and the schema disagree. To
+> change the schema, add a new `V<n>__description.sql` — never edit a migration that has already
+> been applied.
 
 ---
 
@@ -674,16 +678,15 @@ Exposed via Spring Actuator ([application.yml:124-137](src/main/resources/applic
 
 Ordered by value-vs-effort:
 
-1. **Flyway baseline migrations** — lock schema, stop using `ddl-auto: update` in prod.
-2. **Centralized logging** — ship container stdout to Loki or ELK.
-3. **Payment gateway** — replace manual UPI QR with Razorpay/PhonePe for auto-verification.
-4. **Object storage for uploads** — move `uploads/drivers/` to S3 to unblock horizontal scaling.
-5. **Email queue** — make OTP/booking emails async (Spring `@Async` is configured; queue persistence missing).
-6. **Driver-trip auto-matching** — replace Owner-manual assignment with a scoring algorithm (distance, rating, availability).
-7. **AI travel assistant** — Claude-powered chat on the landing page grounded in `TravelPackage` table.
-8. **External message broker for WebSocket** — RabbitMQ STOMP relay to enable multi-pod deployment.
-9. **OpenTelemetry tracing** — correlate API → DB → external-API spans.
-10. **Feature flags** — roll out new flows per-role without redeploying.
+1. **Centralized logging** — ship container stdout to Loki or ELK.
+2. **Payment gateway** — replace manual UPI QR with Razorpay/PhonePe for auto-verification.
+3. **Object storage for uploads** — move `uploads/drivers/` to S3 to unblock horizontal scaling.
+4. **Email queue** — make OTP/booking emails async (Spring `@Async` is configured; queue persistence missing).
+5. **Driver-trip auto-matching** — replace Owner-manual assignment with a scoring algorithm (distance, rating, availability).
+6. **AI travel assistant** — Claude-powered chat on the landing page grounded in `TravelPackage` table.
+7. **External message broker for WebSocket** — RabbitMQ STOMP relay to enable multi-pod deployment.
+8. **OpenTelemetry tracing** — correlate API → DB → external-API spans.
+9. **Feature flags** — roll out new flows per-role without redeploying.
 
 ---
 

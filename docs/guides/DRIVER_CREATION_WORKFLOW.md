@@ -294,12 +294,12 @@ ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT false;
 
 ---
 
-## SendGrid Configuration
+## Gmail SMTP Configuration
 
 ### Setup Steps
 
-1. **Create SendGrid Account**
-   - Sign up at https://sendgrid.com
+1. **Create Gmail SMTP Account**
+   - Sign up at https://Gmail SMTP.com
    - Verify your email
 
 2. **Create API Key**
@@ -313,9 +313,9 @@ ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT false;
 
 4. **Update .env File**
 ```env
-SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxx
-SENDGRID_FROM_EMAIL=noreply@nammajourney.com
-SENDGRID_FROM_NAME=Namma Journey
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_gmail_app_password
+MAIL_FROM_NAME=Namma Journey
 ```
 
 ---
@@ -327,8 +327,8 @@ SENDGRID_FROM_NAME=Namma Journey
 curl -X POST http://localhost:8080/api/auth/owner/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@travelplatform.com",
-    "password": "owner@123"
+    "email": "owner@example.com",
+    "password": "YOUR_OWNER_PASSWORD"
   }'
 ```
 
@@ -405,7 +405,7 @@ curl -X POST http://localhost:8080/api/auth/driver/change-password \
 - [x] Update driver login to check email verification
 - [x] Add password change endpoint
 - [x] Update DriverAuthService with password change
-- [x] SendGrid email integration
+- [x] Gmail SMTP email integration
 - [x] OTP generation and verification
 - [x] Update DTOs and controllers
 - [ ] Implement file upload endpoint for photos

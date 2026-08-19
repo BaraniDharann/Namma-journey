@@ -64,7 +64,7 @@ OWNER                    BACKEND                    EMAIL SERVICE
   │                         ├───────────────────────────►│
   │                         │    (username + password)   │
   │                         │                            │
-  │                         │                            │ SendGrid
+  │                         │                            │ Gmail SMTP
   │                         │                            │ API Call
   │                         │                            │
   │                         │◄───────────────────────────┤
@@ -178,7 +178,7 @@ OWNER                    BACKEND                    EMAIL SERVICE
          │ uses                       │ uses
          ▼                            ▼
 ┌──────────────────┐         ┌──────────────────┐
-│DriverRepository │         │  SendGrid API    │
+│DriverRepository │         │  Gmail SMTP API    │
 │                  │         │                  │
 │ - save()         │         │ - POST /mail/    │
 │ - existsByXxx()  │         │   send           │
@@ -444,7 +444,7 @@ Request
 
 External Services:
 ┌──────────────┐
-│  SendGrid    │ ◄─── Email Delivery
+│  Gmail SMTP    │ ◄─── Email Delivery
 └──────────────┘
 
 ┌──────────────┐

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Owner must be logged in and have a valid JWT token
-- SendGrid configured for email sending
+- Gmail SMTP configured for email sending
 - PostgreSQL database running
 
 ---
@@ -16,8 +16,8 @@
 curl -X POST http://localhost:8080/api/auth/owner/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@travelplatform.com",
-    "password": "owner@123"
+    "email": "owner@example.com",
+    "password": "YOUR_OWNER_PASSWORD"
   }'
 ```
 
@@ -275,8 +275,8 @@ curl -X GET http://localhost:8080/api/driver/profile \
 - **Body (JSON):**
 ```json
 {
-  "email": "admin@travelplatform.com",
-  "password": "owner@123"
+  "email": "owner@example.com",
+  "password": "YOUR_OWNER_PASSWORD"
 }
 ```
 - **Tests:** Save token to environment variable
@@ -374,7 +374,7 @@ OTP expires after 5 minutes. Request new OTP by logging in again.
 ## Testing Tips
 
 1. **Test Mode:** Set `otp.test.mode=true` in application.yml to see OTP in console logs
-2. **Check Emails:** Monitor SendGrid dashboard for email delivery
+2. **Check Emails:** Monitor Gmail SMTP dashboard for email delivery
 3. **Database Check:** Query drivers table to verify status changes
 4. **Token Expiry:** JWT tokens expire after 24 hours
 
@@ -387,8 +387,8 @@ OTP expires after 5 minutes. Request new OTP by logging in again.
 base_url=http://localhost:8080
 
 # Owner Credentials
-owner_email=admin@travelplatform.com
-owner_password=owner@123
+owner_email=owner@example.com
+owner_password=YOUR_OWNER_PASSWORD
 
 # Driver Test Data
 driver_mobile=9123456789

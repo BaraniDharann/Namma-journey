@@ -8,8 +8,12 @@ echo ========================================
 echo.
 
 set BASE_URL=http://localhost:8080
-set OWNER_EMAIL=admin@travelplatform.com
-set OWNER_PASSWORD=owner@123
+REM Supply real credentials via the environment; never commit them.
+if "%OWNER_EMAIL%"=="" set OWNER_EMAIL=owner@example.com
+if "%OWNER_PASSWORD%"=="" (
+  echo Set OWNER_PASSWORD before running this script.
+  exit /b 1
+)
 set DRIVER_NAME=Test Driver
 set DRIVER_MOBILE=9876543210
 set DRIVER_EMAIL=testdriver@example.com

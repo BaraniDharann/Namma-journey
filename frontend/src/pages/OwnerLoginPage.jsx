@@ -86,7 +86,7 @@ export default function OwnerLoginPage() {
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Email Address</label>
-                <input type="email" className="input-field" placeholder="admin@travelplatform.com" value={form.email}
+                <input type="email" className="input-field" placeholder="owner@example.com" value={form.email}
                   onChange={e => setForm({ ...form, email: e.target.value })} required
                   style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
               </div>
@@ -120,7 +120,7 @@ export default function OwnerLoginPage() {
               <form onSubmit={handleSendForgotOtp} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Email Address</label>
-                  <input type="email" className="input-field" placeholder="admin@travelplatform.com" value={forgotForm.email}
+                  <input type="email" className="input-field" placeholder="owner@example.com" value={forgotForm.email}
                     onChange={e => setForgotForm({ ...forgotForm, email: e.target.value })} required
                     style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid #e2e8f0', fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
                 </div>

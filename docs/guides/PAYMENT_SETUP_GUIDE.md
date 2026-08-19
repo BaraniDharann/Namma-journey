@@ -154,7 +154,7 @@ curl -X POST http://localhost:8080/api/auth/driver/login \
 ```bash
 curl -X POST http://localhost:8080/api/auth/owner/login \
   -H "Content-Type: application/json" \
-  -d "{\"email\":\"admin@travelplatform.com\",\"password\":\"owner@123\"}"
+  -d "{\"email\":\"owner@example.com\",\"password\":\"YOUR_OWNER_PASSWORD\"}"
 ```
 **Save the token:** `OWNER_TOKEN`
 

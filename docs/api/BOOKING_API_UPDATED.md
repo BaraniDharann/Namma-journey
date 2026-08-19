@@ -122,7 +122,9 @@ curl --request POST \
 
 ## Database Migration
 
-The database schema will be automatically updated by Hibernate (ddl-auto: update).
+The schema is owned by Flyway. These columns arrived in the versioned baseline under
+`src/main/resources/db/migration`; Hibernate runs with `ddl-auto: validate` and never alters
+tables itself.
 
 New columns added to `travel_bookings` table:
 - `from_date` (DATE, NOT NULL)

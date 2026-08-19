@@ -217,8 +217,8 @@ Server runs on: `http://localhost:8080`
 **Request Body:**
 ```json
 {
-  "email": "admin@travelplatform.com",
-  "password": "owner@123"
+  "email": "owner@example.com",
+  "password": "YOUR_OWNER_PASSWORD"
 }
 ```
 
@@ -236,17 +236,20 @@ Server runs on: `http://localhost:8080`
 
 ---
 
-## Creating Owner Account (SQL)
+## Creating the first owner account
 
-```sql
-INSERT INTO owners (email, password, role, created_at) 
-VALUES (
-  'admin@travelplatform.com', 
-  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', -- password: owner@123
-  'ROLE_OWNER',
-  NOW()
-);
+```bash
+# Set OWNER_BOOTSTRAP_SECRET in .env, restart, then:
+curl -X POST http://localhost:8080/api/auth/owner/create-admin \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Secret: $OWNER_BOOTSTRAP_SECRET" \
+  -d '{"email":"owner@example.com","password":"YOUR_OWNER_PASSWORD","name":"Owner"}'
 ```
+
+Clear `OWNER_BOOTSTRAP_SECRET` again afterwards — while it is set, that endpoint mints owner
+tokens, which is full control of the platform. Do not insert the row by hand: the password
+column holds a BCrypt hash, and copying one out of a guide gives every deployment that followed
+the same guide the same known password.
 
 ---
 
@@ -534,13 +537,13 @@ Owners can create driver accounts with email verification, photo uploads, and se
 
 ---
 
-### Email Configuration (SendGrid)
+### Email Configuration (Gmail SMTP)
 
 Add to `.env` file:
 ```env
-SENDGRID_API_KEY=SG.your_api_key_here
-SENDGRID_FROM_EMAIL=noreply@nammajourney.com
-SENDGRID_FROM_NAME=Namma Journey
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_gmail_app_password
+MAIL_FROM_NAME=Namma Journey
 OTP_EXPIRY_MINUTES=5
 ```
 
@@ -580,7 +583,7 @@ ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT false;
 ✅ Secure password generation  
 ✅ First login detection  
 ✅ Forced password change  
-✅ SendGrid email integration  
+✅ Gmail SMTP email integration  
 ✅ Role-based access control  
 
 ---

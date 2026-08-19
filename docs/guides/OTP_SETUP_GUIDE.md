@@ -153,21 +153,24 @@ curl -X POST http://localhost:8080/api/auth/driver/login \
   -d "{\"mobile\":\"9123456789\",\"password\":\"driver@123\"}"
 ```
 
-### 3. Owner Login (Create owner first in DB)
-```sql
-INSERT INTO owners (email, password, role, created_at) 
-VALUES (
-  'admin@travelplatform.com', 
-  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
-  'ROLE_OWNER',
-  NOW()
-);
+### 3. Owner Login (create the owner first)
+```bash
+# Set OWNER_BOOTSTRAP_SECRET in .env, restart, then:
+curl -X POST http://localhost:8080/api/auth/owner/create-admin \
+  -H "Content-Type: application/json" \
+  -H "X-Bootstrap-Secret: $OWNER_BOOTSTRAP_SECRET" \
+  -d '{"email":"owner@example.com","password":"YOUR_OWNER_PASSWORD","name":"Owner"}'
 ```
+
+Clear `OWNER_BOOTSTRAP_SECRET` again afterwards — while it is set, that endpoint mints owner
+tokens, which is full control of the platform. Do not insert the row by hand: the password
+column holds a BCrypt hash, and copying one out of a guide gives every deployment that followed
+the same guide the same known password.
 
 ```bash
 curl -X POST http://localhost:8080/api/auth/owner/login \
   -H "Content-Type: application/json" \
-  -d "{\"email\":\"admin@travelplatform.com\",\"password\":\"owner@123\"}"
+  -d "{\"email\":\"owner@example.com\",\"password\":\"YOUR_OWNER_PASSWORD\"}"
 ```
 
 ### 4. Google OAuth Login

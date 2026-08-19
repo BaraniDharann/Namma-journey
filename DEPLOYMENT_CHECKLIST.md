@@ -115,7 +115,7 @@ curl -X POST http://localhost:8080/api/auth/driver/signup \
 ### 3. Email Service
 ```bash
 # Create test driver and verify email sent
-# Check SendGrid dashboard for email delivery status
+# Check the backend log for mail send failures
 ```
 
 ### 4. Security
@@ -201,7 +201,7 @@ SELECT COUNT(*) as total,
 FROM drivers;
 ```
 
-### SendGrid Dashboard
+### Mail delivery
 - Monitor email delivery rate
 - Check bounce rate
 - Verify no spam complaints
@@ -305,7 +305,7 @@ Tech Team
 ## Known Issues & Workarounds
 
 ### Issue 1: Email Delivery Delay
-**Workaround**: Check SendGrid queue, manually share credentials if needed
+**Workaround**: Check the backend log for the send failure; share credentials by hand if needed
 
 ### Issue 2: Existing Drivers Without Email
 **Workaround**: Email field is optional, existing drivers unaffected
@@ -330,7 +330,7 @@ Tech Team
 ## Support Contacts
 
 - **Technical Issues**: tech@travelplatform.com
-- **SendGrid Issues**: sendgrid-support@travelplatform.com
+- **Mail delivery issues**: check MAIL_USERNAME / MAIL_PASSWORD and the Gmail app-password setup
 - **Database Issues**: dba@travelplatform.com
 - **Emergency**: +91-XXXXXXXXXX
 

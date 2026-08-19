@@ -8,9 +8,9 @@
 psql -U postgres -d travel_booking_db -f database-migration-driver-verification.sql
 
 # Update .env
-SENDGRID_API_KEY=SG.your_key_here
-SENDGRID_FROM_EMAIL=noreply@yourdomain.com
-SENDGRID_FROM_NAME=Namma Journey
+MAIL_USERNAME=your_email@gmail.com
+MAIL_PASSWORD=your_gmail_app_password
+MAIL_FROM_NAME=Namma Journey
 
 # Start server
 mvn spring-boot:run
@@ -20,8 +20,8 @@ mvn spring-boot:run
 ```bash
 POST /api/auth/owner/login
 {
-  "email": "admin@travelplatform.com",
-  "password": "owner@123"
+  "email": "owner@example.com",
+  "password": "YOUR_OWNER_PASSWORD"
 }
 # Save token
 ```
@@ -115,7 +115,7 @@ Authorization: Bearer {driverToken}
 | "Email not verified" | OTP not verified | Owner must verify with OTP |
 | "Invalid OTP" | Wrong/expired OTP | Check email, resend if needed |
 | "Old password incorrect" | Wrong old password | Use password from email |
-| OTP not received | SendGrid config issue | Check API key, sender email |
+| OTP not received | Mail configuration issue | Check API key, sender email |
 
 ---
 
@@ -154,7 +154,7 @@ WHERE email = 'driver@example.com';
 
 **OTP not received?**
 ```bash
-# Test SendGrid
+# Test mail delivery
 curl -X POST http://localhost:8080/api/auth/otp/send \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
@@ -162,12 +162,12 @@ curl -X POST http://localhost:8080/api/auth/otp/send \
 
 **Check logs:**
 ```bash
-tail -f logs/spring.log | grep -i "email\|otp\|sendgrid"
+tail -f logs/spring.log | grep -i "email\|otp\|Gmail SMTP"
 ```
 
-**Verify SendGrid:**
-- Login to SendGrid Dashboard
-- Check Activity Feed
+**Verify mail delivery:**
+- Check the backend log for a mail send failure
+- Confirm MAIL_USERNAME and MAIL_PASSWORD are a Gmail account and app password
 - Verify sender email is authenticated
 
 ---
@@ -183,7 +183,7 @@ tail -f logs/spring.log | grep -i "email\|otp\|sendgrid"
 ## ✅ Checklist
 
 - [ ] Database migration run
-- [ ] SendGrid API key configured
+- [ ] MAIL_USERNAME / MAIL_PASSWORD configured
 - [ ] Sender email verified
 - [ ] Owner account created
 - [ ] Application running

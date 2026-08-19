@@ -335,7 +335,7 @@ curl -X GET http://localhost:8080/api/user/bookings \
 
 ## 🚀 Production Considerations
 
-1. **OTP Service** - Currently using test mode, configure SendGrid for production
+1. **OTP Service** - Currently using test mode, configure Gmail SMTP for production
 2. **Google OAuth** - Implement proper Google token verification
 3. **Route Calculation** - Download OSM data for accurate routing
 4. **Phone Validation** - Add phone number to user profile

@@ -46,6 +46,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `DEPLOYMENT_CHECKLIST.md` required three `SENDGRID_*` variables the project has never used, told
   deployers to rely on `ddl-auto: update` after the schema had moved to Flyway, and published a
   default owner password
+- `HLD.md` stated the project used `ddl-auto: update` with "no Flyway migrations on disk", which
+  had been false since the Flyway baseline landed, and listed adopting Flyway as future work
+- The `docs/` tree documented three `SENDGRID_*` variables the project has never used; mail has
+  always gone over Gmail SMTP
 
 ### Security
 - `JWT_SECRET` no longer has a fallback default — the application will not start without it
@@ -85,6 +89,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - An unsupported or missing `paymentMethod` is a 400 rather than a 500 raised inside the transaction
 - `SECURITY.md` documents what the payment flow does and does not guarantee, including the manual
   verification trust boundary
+- **Removed a working default owner password from the documentation.** `owner@123` appeared 19
+  times across `docs/`, and four guides carried a copy-pasteable `INSERT INTO owners` seed with a
+  live BCrypt hash for it — anyone following those guides stood up an owner account, with full
+  control of the platform, on a publicly known password. The seeds are replaced by the supported
+  `OWNER_BOOTSTRAP_SECRET` flow, which does not hand out a shared credential
+- `scripts/test-driver-workflow.bat` no longer carries hardcoded owner credentials; it reads them
+  from the environment and refuses to run without them
 - Spring Boot 3.4.1 → 3.4.13
 
 ## [1.0.0] - Initial
