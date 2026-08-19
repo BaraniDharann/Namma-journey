@@ -64,6 +64,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fixtures, and deleted the superseded `e2e-test/` suite that carried them
 - Resolved the two critical `websocket-driver` advisories reached through `sockjs-client`
 - Recorded the two remaining `npm audit` findings, and why they are accepted, in `SECURITY.md`
+- **Payment settlement is now idempotent.** `markCashReceived` and `verifyPayment` both accepted
+  an already-settled payment and re-ran the whole completion path — re-completing the booking,
+  re-notifying the passenger and evicting the revenue caches — so a single fare could be counted
+  into owner revenue as many times as the endpoint was called
+- **Cash collection is checked against the fare.** `amountReceived` was carried on the request and
+  never read: a driver could report collecting 1 rupee on a 2500 rupee trip and the booking still
+  settled as paid in full
+- The owner verify endpoint refuses `CASH` payments, which previously let an owner settle a cash
+  fare without the driver ever confirming the money changed hands
+- Every settlement records the actor in the new `payments.verified_by` column
+- `payments.booking_id` is now `UNIQUE`. Two concurrent initiate-payment calls could both insert,
+  after which every read through `findByBookingId` threw `NonUniqueResultException` and the
+  booking became permanently unpayable (`V4__harden_payments.sql`, which de-duplicates first)
+- The UPI deep link percent-encodes every interpolated value, so a payee address containing `&`
+  can no longer inject its own `am=` parameter, and formats the amount with `Locale.ROOT` — on a
+  comma-decimal host a 2500.00 fare was rendering as `am=2500,00`
+- Payment and QR endpoints get their own tight per-account rate limit (`RATELIMIT_PAYMENT`,
+  default 15/min) instead of sharing the 300/min signed-in budget, since each call renders a QR
+- An unsupported or missing `paymentMethod` is a 400 rather than a 500 raised inside the transaction
+- `SECURITY.md` documents what the payment flow does and does not guarantee, including the manual
+  verification trust boundary
 - Spring Boot 3.4.1 → 3.4.13
 
 ## [1.0.0] - Initial

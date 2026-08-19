@@ -20,11 +20,12 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.net.URLEncoder;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
@@ -90,17 +91,23 @@ public class PaymentService {
             return response;
         }
 
-        // New payment
+        // New payment. parseMethod rejects anything that is not UPI or CASH before a row is
+        // built — Payment.PaymentMethod.valueOf on raw request input threw IllegalArgumentException
+        // (and NullPointerException on a null) from inside the transaction, surfacing as a 500.
+        Payment.PaymentMethod method = parseMethod(request);
+
+        // The booking is the only source of truth for what is owed. The request deliberately
+        // carries no amount: if it did, a customer could name their own fare.
         Payment payment = new Payment();
         payment.setBookingId(bookingId);
         payment.setUserId(userId);
         payment.setAmount(booking.getTotalAmount());
-        payment.setPaymentMethod(Payment.PaymentMethod.valueOf(request.getPaymentMethod()));
+        payment.setPaymentMethod(method);
         payment.setStatus(Payment.PaymentStatus.PENDING);
         payment.setDriverId(booking.getDriverId());
         payment.setCreatedAt(LocalDateTime.now());
 
-        if (Payment.PaymentMethod.valueOf(request.getPaymentMethod()) == Payment.PaymentMethod.UPI) {
+        if (method == Payment.PaymentMethod.UPI) {
             payment.setUpiLinkExpiresAt(LocalDateTime.now().plusMinutes(UPI_LINK_EXPIRY_MINUTES));
         }
 
@@ -137,13 +144,44 @@ public class PaymentService {
         Payment payment = paymentRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new RuntimeException("Payment not initiated"));
         
+        // Idempotency guard. Without it a driver could call this repeatedly on a settled
+        // booking: each call re-stamped the payment, re-completed the booking, re-sent the
+        // "payment received" notification and evicted the revenue caches again, so one cash
+        // fare could be counted into owner revenue as many times as the endpoint was hit.
+        if (payment.getStatus() == Payment.PaymentStatus.VERIFIED) {
+            throw new RuntimeException("Payment already completed for this booking");
+        }
+
+        if (booking.getStatus() == TravelBooking.BookingStatus.COMPLETED) {
+            throw new RuntimeException("Trip already completed");
+        }
+
         if (payment.getPaymentMethod() != Payment.PaymentMethod.CASH) {
             throw new RuntimeException("This is not a cash payment");
+        }
+
+        // amountReceived arrived on the request but was never looked at: the payment was marked
+        // VERIFIED for the full fare no matter what the driver typed. A driver could then report
+        // collecting 1 rupee on a 2500 rupee trip and the booking would settle as paid in full,
+        // with owner revenue reporting the full fare against cash that never arrived. Compare it
+        // to the amount actually due instead. The tolerance absorbs the rounding that comes with
+        // storing money in a double (see SECURITY.md) without admitting a real shortfall.
+        Double received = request != null ? request.getAmountReceived() : null;
+        if (received == null) {
+            throw new IllegalArgumentException("Amount received is required");
+        }
+        if (Math.abs(received - payment.getAmount()) > 0.01d) {
+            throw new IllegalArgumentException(String.format(
+                    Locale.ROOT,
+                    "Amount received (%.2f) does not match the amount due (%.2f)",
+                    received, payment.getAmount()));
         }
         
         payment.setPaymentDate(LocalDateTime.now());
         payment.setStatus(Payment.PaymentStatus.VERIFIED);
         payment.setVerifiedDate(LocalDateTime.now());
+        // The driver is the actor for cash: they are the one attesting the money changed hands.
+        payment.setVerifiedBy("driver:" + driverId);
         Payment updated = paymentRepository.save(payment);
         
         booking.setStatus(TravelBooking.BookingStatus.COMPLETED);
@@ -170,12 +208,27 @@ public class PaymentService {
             @CacheEvict(value = "yearlyRevenue",  allEntries = true),
             @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
     })
-    public PaymentResponse verifyPayment(UUID paymentId) {
+    public PaymentResponse verifyPayment(UUID paymentId, String verifiedBy) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
+
+        // This is the manual step where an owner confirms a UPI transfer really landed, and it
+        // is what completes the trip and books the fare into revenue. It used to accept any
+        // payment in any state: re-posting it against an already-settled payment re-completed
+        // the booking, re-notified the passenger and evicted the revenue caches again, so one
+        // fare could be recognised repeatedly. It also accepted CASH payments, bypassing the
+        // driver-side collection check entirely.
+        if (payment.getStatus() == Payment.PaymentStatus.VERIFIED) {
+            throw new RuntimeException("Payment already verified");
+        }
+        if (payment.getPaymentMethod() != Payment.PaymentMethod.UPI) {
+            throw new IllegalArgumentException(
+                    "Only UPI payments are verified here; cash is settled by the assigned driver");
+        }
         
         payment.setStatus(Payment.PaymentStatus.VERIFIED);
         payment.setVerifiedDate(LocalDateTime.now());
+        payment.setVerifiedBy("owner:" + verifiedBy);
         Payment verified = paymentRepository.save(payment);
         
         TravelBooking booking = bookingRepository.findById(payment.getBookingId())
@@ -252,15 +305,53 @@ public class PaymentService {
         return response;
     }
     
-    private String generateUpiDeepLink(Double amount, String bookingRef) {
-        try {
-            String encodedName = URLEncoder.encode(ownerName, "UTF-8");
-            String note = URLEncoder.encode("Booking:" + bookingRef, "UTF-8");
-            return String.format("upi://pay?pa=%s&pn=%s&am=%.2f&cu=INR&tn=%s",
-                    ownerUpiId, encodedName, amount, note);
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("Error generating UPI link", e);
+    /**
+     * Builds the {@code upi://pay} intent the customer's UPI app opens.
+     *
+     * <p>Every interpolated value is percent-encoded, including the payee address. A UPI ID
+     * containing an unescaped {@code &} would otherwise close the {@code pa} parameter and let
+     * the rest of the string inject its own — {@code am}, or a second {@code pa} — so an
+     * operator who mistyped the configured ID could silently produce links that pay the wrong
+     * account or the wrong amount.
+     *
+     * <p>The amount is formatted with {@link Locale#ROOT}. Without it {@code String.format}
+     * follows the JVM default locale, and on a host set to a comma-decimal locale (de, fr, and
+     * most of the EU) a 2500.00 fare renders as {@code am=2500,00} — which UPI apps either
+     * reject outright or read as 2500 rupees short of the real fare.
+     */
+    /**
+     * Maps the request's payment method onto the enum, rejecting anything else with a 400.
+     * {@code PaymentMethod.valueOf} was previously applied straight to the request string, so a
+     * body of {@code {"paymentMethod":"BITCOIN"}} raised IllegalArgumentException and a missing
+     * field raised NullPointerException, both from inside the transaction.
+     */
+    private Payment.PaymentMethod parseMethod(PaymentRequest request) {
+        String raw = request != null ? request.getPaymentMethod() : null;
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalArgumentException("Payment method is required (UPI or CASH)");
         }
+        try {
+            return Payment.PaymentMethod.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Unsupported payment method. Use UPI or CASH");
+        }
+    }
+
+    private String generateUpiDeepLink(Double amount, String bookingRef) {
+        if (amount == null || amount <= 0d) {
+            throw new IllegalStateException("Refusing to build a UPI link for a non-positive amount");
+        }
+        return String.format(
+                Locale.ROOT,
+                "upi://pay?pa=%s&pn=%s&am=%.2f&cu=INR&tn=%s",
+                encode(ownerUpiId),
+                encode(ownerName),
+                amount,
+                encode("Booking:" + bookingRef));
+    }
+
+    private static String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     private String generateQrCodeBase64(String upiDeepLink) {

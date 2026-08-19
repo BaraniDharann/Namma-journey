@@ -154,6 +154,10 @@ app:
     # Signed-in callers, per account. A dashboard render is legitimately ~30 calls and
     # many users share one egress address, so this is budgeted per identity, not per IP.
     authenticated-limit: ${RATELIMIT_AUTHENTICATED:300}
+    # Payment and QR endpoints, per account. Much tighter than the signed-in budget because
+    # each of these renders a 300x300 QR and base64-encodes the PNG, so they cost far more
+    # than an ordinary read. A passenger taps pay once and re-taps if the link expires.
+    payment-limit: ${RATELIMIT_PAYMENT:15}
 
 server:
   port: ${SERVER_PORT:8080}

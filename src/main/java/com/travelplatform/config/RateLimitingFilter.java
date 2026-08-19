@@ -56,6 +56,7 @@ public class RateLimitingFilter implements Filter {
 
     private final Map<String, BucketEntry> generalBuckets = new ConcurrentHashMap<>();
     private final Map<String, BucketEntry> authBuckets = new ConcurrentHashMap<>();
+    private final Map<String, BucketEntry> paymentBuckets = new ConcurrentHashMap<>();
 
     private final ClientIpResolver clientIpResolver;
     private final JwtUtil jwtUtil;
@@ -67,6 +68,16 @@ public class RateLimitingFilter implements Filter {
     /** Credential-guessing budget for /api/auth, per IP. */
     @Value("${app.ratelimit.auth-limit:10}")
     private int authLimit;
+
+    /**
+     * Payment budget, per account. Deliberately far tighter than the general signed-in limit:
+     * initiating a payment or ending a trip renders a 300x300 QR code and base64-encodes the
+     * PNG, which is orders of magnitude more work per request than a normal read. At the
+     * signed-in allowance one account could drive continuous QR generation, and no legitimate
+     * client needs more than a handful — a passenger taps pay, and re-taps if the link expires.
+     */
+    @Value("${app.ratelimit.payment-limit:15}")
+    private int paymentLimit;
 
     /** Signed-in budget, per account rather than per address. */
     @Value("${app.ratelimit.authenticated-limit:300}")
@@ -104,24 +115,32 @@ public class RateLimitingFilter implements Filter {
 
         String clientIp = clientIpResolver.resolve(request);
         boolean isAuthEndpoint = path.startsWith("/api/auth");
+        boolean isPaymentEndpoint = isPaymentPath(path);
 
         String key;
         int limit;
+        Scope scope;
         if (isAuthEndpoint) {
             key = "ip:" + clientIp;
             limit = authLimit;
+            scope = Scope.AUTH;
         } else {
             String accountId = resolveAccountId(request);
             if (accountId != null) {
                 key = "user:" + accountId;
-                limit = authenticatedLimit;
+                // Payment calls draw on their own, much smaller bucket rather than the general
+                // signed-in one, so driving QR generation in a loop cannot hide inside a normal
+                // browsing allowance.
+                limit = isPaymentEndpoint ? paymentLimit : authenticatedLimit;
+                scope = isPaymentEndpoint ? Scope.PAYMENT : Scope.GENERAL;
             } else {
                 key = "ip:" + clientIp;
                 limit = generalLimit;
+                scope = Scope.GENERAL;
             }
         }
 
-        Bucket bucket = resolveBucket(key, limit, isAuthEndpoint);
+        Bucket bucket = resolveBucket(key, limit, scope);
         ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
         response.setHeader("X-Rate-Limit-Remaining", String.valueOf(probe.getRemainingTokens()));
@@ -164,8 +183,27 @@ public class RateLimitingFilter implements Filter {
         }
     }
 
-    private Bucket resolveBucket(String key, int limit, boolean isAuthEndpoint) {
-        Map<String, BucketEntry> buckets = isAuthEndpoint ? authBuckets : generalBuckets;
+    /**
+     * True for the endpoints that move money or mint a UPI QR code.
+     *
+     * <p>Matched on the suffix rather than a prefix because these hang off per-user and
+     * per-driver paths that already carry an id segment, e.g.
+     * {@code /api/user/{userId}/bookings/{bookingId}/payment} and
+     * {@code /api/driver/{driverId}/bookings/{bookingId}/end-trip}.
+     */
+    private boolean isPaymentPath(String path) {
+        return path.endsWith("/payment")
+                || path.endsWith("/cash-payment")
+                || path.endsWith("/end-trip")
+                || path.contains("/payments/");
+    }
+
+    private Bucket resolveBucket(String key, int limit, Scope scope) {
+        Map<String, BucketEntry> buckets = switch (scope) {
+            case AUTH -> authBuckets;
+            case PAYMENT -> paymentBuckets;
+            case GENERAL -> generalBuckets;
+        };
 
         BucketEntry entry = buckets.computeIfAbsent(key, ignored -> {
             Bandwidth bandwidth = Bandwidth.classic(limit, Refill.greedy(limit, REFILL_DURATION));
@@ -177,12 +215,16 @@ public class RateLimitingFilter implements Filter {
         return entry.getBucket();
     }
 
+    /** Which budget a request draws on. Each has its own bucket map, so keys never collide. */
+    private enum Scope { AUTH, PAYMENT, GENERAL }
+
     @Scheduled(fixedRate = 600_000)
     public void cleanUpStaleBuckets() {
         long now = System.currentTimeMillis();
         int removed = 0;
         removed += removeStaleEntries(generalBuckets, now);
         removed += removeStaleEntries(authBuckets, now);
+        removed += removeStaleEntries(paymentBuckets, now);
         if (removed > 0) {
             logger.info("Cleaned up {} stale rate limit bucket(s)", removed);
         }

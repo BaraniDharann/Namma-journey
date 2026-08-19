@@ -47,6 +47,10 @@ public class Payment {
     @Column
     private LocalDateTime verifiedDate;
 
+    /** JWT subject of the owner who verified this payment. Null while it is still pending. */
+    @Column
+    private String verifiedBy;
+
     @Column
     private LocalDateTime upiLinkExpiresAt;
     

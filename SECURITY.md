@@ -60,6 +60,44 @@ A few things this project relies on you to get right — they aren't defaults we
   came from Telegram.
 - Serve everything over TLS. JWTs in transit over plain HTTP are compromised JWTs.
 
+## How payments are trusted
+
+This platform collects fares by **UPI deep link and QR code**. It is not integrated with a payment
+gateway, and that shapes what it can and cannot guarantee — deployers should understand the line.
+
+**What the application enforces:**
+
+- The fare comes from the booking, never from the request. `PaymentRequest` carries no amount
+  field at all, so a customer cannot name their own price.
+- `OWNER_UPI_ID` has no default. The application will not start without it, so a deployment can
+  never silently route fares to an address baked into the source.
+- Every value interpolated into the `upi://pay` intent is percent-encoded, and the amount is
+  formatted with `Locale.ROOT`. A payee address containing `&` cannot inject a second `am=`, and
+  a host running under a comma-decimal locale cannot emit a malformed amount.
+- Settlement is idempotent and single-actor. UPI payments are verified by an **owner**; cash is
+  settled by the **assigned driver** and the amount collected must match the fare. Neither path
+  can be replayed against an already-settled payment, so one trip cannot be recognised into
+  revenue more than once.
+- Every settlement records who performed it, in `payments.verified_by`.
+- `payments.booking_id` is unique, so concurrent requests cannot create two payments for one trip.
+- Payment and QR endpoints have their own tight per-account rate limit (`RATELIMIT_PAYMENT`),
+  because each call renders a QR image and costs far more than an ordinary read.
+
+**What it cannot enforce — the trust boundary:**
+
+> The application never observes the actual transfer. Marking a UPI payment verified is a **manual
+> human judgement** by an owner who has checked their own bank or UPI app. Nothing in this codebase
+> proves the money arrived.
+
+That is an acceptable design for a small operator settling their own trips, and it is the reason
+verification is owner-only and audited. It is **not** suitable for an operation where the person
+clicking verify is not the person whose account receives the money. If you need that separation,
+integrate a payment gateway and reconcile against its webhook rather than extending the manual
+flow.
+
+`upi_transaction_id` exists on the payment record for an owner to store the UPI reference they
+checked against. It is a record, not a proof — the application does not and cannot validate it.
+
 ## Known dependency advisories
 
 `npm audit` on the frontend reports two findings that are deliberately not fixed. Both are

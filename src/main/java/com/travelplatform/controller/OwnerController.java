@@ -147,8 +147,12 @@ public class OwnerController {
     
     @PostMapping("/payments/{paymentId}/verify")
     @PreAuthorize("hasRole('OWNER')")
-    public ResponseEntity<PaymentResponse> verifyPayment(@PathVariable UUID paymentId) {
-        PaymentResponse response = paymentService.verifyPayment(paymentId);
+    public ResponseEntity<PaymentResponse> verifyPayment(
+            @PathVariable UUID paymentId,
+            java.security.Principal principal) {
+        // Verifying a payment settles a trip and books the fare into revenue, so the row records
+        // which owner did it. Principal is the JWT subject, populated by JwtAuthenticationFilter.
+        PaymentResponse response = paymentService.verifyPayment(paymentId, principal.getName());
         return ResponseEntity.ok(response);
     }
     
