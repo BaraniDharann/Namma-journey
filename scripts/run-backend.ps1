@@ -1,4 +1,5 @@
-Set-Location 'c:\react project\Travel Booking Platform'
+# Run from the repository root regardless of where this script is invoked from.
+Set-Location (Join-Path $PSScriptRoot '..')
 Get-Content .env | Where-Object { $_ -match '=' -and $_ -notmatch '^\s*#' } | ForEach-Object {
   $p = $_ -split '=', 2
   [Environment]::SetEnvironmentVariable($p[0].Trim(), $p[1].Trim(), 'Process')

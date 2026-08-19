@@ -13,6 +13,18 @@ FROM eclipse-temurin:17-jre
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
+
+# Run unprivileged. A container process running as root shares uid 0 with the host, so any
+# container escape or writable bind mount starts from full privilege.
+RUN useradd --system --uid 10001 --no-create-home appuser \
+    && mkdir -p /app/uploads \
+    && chown -R appuser:appuser /app
+USER appuser
+
+# Driver documents and trip photos land here. Declared as a volume so they survive the
+# container: without it every redeploy silently discards uploaded licences and Aadhaar scans.
+VOLUME ["/app/uploads"]
+
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
   CMD curl -f http://localhost:8080/api/health || exit 1

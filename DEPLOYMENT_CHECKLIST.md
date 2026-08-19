@@ -1,354 +1,143 @@
-# Deployment Checklist - Driver Management Update
+# Deployment checklist
 
-## Pre-Deployment
+Work through this before putting Namma Journey in front of real customers. It assumes you have
+already run the project locally — see [README.md](README.md) for that.
 
-### Code Review
-- [ ] All new files created successfully
-- [ ] All modified files updated correctly
-- [ ] No compilation errors
-- [ ] All imports resolved
-
-### Database
-- [ ] Backup existing database
-- [ ] Test database migration on staging
-- [ ] New Flyway migration added under `src/main/resources/db/migration` for any schema change
-- [ ] `JPA_DDL_AUTO` is `validate` — Hibernate must never alter tables itself
-
-### Environment Variables
-- [ ] `MAIL_USERNAME` configured (Gmail SMTP account)
-- [ ] `MAIL_PASSWORD` configured (Gmail app password, not the account password)
-- [ ] `MAIL_FROM_NAME` configured
-- [ ] `DB_URL` configured
-- [ ] `DB_USERNAME` configured
-- [ ] `DB_PASSWORD` configured
-- [ ] `JWT_SECRET` configured
-- [ ] `JWT_EXPIRATION` configured
-- [ ] `OWNER_UPI_ID` configured — the app refuses to start without it
-- [ ] `CORS_ALLOWED_ORIGINS` lists the real frontend origin
-- [ ] `OTP_TEST_MODE` is `false`
-- [ ] `OWNER_BOOTSTRAP_SECRET` cleared again after the first owner was created
-
-### Dependencies
-- [ ] Spring Security dependency in pom.xml
-- [ ] JWT dependencies in pom.xml
-- [ ] Run `mvn clean install` successfully
+The items marked **blocking** are ones where getting it wrong is not a degraded deployment but a
+compromised one.
 
 ---
 
-## Deployment Steps
+## 1. Configuration
 
-### 1. Build Application
+Copy `.env.example` to `.env` and fill it in. Nothing sensitive has a fallback: the application
+refuses to start rather than run on a value baked into the source.
+
+### Required — the app will not boot without these
+
+- [ ] `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` — PostgreSQL connection
+- [ ] `JWT_SECRET` — **blocking.** Unique per environment, generated with `openssl rand -hex 64`.
+      Reusing one across environments means a token minted in staging is valid in production.
+- [ ] `OWNER_UPI_ID` — **blocking.** The account that receives every customer payment. Check it
+      character by character; a typo sends real money to whoever owns that address.
+- [ ] `MAIL_USERNAME`, `MAIL_PASSWORD` — Gmail account and **app password** (not the account
+      password). OTP delivery and driver credentials both depend on this; without it nobody can
+      sign up.
+
+### Required to get right, though they have defaults
+
+- [ ] `CORS_ALLOWED_ORIGINS` — set to the real frontend origin. The default only covers localhost,
+      so every browser request from your actual domain is blocked until you change it.
+- [ ] `OTP_TEST_MODE=false` — **blocking.** When on, OTPs are written to the database instead of
+      emailed. Anyone who can read the `otps` table can take over any account.
+- [ ] `OWNER_BOOTSTRAP_SECRET` — set it, create your first owner, then **clear it again**. While
+      it holds a value, `POST /api/auth/owner/create-admin` mints owner tokens, which is full
+      control of the platform.
+- [ ] `RATELIMIT_TRUSTED_PROXIES` — **blocking behind a proxy.** Set to your load balancer or
+      ingress range. Left empty behind a proxy, every request appears to come from the balancer
+      and shares one rate-limit bucket. Set to `*`, any caller can spoof `X-Forwarded-For` and
+      bypass rate limiting entirely.
+- [ ] `JPA_DDL_AUTO=validate` — leave it. `update` lets Hibernate quietly alter live tables.
+
+### Optional
+
+- [ ] `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — only for Google sign-in
+- [ ] `TELEGRAM_*` — see [TELEGRAM_SETUP.md](TELEGRAM_SETUP.md); leave `TELEGRAM_ENABLED=false` to
+      disable
+- [ ] `REDIS_HOST` / `REDIS_PORT`, or `APP_CACHE_TYPE=caffeine` to run without Redis
+- [ ] `OSRM_BASE_URL` / `PHOTON_BASE_URL` — **the defaults are public demo servers.** They are rate
+      limited and not licensed for production traffic. Self-host or buy a provider before launch.
+
+---
+
+## 2. Pre-flight
+
+- [ ] `mvn clean package` succeeds and the test suite passes
+- [ ] `cd frontend && npm ci && npm run build` succeeds
+- [ ] Database exists and is reachable. Flyway creates every table on first boot, so an empty
+      database is enough — do **not** run anything in `db/legacy-scripts/`
+- [ ] Existing database backed up, if this is not a first deploy
+- [ ] TLS terminates in front of the application. A JWT sent over plain HTTP is a compromised JWT
+- [ ] Frontend built with `VITE_API_BASE_URL` pointing at the real API, or left unset so it uses
+      the same origin through the nginx proxy
+
+---
+
+## 3. Deploy
+
+### Docker Compose
+
 ```bash
-cd "c:\react project\Travel Booking Platform"
+docker compose up --build -d
+docker compose logs -f backend
+```
+
+### Manual
+
+```bash
 mvn clean package -DskipTests
+java -jar target/travel-booking-platform-1.0.0.jar
 ```
 
-### 2. Stop Current Application
-```bash
-# If running as service
-sudo systemctl stop travel-platform
-
-# If running manually
-# Press Ctrl+C or kill process
-```
-
-### 3. Backup Current JAR
-```bash
-cp target/travel-platform.jar target/travel-platform.jar.backup
-```
-
-### 4. Deploy New JAR
-```bash
-# Copy new JAR to deployment location
-cp target/travel-platform-0.0.1-SNAPSHOT.jar /opt/travel-platform/travel-platform.jar
-```
-
-### 5. Start Application
-```bash
-# If running as service
-sudo systemctl start travel-platform
-
-# If running manually
-java -jar target/travel-platform-0.0.1-SNAPSHOT.jar
-```
-
-### 6. Verify Application Started
-```bash
-# Check logs
-tail -f logs/application.log
-
-# Check health
-curl http://localhost:8080/actuator/health
-```
+Send `SIGTERM` (not `SIGKILL`) to stop it. The application drains in-flight requests for up to 25
+seconds; killing it outright severs whatever booking or payment was mid-flight.
 
 ---
 
-## Post-Deployment Verification
+## 4. Verify
 
-### 1. Database Schema
-```sql
--- Verify new columns exist
-DESCRIBE drivers;
+- [ ] `curl -f http://<host>:8080/api/health` returns healthy
+- [ ] Flyway applied every migration:
+      `SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank;`
+- [ ] Create the first owner, then clear `OWNER_BOOTSTRAP_SECRET` and restart:
 
--- Should see:
--- email, photo, license_photo, aadhaar_photo
-```
-
-### 2. API Endpoints
 ```bash
-# Test owner login
-curl -X POST http://localhost:8080/api/auth/owner/login \
+curl -X POST http://<host>:8080/api/auth/owner/create-admin \
   -H "Content-Type: application/json" \
-  -d '{"email":"YOUR_OWNER_EMAIL","password":"YOUR_OWNER_PASSWORD"}'
-
-# Test driver creation endpoint exists
-curl -X POST http://localhost:8080/api/owner/drivers \
-  -H "Content-Type: application/json"
-# Should return 401 (not 404)
-
-# Test old driver signup removed
-curl -X POST http://localhost:8080/api/auth/driver/signup \
-  -H "Content-Type: application/json"
-# Should return 404
+  -H "X-Bootstrap-Secret: $OWNER_BOOTSTRAP_SECRET" \
+  -d '{"email":"YOUR_OWNER_EMAIL","password":"YOUR_OWNER_PASSWORD","name":"Owner"}'
 ```
 
-### 3. Email Service
-```bash
-# Create test driver and verify email sent
-# Check the backend log for mail send failures
-```
-
-### 4. Security
-```bash
-# Test unauthorized access
-curl -X POST http://localhost:8080/api/owner/drivers \
-  -H "Content-Type: application/json" \
-  -d '{...}'
-# Should return 401
-
-# Test with USER token
-curl -X POST http://localhost:8080/api/owner/drivers \
-  -H "Authorization: Bearer <USER_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{...}'
-# Should return 403
-```
+- [ ] Sign up as a customer and confirm the OTP email actually arrives
+- [ ] Create a driver as the owner and confirm the credential email arrives
+- [ ] Book a trip, assign the driver, start the trip, and confirm the live map updates — this
+      exercises the WebSocket path, which is the piece most likely to be broken by a proxy that
+      does not forward `Upgrade` headers
+- [ ] Complete a payment end to end and confirm it appears in owner revenue exactly once
 
 ---
 
-## Rollback Plan
+## 5. Security verification
 
-### If Issues Occur:
-
-1. **Stop Application**
-```bash
-sudo systemctl stop travel-platform
-```
-
-2. **Restore Backup**
-```bash
-cp target/travel-platform.jar.backup /opt/travel-platform/travel-platform.jar
-```
-
-3. **Restart Application**
-```bash
-sudo systemctl start travel-platform
-```
-
-4. **Verify Rollback**
-```bash
-curl http://localhost:8080/actuator/health
-```
-
-### Database Rollback (if needed)
-```sql
--- Remove new columns (only if necessary)
-ALTER TABLE drivers 
-DROP COLUMN email,
-DROP COLUMN photo,
-DROP COLUMN license_photo,
-DROP COLUMN aadhaar_photo;
-```
+- [ ] `/actuator/metrics`, `/actuator/prometheus` and `/actuator/caches` return 401/403 to an
+      unauthenticated caller. Only `/actuator/health` and `/actuator/info` should be public
+- [ ] A customer cannot read another customer's booking:
+      `GET /api/user/<someone-elses-id>/bookings` with your own token returns 403
+- [ ] Rate limiting responds: hammer `/api/auth/user/login` and confirm a `429` with `Retry-After`
+- [ ] `.env` is not in the image, not in the repository, and not world-readable on the host
+- [ ] The backend container runs as a non-root user (`docker compose exec backend id` → uid 10001)
 
 ---
 
-## Monitoring
+## 6. Operations
 
-### Application Logs
-```bash
-# Monitor for errors
-tail -f logs/application.log | grep ERROR
-
-# Monitor driver creation
-tail -f logs/application.log | grep "Driver created"
-
-# Monitor email sending
-tail -f logs/application.log | grep "email sent"
-```
-
-### Database Monitoring
-```sql
--- Check driver creation rate
-SELECT COUNT(*), DATE(created_at) 
-FROM drivers 
-GROUP BY DATE(created_at) 
-ORDER BY DATE(created_at) DESC;
-
--- Check email field population
-SELECT COUNT(*) as total,
-       COUNT(email) as with_email,
-       COUNT(*) - COUNT(email) as without_email
-FROM drivers;
-```
-
-### Mail delivery
-- Monitor email delivery rate
-- Check bounce rate
-- Verify no spam complaints
+- [ ] `uploads/` is a persistent volume. Driver licences and Aadhaar scans live there; without a
+      volume every redeploy discards them
+- [ ] Database backups scheduled and a restore actually tested
+- [ ] Log aggregation configured, or at least log rotation — `logs/` grows without bound
+- [ ] Someone is watching `/actuator/health` and knows what to do when it goes red
 
 ---
 
-## Communication Plan
+## Known limitations to accept before launching
 
-### Notify Stakeholders
+These are documented in [SECURITY.md](SECURITY.md); they are design decisions, not oversights.
 
-**Before Deployment:**
-```
-Subject: System Update - Driver Registration Process Change
-
-Dear Team,
-
-We will be deploying an update to the driver registration process:
-
-Date: [DATE]
-Time: [TIME]
-Duration: ~15 minutes
-Impact: Driver signup temporarily unavailable
-
-Changes:
-- Driver accounts will now be created by admin only
-- Drivers will receive login credentials via email
-- Old driver signup endpoint will be removed
-
-Action Required:
-- Admins: Learn new driver creation process
-- Support: Update documentation and FAQs
-
-Thank you,
-Tech Team
-```
-
-**After Deployment:**
-```
-Subject: System Update Complete - New Driver Registration Live
-
-Dear Team,
-
-The driver registration update has been deployed successfully.
-
-New Process:
-1. Admin logs in to owner portal
-2. Admin creates driver account with details
-3. Driver receives email with credentials
-4. Driver logs in using received credentials
-
-Documentation:
-- API Guide: DRIVER_MANAGEMENT_API.md
-- Testing Guide: TESTING_GUIDE.md
-
-Support: support@travelplatform.com
-
-Thank you,
-Tech Team
-```
-
----
-
-## Training Materials
-
-### For Admins
-- [ ] Share DRIVER_MANAGEMENT_API.md
-- [ ] Share TESTING_GUIDE.md
-- [ ] Conduct training session on new process
-- [ ] Provide Postman collection
-
-### For Support Team
-- [ ] Update FAQs
-- [ ] Update help documentation
-- [ ] Train on troubleshooting common issues
-- [ ] Provide escalation process
-
-### For Drivers
-- [ ] Email template explaining new process
-- [ ] Instructions on what to expect
-- [ ] Contact information for support
-
----
-
-## Success Metrics
-
-### Week 1 Post-Deployment
-- [ ] Number of drivers created by admin
-- [ ] Email delivery success rate
-- [ ] Driver login success rate
-- [ ] Support tickets related to new process
-- [ ] System errors/bugs reported
-
-### Week 2-4 Post-Deployment
-- [ ] Process efficiency improvements
-- [ ] User feedback collection
-- [ ] Performance metrics
-- [ ] Security audit results
-
----
-
-## Known Issues & Workarounds
-
-### Issue 1: Email Delivery Delay
-**Workaround**: Check the backend log for the send failure; share credentials by hand if needed
-
-### Issue 2: Existing Drivers Without Email
-**Workaround**: Email field is optional, existing drivers unaffected
-
-### Issue 3: Photo Upload Not Implemented
-**Workaround**: Accept URLs or Base64 strings for now
-
----
-
-## Future Enhancements
-
-- [ ] File upload for photos
-- [ ] Driver password reset
-- [ ] Admin dashboard UI
-- [ ] Bulk driver import
-- [ ] Driver document verification
-- [ ] SMS notification option
-- [ ] Multi-language email templates
-
----
-
-## Support Contacts
-
-- **Technical Issues**: tech@travelplatform.com
-- **Mail delivery issues**: check MAIL_USERNAME / MAIL_PASSWORD and the Gmail app-password setup
-- **Database Issues**: dba@travelplatform.com
-- **Emergency**: +91-XXXXXXXXXX
-
----
-
-## Sign-Off
-
-- [ ] Development Team Lead: _________________ Date: _______
-- [ ] QA Team Lead: _________________ Date: _______
-- [ ] DevOps Lead: _________________ Date: _______
-- [ ] Product Manager: _________________ Date: _______
-
----
-
-**Deployment Status**: ⏳ Pending / ✅ Complete / ❌ Failed
-
-**Deployment Date**: __________________
-
-**Deployed By**: __________________
-
-**Verified By**: __________________
+- **Payment verification is manual.** Nothing in this codebase observes the actual UPI transfer.
+  An owner confirms it from their own bank app. This is fine when the person clicking verify owns
+  the receiving account, and not fine otherwise.
+- **Single-instance WebSocket.** Live tracking uses an in-memory STOMP broker, so running more
+  than one backend replica requires an external broker relay first.
+- **`xlsx` carries an unpatched advisory.** It is used write-only for the revenue export and no
+  code path parses a workbook, so it is not reachable — but it must be replaced before anything
+  ever reads an uploaded spreadsheet.

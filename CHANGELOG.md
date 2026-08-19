@@ -34,6 +34,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Playwright videos and E2E screenshots are no longer tracked in git (21 MB); they are
   regenerated on every run
 
+### Deployment
+- Graceful shutdown. The application now drains in-flight requests on SIGTERM instead of severing
+  them, bounded at 25s so it always exits before an orchestrator escalates to SIGKILL
+- The backend container runs as an unprivileged user instead of root, with `/app/uploads` created
+  and owned by it and declared as a volume — previously driver licences and Aadhaar scans lived
+  only inside the container and were discarded on every redeploy
+- `docker-compose.yml` mounts a named volume for those uploads
+- `DEPLOYMENT_CHECKLIST.md` rewritten from a one-off "Driver Management Update" note into a real
+  pre-production checklist, covering configuration, verification, security checks, operations and
+  the limitations to accept before launching. It no longer contains the author's local path
+- `scripts/run-backend.ps1` resolves the repository root from its own location rather than a
+  hardcoded absolute path that only worked on one machine
+- New `ApplicationConfigDefaultsTest` pins the settings that are silently catastrophic when wrong
+  — secrets acquiring fallbacks, `ddl-auto` returning to `update`, OTP test mode shipping enabled,
+  the bootstrap secret defaulting to a value, actuator widening — and fails the build if any
+  regress
+
 ### Fixed
 - Frontend login flows for user, driver and owner roles
 - Live tracking map and driver location streaming reliability

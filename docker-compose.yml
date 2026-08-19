@@ -29,6 +29,10 @@ services:
       APP_CACHE_TYPE: ${APP_CACHE_TYPE:-redis}
     ports:
       - "8080:8080"
+    volumes:
+      # Driver licences, Aadhaar scans and trip photos. Without this they live only inside the
+      # container and every redeploy throws them away.
+      - backend-uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,6 +70,7 @@ services:
 volumes:
   postgres-data:
   redis-data:
+  backend-uploads:
 
 networks:
   travel-network:
