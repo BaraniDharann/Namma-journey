@@ -144,6 +144,7 @@ on every pull request, because it takes minutes and needs a live database.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to set up, branch, test and submit changes |
 | [SECURITY.md](SECURITY.md) | Reporting a vulnerability |
 | [ASSETS.md](ASSETS.md) | Licensing of the bundled images — read before redistributing |
+| [docs/IMAGE_RELICENSING.md](docs/IMAGE_RELICENSING.md) | Free, per-file plan for making the image set redistributable |
 
 Deeper reference material lives under [docs/](docs/):
 

@@ -35,7 +35,6 @@ which points to a stock library rather than original photography:
 - `prasart-phimai-ancient-stone-thailand.jpg`
 - `tourist-presenting-something.jpg`
 - `car image.jpeg`
-- `india-3d-map.jfif`
 
 The multi-word, hyphen-separated style of those names is characteristic of Freepik and
 similar libraries. None has been confirmed.
@@ -52,6 +51,12 @@ so on for all 22. Those descriptive names are the starting point for a reverse-i
 filename search against the stock libraries.
 
 ## Unverified
+
+> **There is a free way out of this.** See
+> [docs/IMAGE_RELICENSING.md](docs/IMAGE_RELICENSING.md) for the per-file plan. Buying a stock
+> subscription would *not* resolve it — those licences forbid redistributing the file itself,
+> which is exactly what a public repository does. CC0 and public-domain replacements do resolve
+> it, and cost nothing.
 
 **Provenance for every photograph above still needs to be confirmed by the repository owner.**
 Until each row is filled in, treat the image set as *not* redistributable under MIT.

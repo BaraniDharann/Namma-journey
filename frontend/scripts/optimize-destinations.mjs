@@ -12,6 +12,21 @@ import path from 'path'
 const SRC = path.resolve('images/travel places')
 const DST = path.resolve('public/images/travel places')
 
+// The source folder is gitignored, so it is absent on a fresh clone. Say so plainly rather
+// than failing with an ENOENT stack trace — anyone running this is most likely following
+// docs/IMAGE_RELICENSING.md and needs to know what to put where.
+try {
+  await fs.access(SRC)
+} catch {
+  console.error(`No source images found at:
+  ${SRC}
+`)
+  console.error('That folder is gitignored, so it does not exist on a fresh clone. Put the')
+  console.error('original photographs there, named as the left-hand column of the SLUGS table')
+  console.error('below, then run this again. See docs/IMAGE_RELICENSING.md.')
+  process.exit(1)
+}
+
 await fs.mkdir(DST, { recursive: true })
 
 // Map original filenames -> safe ASCII slugs (no spaces, commas, parens — safe for URLs).
