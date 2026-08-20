@@ -178,10 +178,10 @@ OWNER                    BACKEND                    EMAIL SERVICE
          │ uses                       │ uses
          ▼                            ▼
 ┌──────────────────┐         ┌──────────────────┐
-│DriverRepository │         │  Gmail SMTP API    │
+│DriverRepository │         │  JavaMailSender  │
 │                  │         │                  │
-│ - save()         │         │ - POST /mail/    │
-│ - existsByXxx()  │         │   send           │
+│ - save()         │         │ - send()         │
+│ - existsByXxx()  │         │                  │
 └────────┬─────────┘         └──────────────────┘
          │
          │ persists

@@ -162,7 +162,7 @@ curl -X POST http://localhost:8080/api/auth/otp/send \
 
 **Check logs:**
 ```bash
-tail -f logs/spring.log | grep -i "email\|otp\|Gmail SMTP"
+tail -f logs/spring.log | grep -iE "email|otp|mail|smtp"
 ```
 
 **Verify mail delivery:**

@@ -323,7 +323,7 @@ SELECT password FROM drivers WHERE mobile = '9876543210';
 ### Problem: Email not received
 **Solution**: 
 1. Check Gmail SMTP API key in environment variables
-2. Check Gmail SMTP dashboard for email status
+2. Check the backend log for mail send failures
 3. Check spam folder
 4. Verify email address is valid
 

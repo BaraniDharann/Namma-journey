@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Owner must be logged in and have a valid JWT token
-- Gmail SMTP configured for email sending
+- Gmail SMTP configured (MAIL_USERNAME and a Gmail app password)
 - PostgreSQL database running
 
 ---
@@ -374,7 +374,7 @@ OTP expires after 5 minutes. Request new OTP by logging in again.
 ## Testing Tips
 
 1. **Test Mode:** Set `otp.test.mode=true` in application.yml to see OTP in console logs
-2. **Check Emails:** Monitor Gmail SMTP dashboard for email delivery
+2. **Check Emails:** Watch the backend log for mail send failures
 3. **Database Check:** Query drivers table to verify status changes
 4. **Token Expiry:** JWT tokens expire after 24 hours
 

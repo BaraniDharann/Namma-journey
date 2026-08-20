@@ -294,11 +294,11 @@ ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT false;
 
 ---
 
-## Gmail SMTP Configuration
+## Mail configuration
 
 ### Setup Steps
 
-1. **Create Gmail SMTP Account**
+1. **Enable 2-Step Verification and create a Gmail app password**
    - Sign up at https://Gmail SMTP.com
    - Verify your email
 

@@ -113,6 +113,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `OWNER_BOOTSTRAP_SECRET` flow, which does not hand out a shared credential
 - `scripts/test-driver-workflow.bat` no longer carries hardcoded owner credentials; it reads them
   from the environment and refuses to run without them
+- **Removed a live Google OAuth client secret** (`GOCSPX-…`) and the matching client ID from
+  `docs/guides/API_TESTING_GUIDE.md`, along with a full SendGrid API key in the same file. These
+  had been committed and public; earlier passes missed them because the scans looked for known
+  strings rather than provider key prefixes. **Both must be revoked, not just deleted**
+- `frontend/.env.example` no longer advertises `VITE_OWNER_UPI_ID`. Anything prefixed `VITE_` is
+  compiled into the JavaScript bundle and served to every visitor, so following that example
+  would have published the account that collects every fare. Nothing read it — the UPI intent is
+  built server-side and arrives in the payment response — and the file now says so explicitly.
+  `VITE_OTP_TEST_MODE` went with it: it was unused and implied a client-side flag could weaken
+  OTP verification
 - Spring Boot 3.4.1 → 3.4.13
 
 ## [1.0.0] - Initial
