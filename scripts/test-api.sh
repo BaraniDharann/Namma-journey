@@ -28,14 +28,14 @@ curl -X POST $BASE_URL/user/login \
 echo -e "\n3️⃣  Driver Signup..."
 curl -X POST $BASE_URL/driver/signup \
   -H "Content-Type: application/json" \
-  -d '{"name":"Suresh Sharma","mobile":"9123456789","password":"driver@123","licenseNumber":"DL1420110012345","aadhaarNumber":"123456789012"}' \
+  -d '{"name":"Suresh Sharma","mobile":"9123456789","password":"YOUR_DRIVER_PASSWORD","licenseNumber":"DL1420110012345","aadhaarNumber":"123456789012"}' \
   -w "\n"
 
 # Test 4: Driver Login
 echo -e "\n4️⃣  Driver Login..."
 curl -X POST $BASE_URL/driver/login \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"9123456789","password":"driver@123"}' \
+  -d '{"mobile":"9123456789","password":"YOUR_DRIVER_PASSWORD"}' \
   -w "\n"
 
 echo -e "\n✅ All tests completed!"

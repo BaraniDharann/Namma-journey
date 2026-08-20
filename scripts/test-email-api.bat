@@ -43,7 +43,7 @@ echo Test 5: Driver Signup
 echo ----------------------
 curl -X POST %BASE_URL%/driver/signup ^
   -H "Content-Type: application/json" ^
-  -d "{\"name\":\"Suresh Sharma\",\"mobile\":\"9123456789\",\"password\":\"driver@123\",\"licenseNumber\":\"DL1420110012345\",\"aadhaarNumber\":\"123456789012\"}"
+  -d "{\"name\":\"Suresh Sharma\",\"mobile\":\"9123456789\",\"password\":\"YOUR_DRIVER_PASSWORD\",\"licenseNumber\":\"DL1420110012345\",\"aadhaarNumber\":\"123456789012\"}"
 echo.
 echo.
 
@@ -51,7 +51,7 @@ echo Test 6: Driver Login
 echo ---------------------
 curl -X POST %BASE_URL%/driver/login ^
   -H "Content-Type: application/json" ^
-  -d "{\"mobile\":\"9123456789\",\"password\":\"driver@123\"}"
+  -d "{\"mobile\":\"9123456789\",\"password\":\"YOUR_DRIVER_PASSWORD\"}"
 echo.
 echo.
 

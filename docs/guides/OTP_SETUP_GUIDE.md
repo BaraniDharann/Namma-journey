@@ -143,14 +143,14 @@ curl -X POST http://localhost:8080/api/auth/user/login \
 ```bash
 curl -X POST http://localhost:8080/api/auth/driver/signup \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"Suresh Sharma\",\"mobile\":\"9123456789\",\"password\":\"driver@123\",\"licenseNumber\":\"DL1420110012345\",\"aadhaarNumber\":\"123456789012\"}"
+  -d "{\"name\":\"Suresh Sharma\",\"mobile\":\"9123456789\",\"password\":\"YOUR_DRIVER_PASSWORD\",\"licenseNumber\":\"DL1420110012345\",\"aadhaarNumber\":\"123456789012\"}"
 ```
 
 ### 2. Driver Login
 ```bash
 curl -X POST http://localhost:8080/api/auth/driver/login \
   -H "Content-Type: application/json" \
-  -d "{\"mobile\":\"9123456789\",\"password\":\"driver@123\"}"
+  -d "{\"mobile\":\"9123456789\",\"password\":\"YOUR_DRIVER_PASSWORD\"}"
 ```
 
 ### 3. Owner Login (create the owner first)

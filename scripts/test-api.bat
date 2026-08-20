@@ -24,12 +24,12 @@ curl -X POST %BASE_URL%/user/login -H "Content-Type: application/json" -d "{\"lo
 REM Test 3: Driver Signup
 echo.
 echo 3. Driver Signup...
-curl -X POST %BASE_URL%/driver/signup -H "Content-Type: application/json" -d "{\"name\":\"Suresh Sharma\",\"mobile\":\"9123456789\",\"password\":\"driver@123\",\"licenseNumber\":\"DL1420110012345\",\"aadhaarNumber\":\"123456789012\"}"
+curl -X POST %BASE_URL%/driver/signup -H "Content-Type: application/json" -d "{\"name\":\"Suresh Sharma\",\"mobile\":\"9123456789\",\"password\":\"YOUR_DRIVER_PASSWORD\",\"licenseNumber\":\"DL1420110012345\",\"aadhaarNumber\":\"123456789012\"}"
 
 REM Test 4: Driver Login
 echo.
 echo 4. Driver Login...
-curl -X POST %BASE_URL%/driver/login -H "Content-Type: application/json" -d "{\"mobile\":\"9123456789\",\"password\":\"driver@123\"}"
+curl -X POST %BASE_URL%/driver/login -H "Content-Type: application/json" -d "{\"mobile\":\"9123456789\",\"password\":\"YOUR_DRIVER_PASSWORD\"}"
 
 echo.
 echo All tests completed!

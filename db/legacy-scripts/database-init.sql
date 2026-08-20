@@ -46,28 +46,23 @@ CREATE INDEX idx_drivers_mobile ON drivers(mobile);
 CREATE INDEX idx_owners_email ON owners(email);
 
 -- Insert Default Owner Account
--- Password: owner@123 (BCrypt encrypted)
-INSERT INTO owners (email, password, role, created_at) 
-VALUES (
-    'admin@travelplatform.com', 
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
-    'ROLE_OWNER',
-    CURRENT_TIMESTAMP
-) ON CONFLICT (email) DO NOTHING;
+--
+-- REMOVED. This block seeded an owner account -- full control of the platform -- with a BCrypt
+-- hash of a password that was printed in this very file. Every deployment that ran this script
+-- ended up with the same known administrator credential.
+--
+-- Create the first owner through the application instead, which does not hand out a shared
+-- secret. Set OWNER_BOOTSTRAP_SECRET, then:
+--
+--   POST /api/auth/owner/create-admin   (header: X-Bootstrap-Secret)
+--
+-- and clear OWNER_BOOTSTRAP_SECRET again afterwards. See DEPLOYMENT_CHECKLIST.md.
 
 -- Insert Sample Driver for Testing (Optional)
--- Password: driver@123 (BCrypt encrypted)
-INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status, created_at)
-VALUES (
-    'Test Driver',
-    '9999999999',
-    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
-    'TEST123456789',
-    '999999999999',
-    'ROLE_DRIVER',
-    'ACTIVE',
-    CURRENT_TIMESTAMP
-) ON CONFLICT (mobile) DO NOTHING;
+--
+-- REMOVED for the same reason as the owner block above: it seeded a login with a password
+-- published alongside it. Create drivers as the owner through POST /api/owner/drivers, which
+-- generates a random password and emails it to the driver.
 
 -- Verify Tables Created
 SELECT table_name FROM information_schema.tables 

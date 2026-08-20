@@ -146,7 +146,7 @@ curl -X POST http://localhost:8080/api/auth/user/login \
 ```bash
 curl -X POST http://localhost:8080/api/auth/driver/login \
   -H "Content-Type: application/json" \
-  -d "{\"mobile\":\"9123456789\",\"password\":\"driver@123\"}"
+  -d "{\"mobile\":\"9123456789\",\"password\":\"YOUR_DRIVER_PASSWORD\"}"
 ```
 **Save the token:** `DRIVER_TOKEN`
 

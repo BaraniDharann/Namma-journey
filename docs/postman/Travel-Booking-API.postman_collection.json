@@ -94,7 +94,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Suresh Sharma\",\n  \"mobile\": \"9123456789\",\n  \"password\": \"driver@123\",\n  \"licenseNumber\": \"DL1420110012345\",\n  \"aadhaarNumber\": \"123456789012\"\n}"
+              "raw": "{\n  \"name\": \"Suresh Sharma\",\n  \"mobile\": \"9123456789\",\n  \"password\": \"YOUR_DRIVER_PASSWORD\",\n  \"licenseNumber\": \"DL1420110012345\",\n  \"aadhaarNumber\": \"123456789012\"\n}"
             },
             "url": {
               "raw": "http://localhost:8080/api/auth/driver/signup",
@@ -117,7 +117,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"mobile\": \"9123456789\",\n  \"password\": \"driver@123\"\n}"
+              "raw": "{\n  \"mobile\": \"9123456789\",\n  \"password\": \"YOUR_DRIVER_PASSWORD\"\n}"
             },
             "url": {
               "raw": "http://localhost:8080/api/auth/driver/login",

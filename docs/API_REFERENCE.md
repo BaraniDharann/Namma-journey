@@ -164,7 +164,7 @@ Server runs on: `http://localhost:8080`
 {
   "name": "Suresh Sharma",
   "mobile": "9123456789",
-  "password": "driver@123",
+  "password": "YOUR_DRIVER_PASSWORD",
   "licenseNumber": "DL1420110012345",
   "aadhaarNumber": "123456789012"
 }
@@ -195,7 +195,7 @@ Server runs on: `http://localhost:8080`
 ```json
 {
   "mobile": "9123456789",
-  "password": "driver@123"
+  "password": "YOUR_DRIVER_PASSWORD"
 }
 ```
 
@@ -377,7 +377,7 @@ curl -X POST http://localhost:8080/api/auth/user/login \
 ```bash
 curl -X POST http://localhost:8080/api/auth/driver/login \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"9123456789","password":"driver@123"}'
+  -d '{"mobile":"9123456789","password":"YOUR_DRIVER_PASSWORD"}'
 ```
 
 ### Authenticated Request
