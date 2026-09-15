@@ -446,16 +446,16 @@ export default function OwnerRevenue() {
               </select>
             </div>
             <RevenueChart data={monthlyBars} labels={MONTHS} height={220} />
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 16 }}>
-              <div style={{ textAlign: 'center' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 16, marginTop: 16 }}>
+              <div style={{ textAlign: 'center', minWidth: 90, overflowWrap: 'anywhere' }}>
                 <div style={{ fontSize: 20, fontWeight: 900, color: '#f97316' }}>₹{totalYearRevenue.toLocaleString()}</div>
                 <div style={{ fontSize: 11, color: '#94a3b8' }}>Total Revenue</div>
               </div>
-              <div style={{ textAlign: 'center' }}>
+              <div style={{ textAlign: 'center', minWidth: 90, overflowWrap: 'anywhere' }}>
                 <div style={{ fontSize: 20, fontWeight: 900, color: '#0F172A' }}>₹{totalYearRevenue > 0 ? Math.round(totalYearRevenue / 12).toLocaleString() : 0}</div>
                 <div style={{ fontSize: 11, color: '#94a3b8' }}>Avg/Month</div>
               </div>
-              <div style={{ textAlign: 'center' }}>
+              <div style={{ textAlign: 'center', minWidth: 90, overflowWrap: 'anywhere' }}>
                 <div style={{ fontSize: 20, fontWeight: 900, color: '#22c55e' }}>₹{Math.max(...monthlyBars).toLocaleString()}</div>
                 <div style={{ fontSize: 11, color: '#94a3b8' }}>Best Month</div>
               </div>

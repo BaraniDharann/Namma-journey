@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { GoogleLogin } from '@react-oauth/google'
 import { useAuth } from '../context/AuthContext'
@@ -40,6 +40,21 @@ export default function LoginPage() {
       setGoogleLoading(false)
     }
   }
+
+  // The Google Identity button only accepts a fixed pixel width (no percentage/responsive
+  // support), so it's measured off its own container and re-measured on resize — otherwise
+  // its hard-coded 420px overflows any viewport narrower than that (phones included).
+  const googleBtnRef = useRef(null)
+  const [googleBtnWidth, setGoogleBtnWidth] = useState(420)
+  useEffect(() => {
+    const el = googleBtnRef.current
+    if (!el) return
+    const update = () => setGoogleBtnWidth(Math.max(200, Math.min(420, Math.floor(el.clientWidth))))
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const [showForgot, setShowForgot] = useState(false)
   const [forgotStep, setForgotStep] = useState(1)
@@ -153,14 +168,14 @@ export default function LoginPage() {
           {error && <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: '#fef2f2', color: '#dc2626', fontSize: 13 }}>⚠ {error}</div>}
 
           {/* Google Login */}
-          <div style={{ marginBottom: 20 }}>
+          <div ref={googleBtnRef} style={{ marginBottom: 20 }}>
             {googleLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14, background: '#f8fafc', borderRadius: 10, color: '#64748b', fontSize: 14, gap: 8, border: '1.5px solid #e2e8f0' }}>
                 <div className="spinner" style={{ width: 18, height: 18 }} /> Signing in with Google...
               </div>
             ) : (
               <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => setError('Google sign-in failed.')}
-                width="420" theme="outline" size="large" text="continue_with" shape="rectangular" />
+                width={String(googleBtnWidth)} theme="outline" size="large" text="continue_with" shape="rectangular" />
             )}
           </div>
 

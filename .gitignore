@@ -50,6 +50,7 @@ playwright-tests/playwright-report/
 playwright-tests/test-results/
 playwright-tests/reports/
 playwright-tests/screenshots-walkthrough/
+playwright-tests/responsive-screenshots/
 
 # Playwright videos — regenerated on every run
 playwright-tests/videos-ui/

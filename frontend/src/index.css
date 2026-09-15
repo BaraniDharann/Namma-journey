@@ -126,6 +126,10 @@ body {
   border-radius: 16px;
   padding: 24px;
   transition: all 0.2s ease;
+  /* Large currency figures (e.g. "₹6,99,213.24") are one unbreakable token — without this,
+     a card too narrow to fit them on one line clips the tail instead of wrapping it, since
+     overflow-wrap/word-break inherit down to every text node inside. */
+  overflow-wrap: anywhere;
 }
 .stat-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
 
@@ -240,6 +244,10 @@ body {
   transition: all 0.35s cubic-bezier(0.16,1,0.3,1);
   position: relative;
   overflow: hidden;
+  /* Same reasoning as .stat-card: a long currency figure has no space to wrap at, so on a
+     narrow card (2-up mobile grid) it gets clipped by overflow:hidden above instead of
+     wrapping onto a second line. This lets it wrap. */
+  overflow-wrap: anywhere;
 }
 .stat-card-enhanced::before {
   content: '';
