@@ -27,6 +27,12 @@ public class SecurityConfig {
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    @Autowired
+    private SecurityErrorHandlers.RestAuthenticationEntryPoint authenticationEntryPoint;
+
+    @Autowired
+    private SecurityErrorHandlers.RestAccessDeniedHandler accessDeniedHandler;
+
     // Injected from app.cors.allowed-origins (comma-separated); overridable per environment.
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
@@ -76,6 +82,13 @@ public class SecurityConfig {
                 .requestMatchers("/api/owner/pricing/current").authenticated()
                 .requestMatchers("/api/owner/**").hasRole("OWNER")
                 .anyRequest().authenticated()
+            )
+            // Without this, Spring Security's default entry point answers every unauthenticated
+            // request with an empty 403. The SPA only treats 401 as "session gone", so a missing or
+            // no-longer-valid token left it retrying forever behind an "Access denied" toast.
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint(authenticationEntryPoint)
+                .accessDeniedHandler(accessDeniedHandler)
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
