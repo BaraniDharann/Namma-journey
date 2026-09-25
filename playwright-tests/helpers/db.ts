@@ -72,17 +72,9 @@ export async function setDriverPassword(driverId: string | number, plaintext: st
  * any owner exists, and the alternative — resetting the existing owner's password — would
  * change the credentials of the account the operator actually signs in with.
  */
-export async function createTestOwner(email: string, plaintext: string): Promise<string> {
-  const hash = bcrypt.hashSync(plaintext, 10);
-  const rows = await query(
-    `INSERT INTO owners (email, password, role, created_at)
-     VALUES ($1, $2, 'ROLE_OWNER', NOW())
-     ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password
-     RETURNING id`,
-    [email, hash]
-  );
-  return String(rows[0].id);
-}
+// createTestOwner() used to live here and minted a fresh ROLE_OWNER row per run, which is how
+// the database ended up with 31 owner accounts all sharing one password from this repo. There is
+// exactly one owner now; the suite signs in as it (see global-setup) rather than making more.
 
 export async function bookingRow(bookingId: string) {
   const rows = await query(`SELECT * FROM travel_bookings WHERE id = $1`, [bookingId]);

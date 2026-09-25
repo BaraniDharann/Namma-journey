@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { readAccounts, OWNER_ID } from '../helpers/env';
+import { readAccounts } from '../helpers/env';
 import { contexts, disposeAll, Ctxs, futureDate } from '../helpers/booking';
 import { unique } from '../helpers/api';
 
@@ -19,10 +19,10 @@ test.describe('Owner API', () => {
   });
 
   test('sets and reads pricing', async () => {
-    const km = await c.owner.post(`/api/owner/pricing/set?pricePerKm=14&ownerId=${OWNER_ID}`);
+    const km = await c.owner.post(`/api/owner/pricing/set?pricePerKm=14&ownerId=${acc.owner.ownerId}`);
     expect(km.status(), (await km.text()).slice(0, 200)).toBe(200);
 
-    const hr = await c.owner.post(`/api/owner/pricing/set-hourly?pricePerHour=275&ownerId=${OWNER_ID}`);
+    const hr = await c.owner.post(`/api/owner/pricing/set-hourly?pricePerHour=275&ownerId=${acc.owner.ownerId}`);
     expect(hr.status()).toBe(200);
 
     const current = await c.owner.get('/api/owner/pricing/current');
@@ -32,16 +32,16 @@ test.describe('Owner API', () => {
     expect(Number(p.pricePerHour)).toBe(275);
 
     // Restore what global setup configured.
-    await c.owner.post(`/api/owner/pricing/set?pricePerKm=12&ownerId=${OWNER_ID}`);
-    await c.owner.post(`/api/owner/pricing/set-hourly?pricePerHour=250&ownerId=${OWNER_ID}`);
+    await c.owner.post(`/api/owner/pricing/set?pricePerKm=12&ownerId=${acc.owner.ownerId}`);
+    await c.owner.post(`/api/owner/pricing/set-hourly?pricePerHour=250&ownerId=${acc.owner.ownerId}`);
   });
 
   test('rejects non-positive pricing', async () => {
     for (const q of ['pricePerKm=0', 'pricePerKm=-5']) {
-      const res = await c.owner.post(`/api/owner/pricing/set?${q}&ownerId=${OWNER_ID}`);
+      const res = await c.owner.post(`/api/owner/pricing/set?${q}&ownerId=${acc.owner.ownerId}`);
       expect(res.status(), `${q} -> ${res.status()}`).toBeGreaterThanOrEqual(400);
     }
-    const hourly = await c.owner.post(`/api/owner/pricing/set-hourly?pricePerHour=-100&ownerId=${OWNER_ID}`);
+    const hourly = await c.owner.post(`/api/owner/pricing/set-hourly?pricePerHour=-100&ownerId=${acc.owner.ownerId}`);
     expect(hourly.status()).toBeGreaterThanOrEqual(400);
   });
 
@@ -156,7 +156,7 @@ test.describe('Owner API', () => {
       itinerary: [{ day: 1, title: 'Arrival', description: 'Check in', activities: ['Rest'] }],
     };
 
-    const created = await c.owner.post(`/api/owner/packages?ownerId=${OWNER_ID}`, { data: pkg });
+    const created = await c.owner.post(`/api/owner/packages?ownerId=${acc.owner.ownerId}`, { data: pkg });
     expect(created.status(), (await created.text()).slice(0, 300)).toBe(201);
     const body = await created.json();
     const id = body.id;
@@ -177,7 +177,7 @@ test.describe('Owner API', () => {
   });
 
   test('rejects an invalid package payload', async () => {
-    const res = await c.owner.post(`/api/owner/packages?ownerId=${OWNER_ID}`, {
+    const res = await c.owner.post(`/api/owner/packages?ownerId=${acc.owner.ownerId}`, {
       data: { name: '', category: '', state: '', durationDays: 0, durationNights: -1, pricePerPerson: 0, maxGroupSize: 0 },
     });
     expect(res.status()).toBe(400);

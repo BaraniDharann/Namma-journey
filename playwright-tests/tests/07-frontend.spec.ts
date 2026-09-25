@@ -92,8 +92,8 @@ test.describe('Frontend — public pages and real login', () => {
     const problems = watch(page, '/owner/login');
 
     await page.goto('/owner/login', { waitUntil: 'domcontentloaded' });
-    await page.locator('input[type="email"]').first().fill(acc.owner.testEmail);
-    await page.locator('input[type="password"]').first().fill(acc.owner.testPassword);
+    await page.locator('input[type="email"]').first().fill(acc.owner.email);
+    await page.locator('input[type="password"]').first().fill(acc.owner.password);
     await page.locator('form button[type="submit"], button[type="submit"]').first().click();
 
     await page.waitForURL('**/owner/dashboard', { timeout: 30000 });
@@ -111,7 +111,7 @@ test.describe('Frontend — public pages and real login', () => {
     const page = await ctx.newPage();
 
     await page.goto('/owner/login', { waitUntil: 'domcontentloaded' });
-    await page.locator('input[type="email"]').first().fill(acc.owner.testEmail);
+    await page.locator('input[type="email"]').first().fill(acc.owner.email);
     await page.locator('input[type="password"]').first().fill('definitely-not-the-password');
     await page.locator('button[type="submit"]').first().click();
 

@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { request } from '@playwright/test';
-import { API_BASE, WEB_BASE, OWNER_ID, ACCOUNTS_FILE, Accounts } from './helpers/env';
-import { apiContext, mintToken, unique, freshIp } from './helpers/api';
-import { waitForOtp, setDriverPassword, createTestOwner, query } from './helpers/db';
+import { API_BASE, WEB_BASE, OWNER_EMAIL, OWNER_PASSWORD, ACCOUNTS_FILE, Accounts } from './helpers/env';
+import { apiContext, unique, freshIp } from './helpers/api';
+import { waitForOtp, setDriverPassword, query } from './helpers/db';
 
 /**
  * Creates the two brand-new accounts the whole suite runs on:
@@ -15,8 +15,9 @@ import { waitForOtp, setDriverPassword, createTestOwner, query } from './helpers
  *            the server) we set a known bcrypt password directly, then drive the genuine
  *            first-login flow: login -> firstLogin:true + OTP -> verify-otp -> login again.
  *
- * The OWNER is an existing seeded account whose password we don't hold, so its token is
- * minted with the backend's own JWT secret.
+ * The OWNER is the one owner account, read from the backend .env and signed in for real. The
+ * suite never creates owners: it used to mint a throwaway per run, which left a stray ROLE_OWNER
+ * row behind every time — all of them sharing a password committed to this repo.
  */
 
 async function waitForServer(url: string, label: string, timeoutMs = 120000) {
@@ -44,7 +45,32 @@ export default async function globalSetup() {
   await waitForServer(WEB_BASE, 'frontend');
 
   const ids = unique();
-  const ownerToken = mintToken(OWNER_ID, 'ROLE_OWNER');
+
+  // ---------------------------------------------------------------- OWNER
+  // One owner, signed in for real. The suite no longer creates owner accounts: doing so left a
+  // stray ROLE_OWNER row behind on every run, all sharing one password from this repo.
+  if (!OWNER_EMAIL || !OWNER_PASSWORD) {
+    throw new Error(
+      'OWNER_EMAIL / OWNER_PASSWORD are not set. Add them to the backend .env (the suite reads ' +
+        'that file) so the E2E run can sign in as the owner.'
+    );
+  }
+  const ownerAuth = await apiContext({ ip: freshIp('setup-owner-auth') });
+  const ownerLogin = await ownerAuth.post('/api/auth/owner/login', {
+    data: { email: OWNER_EMAIL, password: OWNER_PASSWORD },
+  });
+  if (ownerLogin.status() !== 200) {
+    throw new Error(
+      `owner login failed for ${OWNER_EMAIL}: ${ownerLogin.status()} ${(await ownerLogin.text()).slice(0, 300)}\n` +
+        'The owner account must exist with this password before the suite runs.'
+    );
+  }
+  const ownerBody = await ownerLogin.json();
+  const ownerToken: string = ownerBody.token;
+  const OWNER_ID = String(ownerBody.userId);
+  await ownerAuth.dispose();
+  console.log(`[setup] owner signed in: ${OWNER_EMAIL} (id ${OWNER_ID})`);
+
   const owner = await apiContext({ token: ownerToken, ip: freshIp('setup-owner') });
 
   // Pricing must exist before any booking can be costed. Set both models.
@@ -175,14 +201,6 @@ export default async function globalSetup() {
   }
   console.log(`[setup] driver created: ${ids.driverEmail} (id ${driverId})`);
 
-  // --------------------------------------------------------------- OWNER
-  // A throwaway owner with a known password, so the owner login form is covered by a real
-  // sign-in instead of an injected token. Deliberately NOT the operator's own account.
-  const testOwnerEmail = `e2e.owner.${ids.userMobile}@njtest.local`;
-  const testOwnerPassword = 'E2eOwner@123';
-  const testOwnerId = await createTestOwner(testOwnerEmail, testOwnerPassword);
-  console.log(`[setup] test owner created: ${testOwnerEmail} (id ${testOwnerId})`);
-
   const accounts: Accounts = {
     user: {
       userId: userBody.userId || signupBody.userId,
@@ -202,10 +220,9 @@ export default async function globalSetup() {
     },
     owner: {
       ownerId: OWNER_ID,
+      email: OWNER_EMAIL,
+      password: OWNER_PASSWORD,
       token: ownerToken,
-      testOwnerId: testOwnerId,
-      testEmail: testOwnerEmail,
-      testPassword: testOwnerPassword,
     },
     createdAt: new Date().toISOString(),
   };

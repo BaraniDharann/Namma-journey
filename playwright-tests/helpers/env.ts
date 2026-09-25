@@ -19,19 +19,25 @@ export const backendEnv: Record<string, string> = (() => {
 export const API_BASE = process.env.E2E_API_BASE || 'http://localhost:8080';
 export const WEB_BASE = process.env.E2E_WEB_BASE || 'http://localhost:5173';
 
-/** Known owner seeded in this database (owners table has exactly one row). */
-export const OWNER_ID = process.env.E2E_OWNER_ID || '2';
+/**
+ * The single owner account, taken from the backend's own .env so the suite and the running
+ * application always agree on who the owner is.
+ *
+ * This used to mint a throwaway owner per run (and default OWNER_ID to a hardcoded '2'), which
+ * left one abandoned ROLE_OWNER row behind every time the suite ran — 31 of them by the time
+ * anyone looked, each with the same password baked into this repo. There is exactly one owner
+ * now, and the suite signs in as it rather than manufacturing more.
+ */
+export const OWNER_EMAIL = process.env.E2E_OWNER_EMAIL || backendEnv.OWNER_EMAIL || '';
+export const OWNER_PASSWORD = process.env.E2E_OWNER_PASSWORD || backendEnv.OWNER_PASSWORD || '';
 
 export const ACCOUNTS_FILE = path.join(__dirname, '..', 'test-data', 'accounts.json');
 
 export type Accounts = {
   user: { userId: string; email: string; mobile: string; name: string; password: string; token: string };
   driver: { driverId: string; email: string; mobile: string; name: string; password: string; token: string };
-  // ownerId/token are the seeded operator account, whose password the suite does not hold, so
-  // its token is minted with the backend secret. testEmail/testPassword belong to a separate
-  // throwaway owner created by global setup purely so the owner login FORM can be exercised
-  // for real — resetting the operator's own password would lock them out of their app.
-  owner: { ownerId: string; token: string; testOwnerId: string; testEmail: string; testPassword: string };
+  /** The one owner. `token` comes from a real sign-in, not a minted one. */
+  owner: { ownerId: string; email: string; password: string; token: string };
   createdAt: string;
 };
 

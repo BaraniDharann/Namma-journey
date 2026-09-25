@@ -58,3 +58,7 @@ playwright-tests/videos-ui/
 # Original unoptimised source photos. The versions actually served are the .webp files
 # under frontend/public/images/, so these 138 MB of originals are kept locally only.
 frontend/images/
+
+# Owner table snapshot written by scripts/set-single-owner.js — contains bcrypt password hashes
+scripts/owners-backup.json
+scripts/db-backup-*.sql
