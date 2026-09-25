@@ -175,8 +175,11 @@ export const uploadEndTripPhoto = (driverId, bookingId, photoFile) => {
   return api.post(`/driver/${driverId}/bookings/${bookingId}/end-trip-photo`, formData, { timeout: 60000 })
     .then(res => { invalidateCache('bookings'); return res })
 }
-export const getDriverLocation = (bookingId) => api.get(`/driver/location/${bookingId}`)
-export const updateDriverLocation = (data) => api.post(`/driver/location/update`, data)
+// Live tracking runs on a 5s poll (reader) and a 3s publish (driver). Both are background
+// chatter the user never triggered, and "no fix yet" is a normal 404 on a trip that hasn't
+// started — so neither may raise a toast. Callers already treat failure as "no update".
+export const getDriverLocation = (bookingId) => api.get(`/driver/location/${bookingId}`, { _silent: true })
+export const updateDriverLocation = (data) => api.post(`/driver/location/update`, data, { _silent: true })
 
 // Owner APIs
 export const getOwnerBookings = () => cachedGet('/owner/bookings')
@@ -241,11 +244,14 @@ export const cancelOwnerPackageBooking = (bookingId, reason) => api.post(`/owner
 export const completePackageBooking = (bookingId) => api.post(`/owner/package-bookings/${bookingId}/complete`).then(res => { invalidateCache('package-bookings'); return res })
 
 // Notification APIs
+// The bell polls these every 10s in the background. The user never asked for them, so a failure
+// must not raise a toast — otherwise one bad poll re-arms the same toast forever and buries
+// whatever the page is actually telling them.
 export const getNotifications = (recipientId, role) =>
-  api.get(`/notifications?recipientId=${recipientId}&role=${role}`)
+  api.get(`/notifications?recipientId=${recipientId}&role=${role}`, { _silent: true })
 
 export const getUnreadCount = (recipientId, role) =>
-  api.get(`/notifications/unread-count?recipientId=${recipientId}&role=${role}`)
+  api.get(`/notifications/unread-count?recipientId=${recipientId}&role=${role}`, { _silent: true })
 
 export const markNotificationAsRead = (notificationId) =>
   api.put(`/notifications/${notificationId}/read`)
