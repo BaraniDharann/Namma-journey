@@ -1,7 +1,5 @@
 package com.travelplatform.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.travelplatform.config.JwtUtil;
 import com.travelplatform.dto.AuthResponse;
 import com.travelplatform.dto.UserLoginRequest;
@@ -13,8 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.Base64;
 
 @Service
 @Slf4j
@@ -31,7 +27,10 @@ public class UserAuthService {
     
     @Autowired
     private PasswordEncoder passwordEncoder;
-    
+
+    @Autowired
+    private GoogleTokenVerifier googleTokenVerifier;
+
     public AuthResponse signup(UserSignupRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email already registered");
@@ -77,13 +76,12 @@ public class UserAuthService {
                 throw new IllegalArgumentException("Invalid credentials");
             }
         } else if (request.getLoginType() == User.LoginType.GOOGLE) {
-            if (request.getToken() == null || request.getToken().isEmpty()) {
-                throw new IllegalArgumentException("Google token is required");
-            }
-            
-            String email = extractEmailFromGoogleToken(request.getToken());
-            String name = extractNameFromGoogleToken(request.getToken());
-            
+            // Signature, audience, issuer and expiry are all checked here. Anything short of that
+            // and the token is just attacker-supplied JSON naming whichever account they like.
+            GoogleTokenVerifier.GoogleIdentity identity = googleTokenVerifier.verify(request.getToken());
+            final String email = identity.email();
+            final String name = identity.name();
+
             user = userRepository.findByEmail(email).orElseGet(() -> {
                 User newUser = new User();
                 newUser.setEmail(email);
@@ -104,45 +102,4 @@ public class UserAuthService {
         return response;
     }
 
-    private String extractEmailFromGoogleToken(String token) {
-        try {
-            String[] parts = token.split("\\.");
-            if (parts.length < 2) {
-                throw new IllegalArgumentException("Invalid Google token format");
-            }
-            String payload = parts[1];
-            // Add padding if needed
-            int padding = 4 - payload.length() % 4;
-            if (padding < 4) payload += "=".repeat(padding);
-            String decoded = new String(Base64.getUrlDecoder().decode(payload));
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode jsonNode = mapper.readTree(decoded);
-            if (!jsonNode.has("email")) {
-                throw new IllegalArgumentException("Email not found in Google token");
-            }
-            return jsonNode.get("email").asText();
-        } catch (Exception e) {
-            log.error("Failed to extract email from Google token: {}", e.getMessage());
-            throw new IllegalArgumentException("Invalid Google token");
-        }
-    }
-    
-    private String extractNameFromGoogleToken(String token) {
-        try {
-            String[] parts = token.split("\\.");
-            if (parts.length < 2) return "Google User";
-            String payload = parts[1];
-            int padding = 4 - payload.length() % 4;
-            if (padding < 4) payload += "=".repeat(padding);
-            String decoded = new String(Base64.getUrlDecoder().decode(payload));
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode jsonNode = mapper.readTree(decoded);
-            if (jsonNode.has("name")) return jsonNode.get("name").asText();
-            if (jsonNode.has("given_name")) return jsonNode.get("given_name").asText();
-            return "Google User";
-        } catch (Exception e) {
-            log.warn("Failed to extract name from Google token: {}", e.getMessage());
-            return "Google User";
-        }
-    }
 }
