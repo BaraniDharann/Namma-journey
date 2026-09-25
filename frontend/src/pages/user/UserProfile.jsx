@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { useAuth } from '../../context/AuthContext'
 import { updateUserProfile } from '../../utils/api'
+import { needsMobileNumber } from '../../components/MobileNumberGate'
 
 const navItems = [
   { path: '/user/dashboard', icon: '🏠', label: 'Dashboard' },
@@ -14,7 +15,9 @@ const navItems = [
 
 export default function UserProfile() {
   const { user, updateUser } = useAuth()
-  const [editing, setEditing] = useState(false)
+  // Travellers are sent here specifically to supply a missing number (booking is closed without
+  // one), so open straight into the form rather than making them hunt for the Edit button.
+  const [editing, setEditing] = useState(() => needsMobileNumber(user))
   const [name, setName] = useState(user?.name || '')
   const [mobile, setMobile] = useState(user?.mobile || '')
   const [saving, setSaving] = useState(false)
@@ -31,7 +34,11 @@ export default function UserProfile() {
       setMsg({ type: 'success', text: 'Profile updated successfully!' })
       setEditing(false)
     } catch (err) {
-      setMsg({ type: 'error', text: err.response?.data?.message || 'Failed to update profile' })
+      // The API's error envelope is {"error": "..."} (GlobalExceptionHandler); reading only
+      // `message` swallowed every reason the server gave — "that number is already registered",
+      // "enter a valid 10-digit number" — and showed the generic fallback instead.
+      const reason = err.response?.data?.error || err.response?.data?.message
+      setMsg({ type: 'error', text: reason || 'Failed to update profile' })
     } finally {
       setSaving(false)
     }
@@ -50,6 +57,16 @@ export default function UserProfile() {
         <div style={{ marginBottom: 24 }}>
           <h1 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 900, fontSize: 26, color: '#0F172A', letterSpacing: '-0.5px' }}>My Profile</h1>
         </div>
+
+        {needsMobileNumber(user) && (
+          <div style={{
+            padding: '14px 16px', borderRadius: 12, marginBottom: 16, fontSize: 13, lineHeight: 1.6,
+            background: '#fff7ed', color: '#9a3412', border: '1px solid #ffedd5',
+          }}>
+            <strong>📱 Your mobile number is missing.</strong> Trip booking stays closed until you
+            add one — the driver assigned to your trip needs it to reach you.
+          </div>
+        )}
 
         {msg && (
           <div style={{

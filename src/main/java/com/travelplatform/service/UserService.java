@@ -37,8 +37,28 @@ public class UserService {
     private final NotificationService notificationService;
     private final TripDriverPhotoRepository tripDriverPhotoRepository;
     
+    /**
+     * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
+     * always say the same thing. The frontend matches on it to route them to the profile page.
+     */
+    public static final String MOBILE_REQUIRED_MESSAGE =
+            "Add your mobile number in your profile before booking a trip — your driver needs it to reach you.";
+
+    /** Indian mobile numbers, same shape the signup and booking forms already enforce. */
+    private static final java.util.regex.Pattern MOBILE_PATTERN = java.util.regex.Pattern.compile("^[6-9]\\d{9}$");
+
     @Transactional
     public TravelBookingResponse createBooking(UUID userId, TravelBookingRequest request) {
+        // A trip with no way to reach the traveller is not a trip anyone can drive. Accounts
+        // created through Sign-in with Google never collect a number, so this is the first point
+        // where it becomes mandatory. Enforced here rather than only in the form: the form is
+        // just a convenience, this is the rule.
+        com.travelplatform.entity.User booker = userRepository.findById(userId)
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("User not found"));
+        if (booker.getPhone() == null || booker.getPhone().isBlank()) {
+            throw new IllegalArgumentException(MOBILE_REQUIRED_MESSAGE);
+        }
+
         if (request.getFromDate() == null || request.getToDate() == null) {
             throw new IllegalArgumentException("From date and to date are required");
         }
@@ -287,7 +307,19 @@ public class UserService {
             user.setName(request.getName().trim());
         }
         if (request.getPhone() != null && !request.getPhone().isBlank()) {
-            user.setPhone(request.getPhone().trim());
+            String phone = request.getPhone().trim();
+            // Booking now depends on this number being reachable, so it is checked on the way in
+            // rather than discovered to be junk when a driver tries to call.
+            if (!MOBILE_PATTERN.matcher(phone).matches()) {
+                throw new IllegalArgumentException("Enter a valid 10-digit Indian mobile number starting with 6-9");
+            }
+            // phone is a unique column; catching the clash here gives the traveller something they
+            // can act on instead of a 409 about a database constraint.
+            if (!phone.equals(user.getPhone())
+                    && userRepository.findByPhone(phone).filter(other -> !other.getId().equals(userId)).isPresent()) {
+                throw new IllegalArgumentException("That mobile number is already registered to another account");
+            }
+            user.setPhone(phone);
         }
         return userRepository.save(user);
     }

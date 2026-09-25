@@ -5,6 +5,7 @@ import PlaceAutocomplete from '../../components/PlaceAutocomplete'
 import RouteMap from '../../components/RouteMap'
 import { useAuth } from '../../context/AuthContext'
 import { createBooking, getCurrentPricing } from '../../utils/api'
+import { MobileRequiredPanel, needsMobileNumber } from '../../components/MobileNumberGate'
 
 const navItems = [
   { path: '/user/dashboard', icon: '🏠', label: 'Dashboard' },
@@ -119,6 +120,22 @@ export default function NewBooking() {
                 style={{ flex: 1, padding: '12px 20px', borderRadius: 12, border: '2px solid #ffedd5', background: '#fff', color: '#f97316', fontWeight: 700, fontSize: 14, cursor: 'pointer', transition: 'all 0.2s' }}>New Booking</button>
             </div>
           </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  // No contact number, no booking — the server refuses it too, so showing the form here would
+  // only let someone fill the whole thing in before being turned away.
+  if (needsMobileNumber(user)) {
+    return (
+      <DashboardLayout navItems={navItems} role="ROLE_USER">
+        <div style={{ maxWidth: 680, margin: '0 auto' }} className="animate-fadeIn">
+          <div style={{ marginBottom: 24 }}>
+            <h1 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 900, fontSize: 26, color: '#0F172A', letterSpacing: '-0.5px', marginBottom: 4 }}>Book a Trip</h1>
+            <p style={{ fontSize: 14, color: '#64748b' }}>One thing to sort out first</p>
+          </div>
+          <MobileRequiredPanel />
         </div>
       </DashboardLayout>
     )

@@ -4,6 +4,7 @@ import DashboardLayout from '../../components/DashboardLayout'
 import { useAuth } from '../../context/AuthContext'
 import { getUserBookings, getUserPayments } from '../../utils/api'
 import Pagination, { usePagination } from '../../components/Pagination'
+import { MobileNumberPrompt } from '../../components/MobileNumberGate'
 
 const navItems = [
   { path: '/user/dashboard', icon: '🏠', label: 'Dashboard' },
@@ -60,6 +61,8 @@ export default function UserDashboard() {
 
   return (
     <DashboardLayout navItems={navItems} role="ROLE_USER">
+      {/* Renders nothing once a number is on file. */}
+      <MobileNumberPrompt />
       <div className="animate-fadeIn">
         <div className="dashboard-hero" style={{ backgroundImage: 'url(/images/backpacker-standing-sunrise-viewpoint-ja-bo-village-mae-hong-son-province-thailand.jpg)' }}>
           <div className="hero-float-img" style={{ position: 'absolute', top: 20, right: 20, zIndex: 2 }}>
