@@ -238,6 +238,7 @@ export default function DriverBookings() {
                 toLon={trackingBooking.toLon}
                 fromPlace={trackingBooking.fromPlace}
                 toPlace={trackingBooking.toPlace}
+                travelMembers={trackingBooking.travelMembers}
                 isDriver={true}
                 driverId={user.userId}
               />

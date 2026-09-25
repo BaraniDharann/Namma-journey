@@ -139,6 +139,7 @@ export default function DriverDashboard() {
                   toLon={started[0].toLon}
                   fromPlace={started[0].fromPlace}
                   toPlace={started[0].toPlace}
+                  travelMembers={started[0].travelMembers}
                   isDriver={true}
                   driverId={user.userId}
                 />

@@ -1,16 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { createStompClient } from '../utils/websocket'
-import { updateDriverLocation } from '../utils/api'
+import { updateDriverLocation, getDriverLocation } from '../utils/api'
+import { bearing, cumulativeDistances, pointAtDistance, nearestIndex } from '../components/map/geo'
 
-function bearing(from, to) {
-  const toRad = (d) => (d * Math.PI) / 180
-  const toDeg = (r) => (r * 180) / Math.PI
-  const dLon = toRad(to[1] - from[1])
-  const y = Math.sin(dLon) * Math.cos(toRad(to[0]))
-  const x = Math.cos(toRad(from[0])) * Math.sin(toRad(to[0])) -
-    Math.sin(toRad(from[0])) * Math.cos(toRad(to[0])) * Math.cos(dLon)
-  return (toDeg(Math.atan2(y, x)) + 360) % 360
-}
+// How often a simulated fix is published, and how long the simulation takes to
+// cover a route end to end. Pacing by wall clock rather than by road speed
+// keeps a 5 km hop and a 500 km run both watchable.
+const SIM_TICK_MS = 2500
+const SIM_TRAVERSAL_MS = 5 * 60 * 1000
 
 /**
  * Drives the driver's live location.
@@ -35,6 +32,10 @@ export default function useDriverLocationSender({ bookingId, driverId, active, r
 
   useEffect(() => {
     if (!active || !bookingId || !driverId) return
+
+    // The resume lookup below is async, so the effect can be torn down before it settles.
+    // Without this the interval would be created after cleanup had already run.
+    let cancelled = false
 
     let token = null
     try { token = localStorage.getItem('nj_token') } catch { /* storage unavailable */ }
@@ -73,52 +74,100 @@ export default function useDriverLocationSender({ bookingId, driverId, active, r
     client.onWebSocketClose = () => { connectedRef.current = false }
     client.activate()
 
-    // --- Movement source 1: simulate driving along the route ---
-    if (routeCoords && routeCoords.length >= 2) {
-      let idx = 0
-      let realGpsMoving = false
-      // Advance a fixed number of waypoints per tick so the car moves at a
-      // visible pace whether the route has 60 points (straight-line fallback)
-      // or several hundred (a full OSRM geometry on a long intercity trip).
-      const stride = Math.max(1, Math.floor(routeCoords.length / 120))
-      emit(routeCoords[0][0], routeCoords[0][1], bearing(routeCoords[0], routeCoords[1]))
-      timerRef.current = setInterval(() => {
-        if (realGpsMoving) return // a moving real fix takes over
-        const from = routeCoords[idx]
-        const to = routeCoords[Math.min(idx + stride, routeCoords.length - 1)]
-        emit(from[0], from[1], bearing(from, to))
-        idx = idx + stride >= routeCoords.length ? 0 : idx + stride // loop for demo continuity
-      }, 2500)
+    /**
+     * Where this trip had already got to, or null if it has not published a fix yet.
+     *
+     * Everything below waits for this. A driver refreshing mid-trip remounts the whole hook,
+     * and the published fix is the single source of truth for the passenger's map — so any
+     * position emitted before we know the trip's progress rewinds it for both of them. That is
+     * the bug this answers: refresh at "7 km left" and the car teleported back to the pickup.
+     */
+    const lastFix = () =>
+      getDriverLocation(bookingId)
+        .then((res) => {
+          const lat = Number(res?.data?.latitude)
+          const lon = Number(res?.data?.longitude)
+          return Number.isFinite(lat) && Number.isFinite(lon) ? [lat, lon] : null
+        })
+        .catch(() => null) // 404 — nothing published yet, which is the normal first run
 
-      // Still listen to real GPS; if it actually moves, let it win.
-      if (navigator.geolocation) {
+    const startMovement = (resumeFrom) => {
+      if (cancelled) return
+
+      // --- Movement source 1: simulate driving along the route ---
+      if (routeCoords && routeCoords.length >= 2) {
+        let realGpsMoving = false
+        // Advance a fixed *distance* per tick, not a fixed number of waypoints.
+        // OSRM packs waypoints tightly around junctions and sparsely on open
+        // highway, so stepping by index made the car crawl through towns and
+        // then leap between them — the stutter passengers were seeing.
+        const { cum, total } = cumulativeDistances(routeCoords)
+        const metresPerTick = total / (SIM_TRAVERSAL_MS / SIM_TICK_MS)
+        let travelled = resumeFrom ? cum[nearestIndex(routeCoords, resumeFrom)] ?? 0 : 0
+
+        const at0 = pointAtDistance(routeCoords, cum, travelled)
+        if (at0) emit(at0.pos[0], at0.pos[1], at0.heading)
+
+        timerRef.current = setInterval(() => {
+          if (realGpsMoving) return // a moving real fix takes over
+          travelled += metresPerTick
+          if (travelled > total) travelled = 0 // loop for demo continuity
+          const at = pointAtDistance(routeCoords, cum, travelled)
+          if (at) emit(at.pos[0], at.pos[1], at.heading)
+        }, SIM_TICK_MS)
+
+        // Still listen to real GPS; if it actually moves, let it win.
+        if (navigator.geolocation) {
+          let prev = null
+          watchIdRef.current = navigator.geolocation.watchPosition(
+            (pos) => {
+              const cur = [pos.coords.latitude, pos.coords.longitude]
+              if (prev) {
+                const moved = Math.abs(cur[0] - prev[0]) + Math.abs(cur[1] - prev[1])
+                if (moved > 0.0001) { // ~10m: real movement detected
+                  realGpsMoving = true
+                  emit(cur[0], cur[1], pos.coords.heading || bearing(prev, cur))
+                }
+              }
+              prev = cur
+            },
+            () => {},
+            { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
+          )
+        }
+      } else if (navigator.geolocation) {
+        // --- Movement source 2: no route yet, fall back to raw GPS ---
+        //
+        // A device that is sitting still reports the same fix over and over. On a trip that has
+        // already made progress, publishing that would drag the trip back to wherever the phone
+        // thinks it is — which is exactly what happened on refresh, because this branch runs for
+        // the moment between mount and the route arriving. So once a trip has a fix, a stationary
+        // device only updates the driver's own screen; it has to actually move to be published.
+        // prev starts unknown, not at the trip position: the question is whether the DEVICE has
+        // moved between two of its own readings. Seeding it with the trip's position would make
+        // the very first reading look like a huge jump and publish it — the rewind all over again.
         let prev = null
         watchIdRef.current = navigator.geolocation.watchPosition(
           (pos) => {
             const cur = [pos.coords.latitude, pos.coords.longitude]
-            if (prev) {
-              const moved = Math.abs(cur[0] - prev[0]) + Math.abs(cur[1] - prev[1])
-              if (moved > 0.0001) { // ~10m: real movement detected
-                realGpsMoving = true
-                emit(cur[0], cur[1], pos.coords.heading || bearing(prev, cur))
-              }
+            const moved = prev ? Math.abs(cur[0] - prev[0]) + Math.abs(cur[1] - prev[1]) > 0.0001 : false
+            if (!resumeFrom || moved) {
+              emit(cur[0], cur[1], pos.coords.heading)
+            } else if (onPositionRef.current) {
+              onPositionRef.current(cur[0], cur[1], pos.coords.heading)
             }
             prev = cur
           },
-          () => {},
+          (err) => console.warn('Geolocation error:', err.message),
           { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
         )
       }
-    } else if (navigator.geolocation) {
-      // --- Movement source 2: no route yet, fall back to raw GPS ---
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        (pos) => emit(pos.coords.latitude, pos.coords.longitude, pos.coords.heading),
-        (err) => console.warn('Geolocation error:', err.message),
-        { enableHighAccuracy: true, maximumAge: 2000, timeout: 5000 }
-      )
     }
 
+    lastFix().then(startMovement)
+
     return () => {
+      cancelled = true
       if (timerRef.current) clearInterval(timerRef.current)
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
       if (clientRef.current) clientRef.current.deactivate()

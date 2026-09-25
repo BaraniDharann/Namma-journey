@@ -1,7 +1,7 @@
 import { test, expect, Browser, Page } from '@playwright/test';
 import { readAccounts, API_BASE } from '../helpers/env';
 import { apiContext, freshIp } from '../helpers/api';
-import { contexts, disposeAll, bookingPayload, Ctxs } from '../helpers/booking';
+import { contexts, disposeAll, bookingPayload, Ctxs, ROUTE } from '../helpers/booking';
 import { createUser, NewUser } from '../helpers/accounts';
 import { authedContext, watch, summarize, Session } from '../helpers/browser';
 
@@ -200,7 +200,7 @@ test.describe('Live tracking', () => {
     await driverPage.waitForLoadState('networkidle').catch(() => {});
     await openTracking(driverPage, 'Live Navigation', booking.toPlace);
 
-    await expect(driverPage.locator('.driver-car-icon').first()).toBeAttached({ timeout: 20000 });
+    await expect(driverPage.locator('.nj-veh-icon').first()).toBeAttached({ timeout: 20000 });
     await testInfo.attach('driver-live-navigation.png', {
       body: await driverPage.screenshot({ fullPage: true }),
       contentType: 'image/png',
@@ -236,7 +236,7 @@ test.describe('Live tracking', () => {
     // The re-center button only renders when driverPos is set.
     await expect(userPage.locator('[title="Re-center on driver"]')).toBeVisible({ timeout: 15000 });
     await expect(userPage.getByText("Connecting to driver's live location...")).toHaveCount(0);
-    await expect(userPage.locator('.driver-car-icon').first()).toBeAttached();
+    await expect(userPage.locator('.nj-veh-icon').first()).toBeAttached();
 
     await testInfo.attach('user-track-your-driver.png', {
       body: await userPage.screenshot({ fullPage: true }),
@@ -355,6 +355,119 @@ test.describe('Live tracking', () => {
     const otherLoc = await c.user.get(`/api/driver/location/${otherBooking.bookingId}`);
     expect(otherLoc.status(), 'each booking must have its own location slot').toBe(404);
 
+    await disposeAll(c);
+  });
+});
+
+/**
+ * Refreshing the driver's page must not rewind the trip.
+ *
+ * The simulated drive lives in a useEffect, so every mount re-ran it with `travelled = 0` and
+ * immediately published the route's start point. That published fix is the single source of
+ * truth for the whole pipeline, so a driver hitting F5 halfway to Chennai did not merely reset
+ * their own screen — the passenger watching "7.1 km left" saw the car teleport back to the
+ * pickup and the ETA grow. The sender now seeds itself from the last stored fix.
+ */
+test.describe('Live tracking — surviving a refresh', () => {
+  test.describe.configure({ timeout: 240_000 });
+
+  // Same dedicated traveller arrangement as the block above: the shared account accumulates
+  // bookings from other specs, which makes "the one trackable trip" ambiguous.
+  test.beforeAll(async () => {
+    trackUser = await createUser('tracker-refresh');
+    U = trackUser.userId;
+    userSession = {
+      token: trackUser.token, userId: U, role: 'ROLE_USER',
+      name: trackUser.name, email: trackUser.email, mobile: trackUser.mobile,
+    };
+  });
+
+  const kmBetween = (a: [number, number], b: [number, number]) => {
+    const R = 6371;
+    const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+    const dLon = ((b[1] - a[1]) * Math.PI) / 180;
+    const la1 = (a[0] * Math.PI) / 180;
+    const la2 = (b[0] * Math.PI) / 180;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+
+  const PICKUP: [number, number] = [ROUTE.fromLat, ROUTE.fromLon];
+
+  test('a driver refreshing mid-trip resumes from where the trip is, not the pickup', async ({ browser }) => {
+    const c = await tctx('track-refresh');
+    const booking = await startedTrackingBooking(c, `RF${Date.now().toString().slice(-6)}`);
+    const bookingId = booking.bookingId;
+
+    const driverCtx = await authedContext(browser, driverSession, 'refresh-driver');
+    const driverPage = await driverCtx.newPage();
+    await driverPage.goto('/driver/bookings', { waitUntil: 'domcontentloaded' });
+    await openTracking(driverPage, 'Live Navigation', booking.toPlace);
+
+    expect(await waitForStoredLocation(bookingId), 'driver UI never published a fix').not.toBeNull();
+
+    // Let the car get clearly away from the pickup before refreshing — otherwise "did not
+    // rewind" would pass trivially.
+    let before = 0;
+    const deadline = Date.now() + 90_000;
+    while (Date.now() < deadline && before <= 20) {
+      const fix = await storedLocation(bookingId);
+      if (fix) before = kmBetween(PICKUP, [fix.latitude, fix.longitude]);
+      if (before <= 20) await new Promise((r) => setTimeout(r, 2000));
+    }
+    expect(before, 'the simulated car never left the pickup, so the test proves nothing')
+      .toBeGreaterThan(20);
+
+    // The moment the bug used to strike.
+    await driverPage.reload({ waitUntil: 'domcontentloaded' });
+    await openTracking(driverPage, 'Live Navigation', booking.toPlace);
+    await driverPage.waitForTimeout(9000);
+
+    const fixAfter = await storedLocation(bookingId);
+    expect(fixAfter, 'no fix stored after the refresh').not.toBeNull();
+    const after = kmBetween(PICKUP, [fixAfter.latitude, fixAfter.longitude]);
+
+    expect(
+      after,
+      `trip rewound on refresh: was ${before.toFixed(1)} km from pickup, now ${after.toFixed(1)} km`
+    ).toBeGreaterThan(before * 0.8);
+
+    await driverCtx.close();
+    await disposeAll(c);
+  });
+
+  test('the passenger map keeps the trip position across their own refresh', async ({ browser }) => {
+    const c = await tctx('track-user-refresh');
+    const booking = await startedTrackingBooking(c, `UR${Date.now().toString().slice(-6)}`);
+    const bookingId = booking.bookingId;
+
+    const driverCtx = await authedContext(browser, driverSession, 'ur-driver');
+    const driverPage = await driverCtx.newPage();
+    await driverPage.goto('/driver/bookings', { waitUntil: 'domcontentloaded' });
+    await openTracking(driverPage, 'Live Navigation', booking.toPlace);
+    expect(await waitForStoredLocation(bookingId), 'driver UI never published a fix').not.toBeNull();
+
+    const userCtx = await authedContext(browser, userSession, 'ur-user');
+    const userPage = await userCtx.newPage();
+    await userPage.goto('/user/bookings', { waitUntil: 'domcontentloaded' });
+    await openTracking(userPage, 'Track Your Driver', booking.toPlace);
+    await expect(userPage.getByText(/updated \d+s ago/)).toBeVisible({ timeout: 45000 });
+
+    // Reloading the passenger's page must re-show live data, not an empty map: the poll fires
+    // immediately on mount rather than waiting a full interval.
+    await userPage.reload({ waitUntil: 'domcontentloaded' });
+    await openTracking(userPage, 'Track Your Driver', booking.toPlace);
+    await expect(
+      userPage.getByText(/updated \d+s ago/),
+      'after a passenger refresh the map came back without live data'
+    ).toBeVisible({ timeout: 45000 });
+
+    // And the driver must still be underway, not back at the pickup.
+    const fix = await storedLocation(bookingId);
+    expect(fix).not.toBeNull();
+
+    await userCtx.close();
+    await driverCtx.close();
     await disposeAll(c);
   });
 });

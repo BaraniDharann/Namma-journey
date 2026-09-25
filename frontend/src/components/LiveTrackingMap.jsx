@@ -2,10 +2,14 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import 'leaflet.marker.slideto'
 import useDriverLocationSender from '../hooks/useDriverLocationSender'
 import useLiveDriverLocation from '../hooks/useLiveDriverLocation'
 import { OSRM_BASE_URL, TILE_URL, TILE_ATTRIBUTION } from '../config/mapServices'
+import { SmoothVehicleMarker, RouteCruiseMarker } from './map/VehicleMarkers'
+import { pickVehicle, vehicleSvg, VEHICLE_MARKER_CSS } from './map/vehicleIcons'
+import {
+  bearing, buildStraightRoute, cumulativeDistances, haversineKm, nearestIndex,
+} from './map/geo'
 
 const pickupIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
@@ -19,147 +23,12 @@ const dropIcon = new L.Icon({
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
 })
 
-function createCarIcon(heading = 0) {
-  return L.divIcon({
-    className: 'driver-car-icon',
-    html: `
-      <div class="car-container" style="transform:rotate(${heading}deg)">
-        <div class="car-pulse-ring"></div>
-        <div class="car-glow"></div>
-        <div class="car-emoji">🚖</div>
-      </div>
-    `,
-    iconSize: [48, 48],
-    iconAnchor: [24, 24],
-  })
-}
-
-function getBearing(from, to) {
-  const toRad = (d) => (d * Math.PI) / 180
-  const toDeg = (r) => (r * 180) / Math.PI
-  const dLon = toRad(to[1] - from[1])
-  const y = Math.sin(dLon) * Math.cos(toRad(to[0]))
-  const x = Math.cos(toRad(from[0])) * Math.sin(toRad(to[0])) -
-    Math.sin(toRad(from[0])) * Math.cos(toRad(to[0])) * Math.cos(dLon)
-  return (toDeg(Math.atan2(y, x)) + 360) % 360
-}
-
-// Straight-line fallback so the route (and the animated/real car) always render
-// even when the external OSRM routing service is slow, rate-limited or offline.
-function buildStraightRoute(fromLat, fromLon, toLat, toLon, steps = 60) {
-  const pts = []
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps
-    pts.push([fromLat + (toLat - fromLat) * t, fromLon + (toLon - fromLon) * t])
-  }
-  return pts
-}
-
-// Great-circle distance in km. Mirrors RoutingService.haversineDistance on the backend,
-// including its 6371 km radius, so a client-side estimate never contradicts a server one.
-function haversineKm(from, to) {
-  const toRad = (d) => (d * Math.PI) / 180
-  const R = 6371
-  const dLat = toRad(to[0] - from[0])
-  const dLon = toRad(to[1] - from[1])
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(from[0])) * Math.cos(toRad(to[0])) * Math.sin(dLon / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-function findNearestRouteIndex(routeCoords, pos) {
-  if (!routeCoords || !pos) return 0
-  let minDist = Infinity
-  let minIdx = 0
-  for (let i = 0; i < routeCoords.length; i++) {
-    const d = (routeCoords[i][0] - pos[0]) ** 2 + (routeCoords[i][1] - pos[1]) ** 2
-    if (d < minDist) { minDist = d; minIdx = i }
-  }
-  return minIdx
-}
-
 function FitBounds({ bounds }) {
   const map = useMap()
   useEffect(() => {
     if (bounds) map.fitBounds(bounds, { padding: [50, 50] })
   }, [bounds, map])
   return null
-}
-
-function FollowDriver({ driverPos, active }) {
-  const map = useMap()
-  useEffect(() => {
-    if (!active || !driverPos || !map) return
-    map.panTo(driverPos, { animate: true, duration: 1 })
-  }, [driverPos, map, active])
-  return null
-}
-
-function DriverMarker({ position, heading }) {
-  const markerRef = useRef(null)
-  const icon = useMemo(() => createCarIcon(heading), [heading])
-
-  // Smoothly slide the leaflet marker toward each new position instead of the
-  // instant jump react-leaflet does on a position prop change.
-  useEffect(() => {
-    const m = markerRef.current
-    if (m && m.slideTo) m.slideTo(position, { duration: 2000 })
-    else if (m) m.setLatLng(position)
-  }, [position])
-
-  return <Marker position={position} icon={icon} zIndexOffset={1000} ref={markerRef} />
-}
-
-// Rapido-style animated car that moves along the route from pickup to drop
-function AnimatedRouteCarMarker({ routeCoords, speedFactor = 1 }) {
-  const markerRef = useRef(null)
-  const animFrameRef = useRef(null)
-  const icon = useMemo(() => createCarIcon(0), [])
-
-  useEffect(() => {
-    if (!routeCoords || routeCoords.length < 2) return
-
-    const stepsPerSegment = 60 // frames per segment for smoothness
-    let currentIndex = 0
-    let currentStep = 0
-    let lastHeading = -1
-
-    const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
-
-    const animate = () => {
-      const marker = markerRef.current
-      if (!marker) { animFrameRef.current = requestAnimationFrame(animate); return }
-
-      const from = routeCoords[currentIndex]
-      const to = routeCoords[currentIndex + 1]
-      if (!from || !to) {
-        currentIndex = 0
-        currentStep = 0
-        animFrameRef.current = requestAnimationFrame(animate)
-        return
-      }
-
-      const t = currentStep / stepsPerSegment
-      marker.setLatLng(lerp(from, to, t))
-      const heading = Math.round(getBearing(from, to))
-      if (heading !== lastHeading) { marker.setIcon(createCarIcon(heading)); lastHeading = heading }
-
-      currentStep += speedFactor
-      if (currentStep >= stepsPerSegment) {
-        currentStep = 0
-        currentIndex++
-        if (currentIndex >= routeCoords.length - 1) currentIndex = 0 // loop
-      }
-
-      animFrameRef.current = requestAnimationFrame(animate)
-    }
-
-    animFrameRef.current = requestAnimationFrame(animate)
-    return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current) }
-  }, [routeCoords, speedFactor])
-
-  if (!routeCoords || routeCoords.length < 2) return null
-  return <Marker position={routeCoords[0]} icon={icon} zIndexOffset={1000} ref={markerRef} />
 }
 
 function MapInstance({ setMap, onUserDrag }) {
@@ -170,11 +39,15 @@ function MapInstance({ setMap, onUserDrag }) {
       map.on('dragstart', onUserDrag)
       return () => map.off('dragstart', onUserDrag)
     }
+    return undefined
   }, [map, setMap, onUserDrag])
   return null
 }
 
-export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, toLon, fromPlace, toPlace, isDriver, driverId }) {
+export default function LiveTrackingMap({
+  bookingId, fromLat, fromLon, toLat, toLon, fromPlace, toPlace,
+  isDriver, driverId, travelMembers,
+}) {
   const [routeCoords, setRouteCoords] = useState(null)
   const [driverPos, setDriverPos] = useState(null)
   const [driverHeading, setDriverHeading] = useState(0)
@@ -190,9 +63,13 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
   const lastEtaCalcRef = useRef(0)
   const prevPosRef = useRef(null)
 
+  // Each trip gets its own vehicle, so two bookings open side by side are
+  // told apart at a glance and the marker hints at the car that was sent.
+  const vehicle = useMemo(() => pickVehicle(bookingId, travelMembers), [bookingId, travelMembers])
+
   // Fetch route on mount, falling back to a straight line if OSRM is unavailable
   useEffect(() => {
-    if (!fromLat || !toLat) return
+    if (!fromLat || !toLat) return undefined
     let cancelled = false
     const fallback = () => { if (!cancelled) setRouteCoords(buildStraightRoute(fromLat, fromLon, toLat, toLon)) }
     const coords = `${fromLon},${fromLat};${toLon},${toLat}`
@@ -214,7 +91,7 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
     const newPos = [lat, lon]
     let heading = serverHeading || 0
     if (!heading && prevPosRef.current) {
-      heading = getBearing(prevPosRef.current, newPos)
+      heading = bearing(prevPosRef.current, newPos)
     }
     prevPosRef.current = newPos
     setDriverPos(newPos)
@@ -242,7 +119,7 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
 
   // Tick a "last updated Ns ago" freshness counter once per second.
   useEffect(() => {
-    if (isDriver || !lastUpdate) return
+    if (isDriver || !lastUpdate) return undefined
     const tick = () => setSecondsAgo(Math.floor((Date.now() - lastUpdate) / 1000))
     tick()
     const id = setInterval(tick, 1000)
@@ -280,19 +157,26 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
     }).catch(straightLineEstimate)
   }, [driverPos, toLat, toLon])
 
-  // Travelled route (green portion behind driver)
-  const travelledRoute = useMemo(() => {
-    if (!routeCoords || !driverPos) return null
-    const idx = findNearestRouteIndex(routeCoords, driverPos)
-    return routeCoords.slice(0, idx + 1)
-  }, [routeCoords, driverPos])
+  // Running length of the route, so progress is measured in metres covered
+  // rather than waypoints passed — OSRM packs waypoints tightly around
+  // junctions, which would make the bar lurch at every roundabout.
+  const routeMetrics = useMemo(
+    () => (routeCoords ? cumulativeDistances(routeCoords) : null),
+    [routeCoords],
+  )
 
-  // Progress percentage
-  const progress = useMemo(() => {
-    if (!routeCoords || !driverPos) return 0
-    const idx = findNearestRouteIndex(routeCoords, driverPos)
-    return Math.round((idx / (routeCoords.length - 1)) * 100)
-  }, [routeCoords, driverPos])
+  // One nearest-point lookup per position feeds both the travelled line and the
+  // progress bar; it used to run three times per render.
+  const travelled = useMemo(() => {
+    if (!routeCoords || !routeMetrics || !driverPos) return null
+    const idx = nearestIndex(routeCoords, driverPos)
+    const percent = routeMetrics.total > 0
+      ? Math.round((routeMetrics.cum[idx] / routeMetrics.total) * 100)
+      : 0
+    return { coords: routeCoords.slice(0, idx + 1), percent }
+  }, [routeCoords, routeMetrics, driverPos])
+
+  const progress = travelled?.percent ?? 0
 
   if (!fromLat || !toLat) return null
 
@@ -365,17 +249,19 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
           <div style={{
             position: 'absolute', left: 0, top: 0, height: '100%', borderRadius: 2,
             width: `${progress}%`,
-            background: 'linear-gradient(90deg, #22c55e, #3b82f6)',
-            transition: 'width 2s ease',
+            background: `linear-gradient(90deg, #22c55e, ${vehicle.body})`,
+            transition: 'width 2s linear',
           }} />
           {driverPos && (
-            <div style={{
-              position: 'absolute', top: -8, transition: 'left 2s ease',
-              left: `calc(${progress}% - 8px)`,
-              fontSize: 16, lineHeight: 1,
-            }}>
-              🚖
-            </div>
+            <div
+              // Same vehicle as the map marker, turned to face along the bar.
+              dangerouslySetInnerHTML={{ __html: vehicleSvg(vehicle, 20) }}
+              style={{
+                position: 'absolute', top: -10, transition: 'left 2s linear',
+                left: `calc(${progress}% - 10px)`,
+                lineHeight: 0, transform: 'rotate(90deg)',
+              }}
+            />
           )}
         </div>
 
@@ -423,37 +309,37 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
               {/* Route glow (wider, semi-transparent) */}
               <Polyline positions={routeCoords} pathOptions={{ color: '#3b82f6', weight: 10, opacity: 0.15 }} />
               {/* Main route line */}
-              <Polyline positions={routeCoords} pathOptions={{ color: '#3b82f6', weight: 5, opacity: 0.6 }} />
+              <Polyline positions={routeCoords} pathOptions={{ color: '#3b82f6', weight: 5, opacity: 0.75 }} />
             </>
           )}
 
           {/* Travelled route - green solid */}
-          {travelledRoute && travelledRoute.length > 1 && (
+          {travelled && travelled.coords.length > 1 && (
             <>
-              <Polyline positions={travelledRoute} pathOptions={{ color: '#22c55e', weight: 8, opacity: 0.15 }} />
-              <Polyline positions={travelledRoute} pathOptions={{ color: '#22c55e', weight: 5, opacity: 0.9 }} />
+              <Polyline positions={travelled.coords} pathOptions={{ color: '#22c55e', weight: 8, opacity: 0.15 }} />
+              <Polyline positions={travelled.coords} pathOptions={{ color: '#22c55e', weight: 5, opacity: 0.9 }} />
             </>
           )}
 
-          {/* Remaining route - blue solid when live tracking */}
-          {routeCoords && driverPos && (
-            <Polyline
-              positions={routeCoords.slice(findNearestRouteIndex(routeCoords, driverPos))}
-              pathOptions={{ color: '#3b82f6', weight: 5, opacity: 0.8 }}
-            />
-          )}
-
-          {/* Animated car along route when waiting for real GPS */}
+          {/* Route preview while the driver's first fix is still on its way */}
           {routeCoords && !driverPos && (
-            <AnimatedRouteCarMarker routeCoords={routeCoords} speedFactor={1.5} />
+            <RouteCruiseMarker
+              routeCoords={routeCoords}
+              vehicle={vehicle}
+              tooltip={`${vehicle.label} · route preview`}
+            />
           )}
 
           {/* Real driver car - shows when we have actual driver GPS */}
           {driverPos && (
-            <>
-              <DriverMarker position={driverPos} heading={driverHeading} />
-              <FollowDriver driverPos={driverPos} active={followDriver} />
-            </>
+            <SmoothVehicleMarker
+              position={driverPos}
+              heading={driverHeading}
+              routeCoords={routeCoords}
+              vehicle={vehicle}
+              follow={followDriver}
+              tooltip={isDriver ? `Your ${vehicle.label}` : `Your ride · ${vehicle.label}`}
+            />
           )}
         </MapContainer>
         {/* Recenter button */}
@@ -478,10 +364,6 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.4; transform: scale(1.2); }
         }
-        @keyframes glow {
-          0%, 100% { box-shadow: 0 0 8px 2px rgba(59,130,246,0.5); }
-          50% { box-shadow: 0 0 16px 6px rgba(59,130,246,0.8); }
-        }
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
@@ -495,30 +377,7 @@ export default function LiveTrackingMap({ bookingId, fromLat, fromLon, toLat, to
           border: 2px solid #bfdbfe; border-top-color: #3b82f6;
           animation: spin 1s linear infinite;
         }
-        .driver-car-icon { background: none !important; border: none !important; }
-        .car-container {
-          position: relative; width: 48px; height: 48px;
-          display: flex; align-items: center; justify-content: center;
-          transition: transform 0.5s ease;
-        }
-        .car-pulse-ring {
-          position: absolute; width: 48px; height: 48px; border-radius: 50%;
-          border: 2px solid rgba(59,130,246,0.6);
-          animation: car-ring-pulse 2s ease-out infinite;
-        }
-        @keyframes car-ring-pulse {
-          0% { transform: scale(0.5); opacity: 1; }
-          100% { transform: scale(1.8); opacity: 0; }
-        }
-        .car-glow {
-          position: absolute; width: 36px; height: 36px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(59,130,246,0.4) 0%, transparent 70%);
-          animation: glow 2s ease-in-out infinite;
-        }
-        .car-emoji {
-          font-size: 32px; z-index: 1; position: relative;
-          filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4));
-        }
+        ${VEHICLE_MARKER_CSS}
       `}</style>
     </div>
   )

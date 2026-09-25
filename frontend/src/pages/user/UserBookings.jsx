@@ -269,6 +269,7 @@ export default function UserBookings() {
                 toLon={trackingBooking.toLon}
                 fromPlace={trackingBooking.fromPlace}
                 toPlace={trackingBooking.toPlace}
+                travelMembers={trackingBooking.travelMembers}
                 isDriver={false}
               />
             </div>
