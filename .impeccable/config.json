@@ -37,6 +37,24 @@
         ],
         "createdAt": "2026-10-01T15:25:38.077Z",
         "reason": "Claude: user explicitly requested glowing flowing title text on dashboards and logins; limited to page titles, off under reduced motion"
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/776-1790838884/content/landing-concepts.html"
+        ],
+        "createdAt": "2026-10-01T15:37:32.705Z",
+        "reason": "Claude: throwaway brainstorming storyboard mockup, gitignored, not shipped UI"
+      },
+      {
+        "rule": "undersized-ui-text",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/776-1790838884/content/landing-concepts.html"
+        ],
+        "createdAt": "2026-10-01T15:37:35.456Z",
+        "reason": "Claude: throwaway brainstorming storyboard mockup, gitignored, not shipped UI"
       }
     ]
   }
