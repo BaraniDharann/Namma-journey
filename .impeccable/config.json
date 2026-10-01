@@ -1,0 +1,43 @@
+{
+  "hook": {
+    "enabled": true,
+    "limits": {
+      "maxFindings": 5,
+      "maxChars": 8000
+    }
+  },
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/776-1790838884/content/landing-concepts.html"
+        ],
+        "createdAt": "2026-10-01T07:17:07.483Z",
+        "reason": "Claude: throwaway brainstorming storyboard mockup, not shipped UI; stages clip by design"
+      },
+      {
+        "rule": "clipped-overflow-container",
+        "value": "*",
+        "files": [
+          ".superpowers/brainstorm/776-1790838884/content/landing-concepts.html"
+        ],
+        "createdAt": "2026-10-01T07:17:08.409Z",
+        "reason": "Claude: throwaway brainstorming storyboard mockup, not shipped UI; stages clip by design"
+      },
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "frontend/src/styles/auth.css",
+          "frontend/src/styles/postcard.css"
+        ],
+        "createdAt": "2026-10-01T15:25:38.077Z",
+        "reason": "Claude: user explicitly requested glowing flowing title text on dashboards and logins; limited to page titles, off under reduced motion"
+      }
+    ]
+  }
+}
