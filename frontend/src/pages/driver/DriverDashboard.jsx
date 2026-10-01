@@ -1,175 +1,215 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import DashboardLayout from '../../components/DashboardLayout'
 import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
-import { getDriverBookings } from '../../utils/api'
-import { Link } from 'react-router-dom'
-import Pagination, { usePagination } from '../../components/Pagination'
+import { getDriverBookings, getDriverProfile, toggleDriverAvailability, driverBookingAction } from '../../utils/api'
+import Icon from '../../components/dash/Icon'
+import { Panel, PanelLink, PageHead, StatusPill, Empty, Skeleton, ErrorNote } from '../../components/dash/ui'
+import { Gauge } from '../../components/dash/charts'
+import AnalyticsCard from '../../components/dash/AnalyticsCard'
+import { useCelebrate } from '../../components/celebrate/Celebration'
+import { inr, shortPlace, todayStats, earningsThisWeek, completionRate, nextTrip, typeMix, daysUntil, statusSegments } from '../../dash/metrics'
 
 const navItems = [
-  { path: '/driver/dashboard', icon: '🏠', label: 'Dashboard' },
-  { path: '/driver/bookings', icon: '📋', label: 'My Trips' },
-  { path: '/driver/profile', icon: '👤', label: 'Profile' },
+  { path: '/driver/dashboard', icon: '', label: 'Dashboard' },
+  { path: '/driver/bookings', icon: '', label: 'My Trips' },
+  { path: '/driver/profile', icon: '', label: 'Profile' },
 ]
 
-function AnimatedNumber({ value, loading }) {
-  if (loading) return <span>...</span>
-  return <span className="number-pop">{value}</span>
+const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || 'there'
+const whenLabel = (b) => {
+  const days = daysUntil(b.fromDate)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Tomorrow'
+  return b.fromDate
 }
+const mapsUrl = (b) =>
+  b.toLat != null && b.toLon != null
+    ? `https://www.google.com/maps/dir/?api=1&origin=${b.fromLat},${b.fromLon}&destination=${b.toLat},${b.toLon}&travelmode=driving`
+    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.toPlace || '')}`
 
 export default function DriverDashboard() {
   const { user } = useAuth()
+  const celebrate = useCelebrate()
   const [bookings, setBookings] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [state, setState] = useState({ loading: true, ok: true })
+  const [status, setStatus] = useState(null)
+  const [toggling, setToggling] = useState(false)
+  const [acting, setActing] = useState(null)
 
-  useEffect(() => {
-    getDriverBookings(user.userId).then(r => setBookings(r.data || [])).catch(() => {}).finally(() => setLoading(false))
+  const load = useCallback(() => {
+    setState((s) => ({ ...s, loading: true }))
+    getDriverBookings(user.userId)
+      .then((r) => { setBookings(r.data || []); setState({ loading: false, ok: true }) })
+      .catch(() => setState({ loading: false, ok: false }))
   }, [user.userId])
 
-  const pending = bookings.filter(b => b.status === 'PENDING')
-  const started = bookings.filter(b => b.status === 'STARTED')
-  const confirmed = bookings.filter(b => b.status === 'CONFIRMED')
-  const completed = bookings.filter(b => b.status === 'COMPLETED')
-  const earnings = completed.reduce((s, b) => s + (b.totalAmount || 0), 0)
+  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    getDriverProfile(user.userId).then((r) => setStatus(r.data?.status || 'ACTIVE')).catch(() => setStatus('ACTIVE'))
+  }, [user.userId])
 
-  const { paginatedItems: paginatedPending, currentPage: currentPageP, totalPages: totalPagesP, setCurrentPage: setCurrentPageP } = usePagination(pending, 4)
-  const { paginatedItems: paginatedConfirmed, currentPage: currentPageC, totalPages: totalPagesC, setCurrentPage: setCurrentPageC } = usePagination(confirmed, 4)
+  const online = status === 'ACTIVE'
+  const toggleOnline = async () => {
+    if (toggling || status == null) return
+    const next = online ? 'INACTIVE' : 'ACTIVE'
+    setToggling(true)
+    try {
+      await toggleDriverAvailability(user.userId, next)
+      setStatus(next)
+      toast.success(next === 'ACTIVE' ? "You're online. New trips can reach you." : "You're offline. No new trips will be sent.")
+    } catch { /* surfaced by the api toast */ }
+    setToggling(false)
+  }
 
-  const stats = [
-    { label: 'New Requests', value: pending.length, icon: '🔔', color: '#fbbf24' },
-    { label: 'Active Trips', value: confirmed.length + started.length, icon: '🚗', color: '#60a5fa' },
-    { label: 'Completed', value: completed.length, icon: '✅', color: '#22c55e' },
-    { label: 'Total Earnings', value: `₹${earnings.toLocaleString()}`, icon: '💰', color: '#f97316' },
-  ]
+  const act = async (b, action) => {
+    setActing(b.bookingId + action)
+    try {
+      await driverBookingAction(user.userId, b.bookingId, action)
+      if (action === 'ACCEPT') {
+        celebrate({
+          title: 'Trip accepted',
+          message: `${shortPlace(b.fromPlace)} → ${shortPlace(b.toPlace)}. The traveller has been told you're on the way.`,
+        })
+      } else {
+        toast.success('Trip declined')
+      }
+      load()
+    } catch { /* surfaced by the api toast */ }
+    setActing(null)
+  }
+
+  const m = useMemo(() => {
+    const now = new Date()
+    return {
+      today: todayStats(bookings, now),
+      week: earningsThisWeek(bookings, now),
+      rate: completionRate(bookings),
+      next: nextTrip(bookings, now),
+      mix: typeMix(bookings),
+      requests: bookings.filter((b) => b.status === 'PENDING'),
+      started: bookings.find((b) => b.status === 'STARTED'),
+      done: bookings.filter((b) => b.status === 'COMPLETED').length,
+      lifetime: bookings.filter((b) => b.status === 'COMPLETED').reduce((s, b) => s + (Number(b.totalAmount) || 0), 0),
+    }
+  }, [bookings])
+
+  const sub = state.loading ? 'Loading your trips…'
+    : `${m.today.trips} trip${m.today.trips === 1 ? '' : 's'} done today${m.next ? ` · next: ${whenLabel(m.next)}` : ''}`
 
   return (
     <DashboardLayout navItems={navItems} role="ROLE_DRIVER">
-      <div className="animate-fadeIn">
-        <div className="dashboard-hero" style={{ backgroundImage: 'url(/images/city-view-from-mountain-hill (1).jpg)', minHeight: 170 }}>
-          <div className="hero-float-img" style={{ position: 'absolute', top: 16, right: 20, zIndex: 2 }}>
-            <img src="/images/car image.jpeg" alt="" style={{ width: 130, height: 80, objectFit: 'cover', borderRadius: 14, boxShadow: '0 8px 24px rgba(0,0,0,0.3)', border: '2px solid rgba(255,255,255,0.3)' }} className="animate-float" />
-          </div>
-          <div className="floating-decor" style={{ width: 60, height: 60, background: '#3b82f6', top: 10, left: '40%', animationDelay: '0.5s' }} />
-          <div className="floating-decor" style={{ width: 40, height: 40, background: '#22c55e', top: 40, left: '60%', animationDelay: '1.5s' }} />
-          <div style={{ width: '100%' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-              <div className="animate-fadeInLeft">
-                <h1 style={{ fontFamily: 'Poppins', fontWeight: 900, fontSize: 26, color: '#fff', marginBottom: 6 }}>Driver Dashboard 🚗</h1>
-                <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>Manage your trips and earnings</p>
-              </div>
-              <div className="glow-online animate-fadeInRight" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: 'rgba(34,197,94,0.2)', backdropFilter: 'blur(8px)', border: '1px solid rgba(34,197,94,0.4)', color: '#4ade80', fontSize: 13, fontWeight: 700 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 8px #4ade80' }} /> Online
-              </div>
-            </div>
-          </div>
-        </div>
+      <PageHead title={`Hi ${firstName(user?.name)}, you're ${online ? 'online' : 'offline'}`} sub={sub}>
+        <button
+          type="button"
+          className="pc-switch"
+          role="switch"
+          aria-checked={online}
+          onClick={toggleOnline}
+          disabled={toggling || status == null}
+        >
+          <span className="pc-switch-track" />
+          {online ? 'Online' : 'Offline'}
+        </button>
+      </PageHead>
 
-        <div className="stagger-children stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
-          {stats.map((s, i) => (
-            <div key={i} className="stat-card-enhanced" style={{ '--accent-color': s.color }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 14, background: `linear-gradient(135deg, ${s.color}20, ${s.color}10)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, boxShadow: `0 4px 12px ${s.color}15` }}>{s.icon}</div>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.color, boxShadow: `0 0 8px ${s.color}60`, animation: 'pulse 2s ease-in-out infinite' }} />
+      <div className="pc-grid">
+        <Panel span={7} title={m.next ? `${m.next.status === 'STARTED' ? 'Trip in progress' : 'Next trip'} · ${whenLabel(m.next)}` : 'Next trip'} meta={m.next && <StatusPill status={m.next.status} />}>
+          {state.loading ? <Skeleton rows={4} /> : !state.ok ? <ErrorNote onRetry={load} /> : !m.next ? (
+            <Empty icon="route" title="No trip lined up">{online ? 'Stay online and new trips will appear here.' : 'Go online to start receiving trips.'}</Empty>
+          ) : (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="pc-route">
+                  <i /><div>{shortPlace(m.next.fromPlace)}<small>Pickup · {m.next.userName || 'Traveller'} · {m.next.travelMembers || 1} passenger{(m.next.travelMembers || 1) === 1 ? '' : 's'}</small></div>
+                  <span className="pc-route-ln" /><span />
+                  <i className="is-end" /><div>{shortPlace(m.next.toPlace)}<small>Drop{m.next.distanceKm ? ` · ${Math.round(m.next.distanceKm)} km` : ''}{m.next.estimatedTimeMinutes ? ` · ~${Math.round(m.next.estimatedTimeMinutes)} min` : ''}</small></div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="pc-figure" style={{ fontSize: 34 }}>{inr(m.next.totalAmount)}</div>
+                  <small style={{ color: 'var(--pc-muted)', fontWeight: 700 }}>fare</small>
+                </div>
               </div>
-              <div style={{ fontSize: 26, fontWeight: 900, color: '#0f172a', marginBottom: 4 }}>
-                <AnimatedNumber value={s.value} loading={loading} />
+              <div className="pc-chips" style={{ marginTop: 16 }}>
+                <a className="pc-btn" href={mapsUrl(m.next)} target="_blank" rel="noreferrer"><Icon name="nav" />Navigate</a>
+                {m.next.userPhone && <a className="pc-btn pc-btn-ghost" href={`tel:${m.next.userPhone}`}><Icon name="phone" />Call {firstName(m.next.userName)}</a>}
+                <Link className="pc-btn pc-btn-ghost" to="/driver/bookings"><Icon name="route" />Open in My Trips</Link>
               </div>
-              <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
+            </>
+          )}
+        </Panel>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-          <div className="glass-card animate-slideUp" style={{ overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 12px' }}>
-              <h2 style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>New Trip Requests</h2>
-              <span className="badge badge-pending" style={{ animation: pending.length > 0 ? 'pulse 2s ease-in-out infinite' : 'none' }}>{pending.length}</span>
-            </div>
-            {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0' }}><div className="spinner" /></div>
-              : pending.length === 0 ? <div className="empty-state" style={{ padding: '32px 20px' }}><div style={{ fontSize: 32, marginBottom: 8 }} className="animate-float">🎉</div><p style={{ color: '#64748b', fontSize: 13 }}>No pending requests</p></div>
-              : <div className="stagger-children">
-                  {paginatedPending.map(b => (
-                    <div key={b.id} style={{ padding: '14px 20px', borderTop: '1px solid #f1f5f9', transition: 'all 0.2s ease', cursor: 'pointer' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#fffbeb'; e.currentTarget.style.paddingLeft = '24px' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.paddingLeft = '20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{b.fromPlace} → {b.toPlace}</div>
-                          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{b.fromDate} • {b.travelMembers} members • {b.acType}</div>
-                        </div>
-                        <div style={{ fontWeight: 700, color: '#f97316', fontSize: 15 }}>₹{b.totalAmount?.toLocaleString()}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>}
-            <Pagination currentPage={currentPageP} totalPages={totalPagesP} onPageChange={setCurrentPageP} />
-            <div style={{ padding: 14 }}>
-              <Link to="/driver/bookings" className="btn-primary" style={{ width: '100%', justifyContent: 'center', fontSize: 13, padding: '10px', borderRadius: 12 }}>View All Trips →</Link>
-            </div>
-          </div>
+        <Panel span={5} title="Today" meta="resets at midnight">
+          {state.loading ? <Skeleton rows={3} /> : (
+            <>
+              <div className="pc-figure" style={{ fontSize: 38 }}>{inr(m.today.earned)}</div>
+              <p style={{ margin: '6px 0 0', color: 'var(--pc-muted)', fontWeight: 700, fontSize: 13 }}>earned from completed trips today</p>
+              <div className="pc-minis" style={{ marginTop: 14 }}>
+                <div><b>{m.today.trips}</b>trips</div>
+                <div><b>{Math.round(m.today.km)} km</b>driven</div>
+                <div><b>{inr(m.lifetime)}</b>all time</div>
+              </div>
+            </>
+          )}
+        </Panel>
 
-          <div className="glass-card animate-slideUp" style={{ overflow: 'hidden', animationDelay: '0.1s' }}>
-            <div style={{ padding: '18px 20px 12px' }}>
-              <h2 style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>Active Trips</h2>
-            </div>
-            {confirmed.length === 0 ? <div className="empty-state" style={{ padding: '32px 20px' }}><div style={{ fontSize: 32, marginBottom: 8 }} className="animate-float">🗺️</div><p style={{ color: '#64748b', fontSize: 13 }}>No active trips</p></div>
-              : <div className="stagger-children">
-                  {paginatedConfirmed.map(b => (
-                    <div key={b.id} style={{ padding: '14px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 12, transition: 'all 0.2s ease' }}
-                      onMouseEnter={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.transform = 'translateX(4px)' }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.transform = 'translateX(0)' }}>
-                      <div style={{ width: 42, height: 42, borderRadius: 12, background: 'linear-gradient(135deg, #eff6ff, #dbeafe)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0, boxShadow: '0 2px 8px rgba(59,130,246,0.15)' }}>🚗</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a' }}>{b.fromPlace} → {b.toPlace}</div>
-                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{b.userName} • {b.userPhone}</div>
-                      </div>
-                      <div style={{ fontWeight: 700, color: '#3b82f6', fontSize: 14 }}>₹{b.totalAmount?.toLocaleString()}</div>
-                    </div>
-                  ))}
-                </div>}
-            <Pagination currentPage={currentPageC} totalPages={totalPagesC} onPageChange={setCurrentPageC} />
+        {m.started && (
+          <Panel span={12} title="Live trip map" meta={<span className="pc-pill pc-pill-live">Sharing location</span>}>
+            <LiveTrackingMap
+              bookingId={m.started.bookingId}
+              fromLat={m.started.fromLat}
+              fromLon={m.started.fromLon}
+              toLat={m.started.toLat}
+              toLon={m.started.toLon}
+              fromPlace={m.started.fromPlace}
+              toPlace={m.started.toPlace}
+              travelMembers={m.started.travelMembers}
+              isDriver
+              driverId={user.userId}
+            />
+          </Panel>
+        )}
 
-            <div style={{ margin: 16 }}>
-              {started.length > 0 ? (
-                <LiveTrackingMap
-                  bookingId={started[0].bookingId}
-                  fromLat={started[0].fromLat}
-                  fromLon={started[0].fromLon}
-                  toLat={started[0].toLat}
-                  toLon={started[0].toLon}
-                  fromPlace={started[0].fromPlace}
-                  toPlace={started[0].toPlace}
-                  travelMembers={started[0].travelMembers}
-                  isDriver={true}
-                  driverId={user.userId}
-                />
-              ) : (
-                <div style={{ borderRadius: 16, overflow: 'hidden', position: 'relative' }}>
-                  <img src="/images/GPS navigator-cuate.png" alt="GPS" style={{ width: '100%', height: 140, objectFit: 'contain', background: 'linear-gradient(135deg,#f0f9ff,#e0f2fe)', padding: 12 }} className="animate-float" />
-                  <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(to top, rgba(15,23,42,0.8), transparent)', padding: '20px 16px 12px', textAlign: 'center' }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>Live Map View</div>
-                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Start a trip to activate GPS tracking</div>
+        <AnalyticsCard
+          span={9}
+          title="Your driving analytics"
+          loading={state.loading}
+          datasets={[
+            { id: 'week', label: 'Earnings this week', kind: 'series', format: inr, data: m.week },
+            { id: 'mix', label: 'Trip mix', kind: 'parts', data: m.mix.map(([label, value]) => ({ label, value })) },
+            { id: 'status', label: 'Trips by status', kind: 'parts', data: statusSegments(bookings).map(([label, value]) => ({ label, value })) },
+          ]}
+        />
+
+        <Panel span={3} title="Completion" meta="all trips">
+          {state.loading ? <Skeleton rows={3} /> : m.done === 0 && m.rate === 0
+            ? <Empty icon="check" title="No trips yet">Your completion rate appears after your first trip.</Empty>
+            : <Gauge pct={m.rate} value={`${Math.round(m.rate * 100)}%`} sub="of assigned trips done" caption="Completion rate" />}
+        </Panel>
+
+        <Panel span={12} title="New requests" meta={m.requests.length ? `${m.requests.length} waiting` : undefined} action={<PanelLink to="/driver/bookings">All trips</PanelLink>}>
+          {state.loading ? <Skeleton rows={3} /> : m.requests.length === 0 ? (
+            <Empty icon="bell" title="No new requests">We&apos;ll notify you when an owner assigns you a trip.</Empty>
+          ) : (
+            <div className="pc-rows">
+              {m.requests.slice(0, 5).map((b) => (
+                <div key={b.bookingId} className="pc-row">
+                  <div style={{ minWidth: 0 }}>
+                    <div className="pc-row-title">{shortPlace(b.fromPlace)} → {shortPlace(b.toPlace)}</div>
+                    <small>{whenLabel(b)} · {b.travelMembers || 1} passenger{(b.travelMembers || 1) === 1 ? '' : 's'}{b.distanceKm ? ` · ${Math.round(b.distanceKm)} km` : ''}{b.acType ? ` · ${b.acType === 'AC' ? 'AC' : 'Non-AC'}` : ''}</small>
+                  </div>
+                  <b>{inr(b.totalAmount)}</b>
+                  <div className="pc-chips">
+                    <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" disabled={!!acting} onClick={() => act(b, 'REJECT')}>Decline</button>
+                    <button type="button" className="pc-btn pc-btn-sm" disabled={!!acting} onClick={() => act(b, 'ACCEPT')}><Icon name="check" size={15} />Accept</button>
                   </div>
                 </div>
-              )}
+              ))}
             </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 24, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }} className="stagger-children driver-image-row">
-          {[
-            { img: '/images/indian-city-buildings-scene.jpg', label: 'City Routes' },
-            { img: '/images/prasart-phimai-ancient-stone-thailand.jpg', label: 'Heritage Sites' },
-            { img: '/images/palace-king-mahal-kingdom-shiva.jpg', label: 'Palace Trips' },
-          ].map((d, i) => (
-            <div key={i} className="image-showcase" style={{ height: 120, borderRadius: 16 }}>
-              <img src={d.img} alt={d.label} loading="lazy" />
-              <div className="overlay">
-                <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>{d.label}</span>
-              </div>
-            </div>
-          ))}
-        </div>
+          )}
+        </Panel>
       </div>
     </DashboardLayout>
   )

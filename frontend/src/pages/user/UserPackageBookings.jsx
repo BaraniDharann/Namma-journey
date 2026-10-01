@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import { useAuth } from '../../context/AuthContext'
 import { getUserPackageBookings, cancelPackageBooking } from '../../utils/api'
 import Pagination, { usePagination } from '../../components/Pagination'
+import Icon from '../../components/dash/Icon'
+import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
+import { inr } from '../../dash/metrics'
 
 const STATUSES = ['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']
-const statusColors = { PENDING: '#F59E0B', CONFIRMED: '#10b981', COMPLETED: '#f97316', CANCELLED: '#ef4444' }
-const statusBg = { PENDING: '#FEF3C7', CONFIRMED: '#DCFCE7', COMPLETED: '#fff7ed', CANCELLED: '#FEF2F2' }
 
 const navItems = [
-  { path: '/user/dashboard', icon: '🏠', label: 'Dashboard' },
-  { path: '/user/bookings', icon: '📋', label: 'My Bookings' },
-  { path: '/user/bookings/new', icon: '➕', label: 'New Booking' },
-  { path: '/user/payments', icon: '💳', label: 'Payments' },
-  { path: '/user/package-bookings', icon: '📦', label: 'My Packages' },
-  { path: '/user/profile', icon: '👤', label: 'Profile' },
+  { path: '/user/dashboard', icon: '', label: 'Dashboard' },
+  { path: '/user/bookings', icon: '', label: 'My Bookings' },
+  { path: '/user/bookings/new', icon: '', label: 'New Booking' },
+  { path: '/user/payments', icon: '', label: 'Payments' },
+  { path: '/user/package-bookings', icon: '', label: 'My Packages' },
+  { path: '/user/profile', icon: '', label: 'Profile' },
 ]
 
 export default function UserPackageBookings() {
@@ -45,67 +47,54 @@ export default function UserPackageBookings() {
 
   return (
     <DashboardLayout navItems={navItems} role="ROLE_USER">
-      <div style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }} className="animate-fadeIn">
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 900, fontSize: 26, color: '#0F172A', letterSpacing: '-0.5px', marginBottom: 4 }}>My Package Bookings</h1>
-          <p style={{ color: '#64748b', fontSize: 14 }}>Track all your travel package bookings</p>
-        </div>
+      <PageHead title="My Package Bookings" sub="Track all your travel package bookings">
+        <Link to="/" className="pc-btn pc-btn-ghost"><Icon name="package" />Explore packages</Link>
+      </PageHead>
 
-        {/* Filter pills */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {STATUSES.map(s => (
-            <button key={s} onClick={() => { setFilter(s); setCurrentPage(1) }}
-              style={{ padding: '8px 18px', borderRadius: 20, border: 'none', fontWeight: 600, fontSize: 13, cursor: 'pointer', background: filter === s ? '#8b5cf6' : '#f1f5f9', color: filter === s ? '#fff' : '#64748b', transition: 'all 0.15s', boxShadow: filter === s ? '0 4px 12px rgba(139,92,246,0.25)' : 'none' }}>{s}</button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 60 }}><div className="spinner" /></div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0' }}>
-            <p style={{ fontSize: 56, marginBottom: 8 }}>🎒</p>
-            <h3 style={{ fontWeight: 700, color: '#0F172A', fontSize: 18, marginBottom: 6 }}>No package bookings yet</h3>
-            <p style={{ color: '#64748b', fontSize: 14 }}>
-              <a href="/" style={{ color: '#8b5cf6', textDecoration: 'none', fontWeight: 600 }}>Explore packages</a> to get started
-            </p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {paginatedItems.map(b => (
-              <div key={b.id} style={{ background: '#fff', borderRadius: 18, padding: 22, boxShadow: '0 1px 4px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0', borderLeft: `4px solid ${statusColors[b.status]}`, transition: 'all 0.2s ease' }}
-                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.03)'; e.currentTarget.style.transform = 'translateY(0)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                      <h3 style={{ fontSize: 17, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.2px' }}>{b.packageName}</h3>
-                      <span style={{ padding: '4px 14px', borderRadius: 20, fontSize: 11, fontWeight: 700, color: statusColors[b.status], background: statusBg[b.status] }}>{b.status}</span>
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 13, color: '#64748b' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>📦 {b.packageCategory?.replace('_', ' ')}</span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>⏱️ {b.durationDays}D / {b.durationNights}N</span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>👥 {b.numberOfPersons} persons</span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>📅 {b.travelDate}</span>
-                    </div>
-                    {b.specialRequests && <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 10, fontStyle: 'italic', padding: '6px 12px', background: '#f8fafc', borderRadius: 8, display: 'inline-block' }}>{b.specialRequests}</p>}
-                    {b.cancellationReason && <p style={{ fontSize: 12, color: '#ef4444', marginTop: 8, padding: '6px 12px', background: '#FEF2F2', borderRadius: 8, display: 'inline-block' }}>Reason: {b.cancellationReason}</p>}
-                    {b.confirmedAt && <p style={{ fontSize: 12, color: '#10b981', marginTop: 6 }}>Confirmed: {new Date(b.confirmedAt).toLocaleString()}</p>}
-                  </div>
-                  <div style={{ textAlign: 'right', minWidth: 140 }}>
-                    <div style={{ fontSize: 24, fontWeight: 900, color: '#8b5cf6', letterSpacing: '-0.5px' }}>₹{b.totalAmount?.toLocaleString()}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>₹{b.pricePerPerson?.toLocaleString()} × {b.numberOfPersons}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>Booked: {new Date(b.bookingDate).toLocaleDateString()}</div>
-                    {(b.status === 'PENDING' || b.status === 'CONFIRMED') && (
-                      <button onClick={() => handleCancel(b.id)} style={{ marginTop: 12, padding: '7px 18px', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s' }}>Cancel Booking</button>
-                    )}
-                  </div>
-                </div>
-              </div>
+      <div className="pc-grid">
+        <Panel span={12} title="Filter by status" meta={!loading && `${filtered.length} shown`}>
+          <div className="pc-chips" role="group" aria-label="Filter package bookings by status">
+            {STATUSES.map(s => (
+              <button key={s} type="button" aria-pressed={filter === s} onClick={() => { setFilter(s); setCurrentPage(1) }}
+                className={`pc-btn pc-btn-sm ${filter === s ? '' : 'pc-btn-ghost'}`}>{s}</button>
             ))}
           </div>
+        </Panel>
+
+        {loading ? (
+          <Panel span={12}><Skeleton rows={4} /></Panel>
+        ) : filtered.length === 0 ? (
+          <Panel span={12}>
+            <Empty icon="package" title="No package bookings yet" action={<Link to="/" className="pc-btn pc-btn-sm"><Icon name="search" size={15} />Explore packages</Link>}>
+              Book a travel package to get started.
+            </Empty>
+          </Panel>
+        ) : (
+          paginatedItems.map(b => (
+            <Panel key={b.id} span={6} title={b.packageName} meta={<StatusPill status={b.status} />}>
+              <div className="pc-chips">
+                <span className="pc-chip"><Icon name="package" size={15} />{b.packageCategory?.replace('_', ' ')}</span>
+                <span className="pc-chip"><Icon name="clock" size={15} />{b.durationDays}D / {b.durationNights}N</span>
+                <span className="pc-chip"><Icon name="users" size={15} />{b.numberOfPersons} persons</span>
+                <span className="pc-chip"><Icon name="calendar" size={15} />{b.travelDate}</span>
+              </div>
+              {b.specialRequests && <p style={{ fontSize: 12.5, color: 'var(--pc-ink-2)', margin: '12px 0 0', fontStyle: 'italic', padding: '8px 12px', background: 'var(--pc-wash)', borderRadius: 10 }}>{b.specialRequests}</p>}
+              {b.cancellationReason && <p style={{ fontSize: 12.5, color: 'var(--pc-bad)', margin: '10px 0 0', padding: '8px 12px', background: 'var(--pc-bad-soft)', borderRadius: 10, fontWeight: 700 }}>Reason: {b.cancellationReason}</p>}
+              {b.confirmedAt && <p style={{ fontSize: 12.5, color: 'var(--pc-good)', margin: '10px 0 0', fontWeight: 700 }}>Confirmed: {new Date(b.confirmedAt).toLocaleString()}</p>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--pc-line)' }}>
+                <div>
+                  <div className="pc-figure" style={{ fontSize: 26, color: 'var(--pc-brand-deep)' }}>{inr(b.totalAmount)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--pc-muted)', marginTop: 4, fontWeight: 600 }}>{inr(b.pricePerPerson)} × {b.numberOfPersons} · Booked: {new Date(b.bookingDate).toLocaleDateString()}</div>
+                </div>
+                {(b.status === 'PENDING' || b.status === 'CONFIRMED') && (
+                  <button type="button" onClick={() => handleCancel(b.id)} className="pc-btn pc-btn-ghost pc-btn-sm" style={{ color: 'var(--pc-bad)' }}><Icon name="x" size={15} />Cancel Booking</button>
+                )}
+              </div>
+            </Panel>
+          ))
         )}
-        {!loading && filtered.length > 0 && <div style={{ marginTop: 16 }}><Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} /></div>}
       </div>
+      {!loading && filtered.length > 0 && <div style={{ marginTop: 16 }}><Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} /></div>}
     </DashboardLayout>
   )
 }

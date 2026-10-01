@@ -4,17 +4,26 @@ import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
 import { getDriverBookings, driverBookingAction, endTrip, markCashReceived, startTrip, uploadEndTripPhoto } from '../../utils/api'
 import Pagination, { usePagination } from '../../components/Pagination'
+import Icon from '../../components/dash/Icon'
+import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
+import { inr, shortPlace } from '../../dash/metrics'
+import { useCelebrate } from '../../components/celebrate/Celebration'
 
 const navItems = [
-  { path: '/driver/dashboard', icon: '🏠', label: 'Dashboard' },
-  { path: '/driver/bookings', icon: '📋', label: 'My Trips' },
-  { path: '/driver/profile', icon: '👤', label: 'Profile' },
+  { path: '/driver/dashboard', icon: '', label: 'Dashboard' },
+  { path: '/driver/bookings', icon: '', label: 'My Trips' },
+  { path: '/driver/profile', icon: '', label: 'Profile' },
 ]
 
-function StatusBadge({ status }) {
-  const map = { PENDING: 'badge-pending', CONFIRMED: 'badge-confirmed', STARTED: 'badge-confirmed', COMPLETED: 'badge-completed', CANCELLED: 'badge-cancelled' }
-  return <span className={`px-3 py-1 rounded-full text-xs font-semibold ${map[status] || 'badge-pending'}`}>{status}</span>
-}
+const FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'STARTED', 'COMPLETED', 'CANCELLED']
+
+// Shared modal chrome: the legacy overlay/box classes are restyled inside the shell; these
+// only pin the stacking order and strip the box's default padding so the header bar is flush.
+const overlayStyle = { position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }
+const boxStyle = (maxWidth) => ({ maxWidth, width: '90%', padding: 0, overflow: 'hidden' })
+const modalHead = { background: 'var(--pc-rail)', padding: '18px 24px', color: '#fff' }
+const modalTitle = { fontWeight: 800, fontSize: 18, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }
+const modalSub = { fontSize: 13, color: 'rgba(255,255,255,0.72)', margin: '4px 0 0' }
 
 function CameraModal({ bookingId, driverId, onPhotoCaptured, onClose }) {
   const videoRef = React.useRef(null)
@@ -73,14 +82,14 @@ function CameraModal({ bookingId, driverId, onPhotoCaptured, onClose }) {
   }
 
   return (
-    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div className="modal-box" style={{ maxWidth: 440, width: '90%', background: '#fff', borderRadius: 24, overflow: 'hidden', textAlign: 'center', boxShadow: '0 24px 64px rgba(0,0,0,0.15)' }}>
-        <div style={{ background: '#0F172A', padding: '20px 24px' }}>
-          <h3 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 18, color: '#fff', marginBottom: 2 }}>📸 Driver Photo Verification</h3>
-          <p style={{ fontSize: 13, color: '#94a3b8' }}>Take a live selfie before ending the trip</p>
+    <div className="modal-overlay" style={overlayStyle}>
+      <div className="modal-box" style={{ ...boxStyle(440), textAlign: 'center' }}>
+        <div style={modalHead}>
+          <h3 style={{ ...modalTitle, justifyContent: 'center' }}><Icon name="camera" />Driver Photo Verification</h3>
+          <p style={modalSub}>Take a live selfie before ending the trip</p>
         </div>
         <div style={{ padding: 24 }}>
-          {error && <div style={{ marginBottom: 14, fontSize: 13, padding: '10px 14px', borderRadius: 12, background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C' }}>⚠️ {error}</div>}
+          {error && <div className="pc-error" style={{ marginBottom: 14, textAlign: 'left' }}><Icon name="alert" /><span>{error}</span></div>}
           <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', background: '#000', marginBottom: 16, aspectRatio: '4/3' }}>
             {!captured ? (
               <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -92,14 +101,14 @@ function CameraModal({ bookingId, driverId, onPhotoCaptured, onClose }) {
           <div style={{ display: 'flex', gap: 10 }}>
             {!captured ? (
               <>
-                <button onClick={onClose} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#64748b' }}>Cancel</button>
-                <button onClick={capture} disabled={!stream || !!error} style={{ flex: 1, padding: '11px', borderRadius: 12, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700, opacity: (!stream || !!error) ? 0.5 : 1 }}>📸 Capture Photo</button>
+                <button type="button" className="pc-btn pc-btn-ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+                <button type="button" className="pc-btn" onClick={capture} disabled={!stream || !!error} style={{ flex: 1 }}><Icon name="camera" />Capture Photo</button>
               </>
             ) : (
               <>
-                <button onClick={retake} style={{ flex: 1, padding: '11px', borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#64748b' }}>🔄 Retake</button>
-                <button onClick={submit} disabled={uploading} style={{ flex: 1, padding: '11px', borderRadius: 12, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 700, opacity: uploading ? 0.7 : 1 }}>
-                  {uploading ? 'Uploading...' : '✓ Submit & End Trip'}
+                <button type="button" className="pc-btn pc-btn-ghost" onClick={retake} style={{ flex: 1 }}><Icon name="refresh" />Retake</button>
+                <button type="button" className="pc-btn pc-btn-teal" onClick={submit} disabled={uploading} style={{ flex: 1 }}>
+                  {uploading ? 'Uploading...' : <><Icon name="check" />Submit &amp; End Trip</>}
                 </button>
               </>
             )}
@@ -112,19 +121,19 @@ function CameraModal({ bookingId, driverId, onPhotoCaptured, onClose }) {
 
 function QrModal({ qrData, onClose }) {
   return (
-    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div className="modal-box" style={{ maxWidth: 380, width: '90%', background: '#fff', borderRadius: 24, overflow: 'hidden', textAlign: 'center', boxShadow: '0 24px 64px rgba(0,0,0,0.15)' }}>
-        <div style={{ background: '#0F172A', padding: '20px 24px' }}>
-          <h3 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 18, color: '#fff', marginBottom: 2 }}>Show QR to Customer</h3>
-          <p style={{ fontSize: 13, color: '#94a3b8' }}>Amount: <strong style={{ color: '#F59E0B' }}>₹{qrData.amount?.toLocaleString()}</strong></p>
+    <div className="modal-overlay" style={overlayStyle}>
+      <div className="modal-box" style={{ ...boxStyle(380), textAlign: 'center' }}>
+        <div style={modalHead}>
+          <h3 style={{ ...modalTitle, justifyContent: 'center' }}><Icon name="qr" />Show QR to Customer</h3>
+          <p style={modalSub}>Amount: <strong style={{ color: '#fff' }}>{inr(qrData.amount)}</strong></p>
         </div>
         <div style={{ padding: 24 }}>
-          <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 16 }}>Customer scans with GPay, PhonePe, Paytm or any UPI app</p>
+          <p style={{ fontSize: 12.5, color: 'var(--pc-muted)', margin: '0 0 16px', fontWeight: 600 }}>Customer scans with GPay, PhonePe, Paytm or any UPI app</p>
           {qrData.upiQrCode && (
-            <img src={qrData.upiQrCode} alt="UPI QR" style={{ width: 220, height: 220, borderRadius: 16, border: '2px solid #e2e8f0', marginBottom: 16 }} />
+            <img src={qrData.upiQrCode} alt="UPI QR" style={{ width: 220, height: 220, borderRadius: 16, border: '2px solid var(--pc-line)', marginBottom: 16 }} />
           )}
-          <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>{qrData.message}</p>
-          <button onClick={onClose} style={{ width: '100%', padding: '11px', borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#64748b' }}>Close</button>
+          <p style={{ fontSize: 12.5, color: 'var(--pc-muted)', margin: '0 0 12px' }}>{qrData.message}</p>
+          <button type="button" className="pc-btn pc-btn-ghost" onClick={onClose} style={{ width: '100%' }}>Close</button>
         </div>
       </div>
     </div>
@@ -133,6 +142,7 @@ function QrModal({ qrData, onClose }) {
 
 export default function DriverBookings() {
   const { user } = useAuth()
+  const celebrate = useCelebrate()
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('ALL')
@@ -160,6 +170,11 @@ export default function DriverBookings() {
       await driverBookingAction(user.userId, bookingId, action)
       if (action === 'ACCEPT') {
         setBookings(prev => prev.map(b => b.bookingId === bookingId ? { ...b, status: 'CONFIRMED' } : b))
+        const trip = bookings.find(b => b.bookingId === bookingId)
+        celebrate({
+          title: 'Trip accepted',
+          message: trip ? `${shortPlace(trip.fromPlace)} → ${shortPlace(trip.toPlace)}. The traveller has been told you're on the way.` : 'The traveller has been told you\'re on the way.',
+        })
       } else {
         // Rejecting unassigns the trip — it goes to another driver, not to CANCELLED, and it
         // leaves this driver's list entirely. Showing a status the booking never enters was
@@ -206,10 +221,12 @@ export default function DriverBookings() {
     setActionLoading(null)
   }
 
-  const statusBorderColor = (status) => {
-    const m = { PENDING: '#F59E0B', CONFIRMED: '#3b82f6', STARTED: '#3b82f6', COMPLETED: '#22c55e', CANCELLED: '#ef4444' }
-    return m[status] || '#e2e8f0'
-  }
+  const busy = (b, action) => actionLoading === b.bookingId + action
+  const filterChip = (on) => ({
+    border: 0, cursor: 'pointer', fontFamily: 'inherit',
+    background: on ? 'var(--pc-ink)' : 'var(--pc-wash)',
+    color: on ? '#fff' : 'var(--pc-ink-2)',
+  })
 
   return (
     <DashboardLayout navItems={navItems} role="ROLE_DRIVER">
@@ -223,11 +240,11 @@ export default function DriverBookings() {
       )}
       {qrData && <QrModal qrData={qrData} onClose={() => setQrData(null)} />}
       {trackingBooking && (
-        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="modal-box" style={{ maxWidth: 600, width: '90%', background: '#fff', borderRadius: 24, overflow: 'hidden', boxShadow: '0 24px 64px rgba(0,0,0,0.15)' }}>
-            <div style={{ background: '#0F172A', padding: '18px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: 18, color: '#fff' }}>Live Navigation</h3>
-              <button onClick={() => setTrackingBooking(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', width: 32, height: 32, borderRadius: 8, fontSize: 16, cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+        <div className="modal-overlay" style={overlayStyle}>
+          <div className="modal-box" style={boxStyle(600)}>
+            <div style={{ ...modalHead, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={modalTitle}><Icon name="nav" />Live Navigation</h3>
+              <button type="button" aria-label="Close live navigation" onClick={() => setTrackingBooking(null)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="x" size={16} /></button>
             </div>
             <div style={{ padding: 20 }}>
               <LiveTrackingMap
@@ -246,113 +263,96 @@ export default function DriverBookings() {
           </div>
         </div>
       )}
-      <div className="animate-fadeIn">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <h1 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 900, fontSize: 26, color: '#0F172A', letterSpacing: '-0.5px', marginBottom: 4 }}>My Trips</h1>
-            <p style={{ fontSize: 14, color: '#64748b' }}>{bookings.length} total assigned trips</p>
-          </div>
-        </div>
 
-        {/* Filter pills */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {['ALL','PENDING','CONFIRMED','STARTED','COMPLETED','CANCELLED'].map(f => (
-            <button key={f} onClick={() => { setFilter(f); setCurrentPage(1) }}
-              style={{ padding: '8px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none', background: filter === f ? '#3b82f6' : '#f1f5f9', color: filter === f ? '#fff' : '#64748b', transition: 'all 0.15s', boxShadow: filter === f ? '0 4px 12px rgba(59,130,246,0.25)' : 'none' }}>{f}</button>
-          ))}
-        </div>
+      <PageHead title="My Trips" sub={`${bookings.length} total assigned trips`} />
+
+      <div className="pc-grid">
+        <Panel span={12} title="Filter by status" meta={loading ? undefined : `${filtered.length} shown`}>
+          <div className="pc-chips" role="group" aria-label="Filter trips by status">
+            {FILTERS.map(f => (
+              <button key={f} type="button" className="pc-chip" aria-pressed={filter === f}
+                onClick={() => { setFilter(f); setCurrentPage(1) }}
+                style={filterChip(filter === f)}>{f}</button>
+            ))}
+          </div>
+        </Panel>
 
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '60px 0' }}><div className="spinner" /></div>
+          <Panel span={12}><Skeleton rows={4} /></Panel>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 24px', background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 56, marginBottom: 12 }}>🚗</div>
-            <h3 style={{ fontWeight: 700, color: '#0F172A', fontSize: 18, marginBottom: 8 }}>No trips found</h3>
-            <p style={{ color: '#94a3b8', fontSize: 14 }}>Trips assigned by owner will appear here</p>
-          </div>
+          <Panel span={12}>
+            <Empty icon="car" title="No trips found">Trips assigned by owner will appear here</Empty>
+          </Panel>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {paginatedItems.map(b => (
-              <div key={b.bookingId} style={{ background: '#fff', borderRadius: 18, padding: 20, border: '1px solid #e2e8f0', borderLeft: `4px solid ${statusBorderColor(b.status)}`, transition: 'all 0.2s ease', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}
-                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.08)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.03)'; e.currentTarget.style.transform = 'translateY(0)' }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 12, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🚗</div>
-                      <div>
-                        <div style={{ fontWeight: 700, color: '#0F172A', fontSize: 15 }}>{b.fromPlace} → {b.toPlace}</div>
-                        <div style={{ fontSize: 12, color: '#94a3b8' }}>{b.fromDate} – {b.toDate}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 10, marginLeft: 50 }}>
-                      {[['Customer', b.userName], ['Phone', b.userPhone], ['Members', `${b.travelMembers} persons`], ['Vehicle', b.acType]].map(([k,v]) => (
-                        <div key={k} style={{ padding: '8px 10px', borderRadius: 10, background: '#f8fafc', border: '1px solid #f1f5f9' }}>
-                          <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 2, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{k}</div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{v}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontSize: 13, color: '#64748b', alignItems: 'center', marginLeft: 50 }}>
-                      <span>📏 {b.distanceKm?.toFixed(1)} km</span>
-                      {b.bookingType === 'HOUR_BASED' && <span style={{ background: '#fff7ed', padding: '2px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#f97316', border: '1px solid #fed7aa' }}>🕐 {b.bookingHours}h @ ₹{b.pricePerHourAtBooking}/hr</span>}
-                      <span style={{ fontWeight: 700, color: '#3b82f6', fontSize: 14 }}>₹{b.totalAmount?.toLocaleString()}</span>
-                    </div>
+          paginatedItems.map(b => (
+            <Panel key={b.bookingId} span={12} title={`${b.fromDate} – ${b.toDate}`} meta={<StatusPill status={b.status} />}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18 }}>
+                <div style={{ flex: '1 1 280px', minWidth: 0 }}>
+                  <div className="pc-route">
+                    <i /><div>{b.fromPlace}<small>Pickup · {b.userName}</small></div>
+                    <span className="pc-route-ln" /><span />
+                    <i className="is-end" /><div>{b.toPlace}<small>Drop · {b.distanceKm?.toFixed(1)} km</small></div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <StatusBadge status={b.status} />
+                  <div className="pc-chips" style={{ marginTop: 14 }}>
+                    <span className="pc-chip"><Icon name="user" size={15} />{b.userName}</span>
+                    <span className="pc-chip"><Icon name="phone" size={15} />{b.userPhone}</span>
+                    <span className="pc-chip"><Icon name="users" size={15} />{`${b.travelMembers} persons`}</span>
+                    <span className="pc-chip"><Icon name="car" size={15} />{b.acType}</span>
+                    {b.bookingType === 'HOUR_BASED' && (
+                      <span className="pc-chip"><Icon name="clock" size={15} />{b.bookingHours}h @ {inr(b.pricePerHourAtBooking)}/hr</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12, marginLeft: 'auto' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div className="pc-figure" style={{ fontSize: 28, color: 'var(--pc-ink)' }}>{inr(b.totalAmount)}</div>
+                    <small style={{ color: 'var(--pc-muted)', fontWeight: 700 }}>fare</small>
+                  </div>
+                  <div className="pc-chips" style={{ justifyContent: 'flex-end' }}>
                     {b.status === 'PENDING' && (
                       <>
-                        <button onClick={() => handleAction(b.bookingId, 'ACCEPT')} disabled={actionLoading === b.bookingId+'ACCEPT'}
-                          style={{ padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          {actionLoading === b.bookingId+'ACCEPT' ? '...' : '✓ Accept'}
+                        <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => handleAction(b.bookingId, 'REJECT')} disabled={busy(b, 'REJECT')}>
+                          {busy(b, 'REJECT') ? '...' : <><Icon name="x" size={15} />Reject</>}
                         </button>
-                        <button onClick={() => handleAction(b.bookingId, 'REJECT')} disabled={actionLoading === b.bookingId+'REJECT'}
-                          style={{ padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          {actionLoading === b.bookingId+'REJECT' ? '...' : '✕ Reject'}
+                        <button type="button" className="pc-btn pc-btn-sm" onClick={() => handleAction(b.bookingId, 'ACCEPT')} disabled={busy(b, 'ACCEPT')}>
+                          {busy(b, 'ACCEPT') ? '...' : <><Icon name="check" size={15} />Accept</>}
                         </button>
                       </>
                     )}
                     {b.status === 'CONFIRMED' && (
                       <>
-                        <button onClick={() => handleStartTrip(b)} disabled={actionLoading === b.bookingId+'START'}
-                          style={{ padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          {actionLoading === b.bookingId+'START' ? '...' : '📍 Start Trip'}
+                        <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => handleStartTrip(b)} disabled={busy(b, 'START')}>
+                          {busy(b, 'START') ? '...' : <><Icon name="nav" size={15} />Start trip</>}
                         </button>
-                        <button onClick={() => handleEndTrip(b.bookingId)} disabled={actionLoading === b.bookingId+'END'}
-                          style={{ padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, background: '#fff7ed', color: '#f97316', border: '1px solid #fed7aa', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          {actionLoading === b.bookingId+'END' ? '...' : '🏁 End Trip'}
+                        <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => handleEndTrip(b.bookingId)} disabled={busy(b, 'END')}>
+                          {busy(b, 'END') ? '...' : <><Icon name="camera" size={15} />End trip</>}
                         </button>
-                        <button onClick={() => handleCash(b.bookingId, b.totalAmount)} disabled={actionLoading === b.bookingId+'CASH'}
-                          style={{ padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, background: '#F0FDF4', color: '#15803d', border: '1px solid #BBF7D0', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          {actionLoading === b.bookingId+'CASH' ? '...' : '💵 Cash Received'}
+                        <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => handleCash(b.bookingId, b.totalAmount)} disabled={busy(b, 'CASH')}>
+                          {busy(b, 'CASH') ? '...' : <><Icon name="wallet" size={15} />Cash received</>}
                         </button>
                       </>
                     )}
                     {b.status === 'STARTED' && (
                       <>
-                        <button onClick={() => setTrackingBooking(b)}
-                          style={{ padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, background: '#fff7ed', color: '#f97316', border: '1px solid #fed7aa', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          📍 Track
+                        <button type="button" className="pc-btn pc-btn-sm" onClick={() => setTrackingBooking(b)}>
+                          <Icon name="pin" size={15} />Track
                         </button>
-                        <button onClick={() => handleEndTrip(b.bookingId)} disabled={actionLoading === b.bookingId+'END'}
-                          style={{ padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          {actionLoading === b.bookingId+'END' ? '...' : '🏁 End Trip'}
+                        <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => handleEndTrip(b.bookingId)} disabled={busy(b, 'END')}>
+                          {busy(b, 'END') ? '...' : <><Icon name="camera" size={15} />End trip</>}
                         </button>
-                        <button onClick={() => handleCash(b.bookingId, b.totalAmount)} disabled={actionLoading === b.bookingId+'CASH'}
-                          style={{ padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, background: '#F0FDF4', color: '#15803d', border: '1px solid #BBF7D0', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          {actionLoading === b.bookingId+'CASH' ? '...' : '💵 Cash Received'}
+                        <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => handleCash(b.bookingId, b.totalAmount)} disabled={busy(b, 'CASH')}>
+                          {busy(b, 'CASH') ? '...' : <><Icon name="wallet" size={15} />Cash received</>}
                         </button>
                       </>
                     )}
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            </Panel>
+          ))
         )}
-        {!loading && filtered.length > 0 && <div style={{ marginTop: 16 }}><Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} /></div>}
       </div>
+      {!loading && filtered.length > 0 && <div style={{ marginTop: 16 }}><Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} /></div>}
     </DashboardLayout>
   )
 }

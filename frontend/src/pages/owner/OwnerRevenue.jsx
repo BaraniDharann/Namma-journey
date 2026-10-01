@@ -2,20 +2,24 @@ import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { getDailyRevenue, getMonthlyRevenue, getMonthlyRevenueSeries, getYearlyRevenue, setPricing, setHourlyPricing, getCurrentPricing, getOwnerBookings, getOwnerDrivers } from '../../utils/api'
 import { useAuth } from '../../context/AuthContext'
+import Icon from '../../components/dash/Icon'
+import { Panel, PageHead, SummaryStrip, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
+import { AreaChart, BarChart, Donut } from '../../components/dash/charts'
+import { inr, shortPlace, STATUS_META } from '../../dash/metrics'
 // Lazy-load heavy libs on first download
 const getJsPDF = () => Promise.all([import('jspdf'), import('jspdf-autotable')]).then(([m]) => m.default)
 const getXLSX = () => import('xlsx')
 
 const navItems = [
-  { path: '/owner/dashboard', icon: '🏠', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '📋', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '🚗', label: 'Drivers' },
-  { path: '/owner/payments', icon: '💳', label: 'Payments' },
-  { path: '/owner/reviews', icon: '⭐', label: 'Reviews' },
-  { path: '/owner/packages', icon: '📦', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '🎫', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '📊', label: 'Revenue' },
-  { path: '/owner/profile', icon: '👤', label: 'Profile' },
+  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
+  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
+  { path: '/owner/drivers', icon: '', label: 'Drivers' },
+  { path: '/owner/payments', icon: '', label: 'Payments' },
+  { path: '/owner/reviews', icon: '', label: 'Reviews' },
+  { path: '/owner/packages', icon: '', label: 'Packages' },
+  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
+  { path: '/owner/revenue', icon: '', label: 'Revenue' },
+  { path: '/owner/profile', icon: '', label: 'Profile' },
 ]
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -123,89 +127,6 @@ async function downloadPDF(title, subtitle, headers, rows, filename, summaryInfo
   doc.save(filename)
 }
 
-// Simple SVG line/area chart
-function RevenueChart({ data, labels, height = 200 }) {
-  if (!data || data.length === 0) return null
-  const max = Math.max(...data, 1)
-  const w = 100, h = 100
-  const padTop = 10, padBot = 5
-  const points = data.map((v, i) => {
-    const x = data.length === 1 ? w / 2 : (i / (data.length - 1)) * w
-    const y = padTop + (1 - v / max) * (h - padTop - padBot)
-    return { x, y, v }
-  })
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
-  const areaPath = linePath + ` L${points[points.length - 1].x},${h} L${points[0].x},${h} Z`
-
-  return (
-    <div style={{ position: 'relative', width: '100%', height }}>
-      <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: '100%' }} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#f97316" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#f97316" stopOpacity="0.02" />
-          </linearGradient>
-          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#f97316" />
-            <stop offset="100%" stopColor="#8b5cf6" />
-          </linearGradient>
-        </defs>
-        {/* Grid lines */}
-        {[0.25, 0.5, 0.75, 1].map(f => {
-          const y = padTop + (1 - f) * (h - padTop - padBot)
-          return <line key={f} x1="0" y1={y} x2={w} y2={y} stroke="#e2e8f0" strokeWidth="0.3" />
-        })}
-        <path d={areaPath} fill="url(#areaGrad)" />
-        <path d={linePath} fill="none" stroke="url(#lineGrad)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r="1.8" fill="#fff" stroke="#f97316" strokeWidth="0.8" />
-        ))}
-      </svg>
-      {/* Labels */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-        {labels.map((l, i) => (
-          <span key={i} style={{ fontSize: 10, color: '#94a3b8', textAlign: 'center', flex: 1 }}>{l}</span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// Donut chart for status breakdown
-function DonutChart({ segments, size = 120 }) {
-  const total = segments.reduce((s, seg) => s + seg.value, 0)
-  if (total === 0) return <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: 12 }}>No data</div>
-  const r = 40, cx = 50, cy = 50, sw = 12
-  let acc = 0
-  const arcs = segments.filter(s => s.value > 0).map(seg => {
-    const frac = seg.value / total
-    const startAngle = acc * 2 * Math.PI - Math.PI / 2
-    acc += frac
-    const endAngle = acc * 2 * Math.PI - Math.PI / 2
-    const large = frac > 0.5 ? 1 : 0
-    const x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle)
-    const x2 = cx + r * Math.cos(endAngle), y2 = cy + r * Math.sin(endAngle)
-    return { ...seg, d: `M${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2}`, frac }
-  })
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-      <svg viewBox="0 0 100 100" width={size} height={size}>
-        {arcs.map((a, i) => <path key={i} d={a.d} fill="none" stroke={a.color} strokeWidth={sw} strokeLinecap="round" />)}
-        <text x={cx} y={cy - 4} textAnchor="middle" style={{ fontSize: 14, fontWeight: 900, fill: '#0F172A' }}>{total}</text>
-        <text x={cx} y={cy + 9} textAnchor="middle" style={{ fontSize: 5.5, fill: '#94a3b8' }}>Total Trips</text>
-      </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {segments.map((s, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 3, background: s.color }} />
-            <span style={{ fontSize: 12, color: '#475569' }}>{s.label}: <b>{s.value}</b></span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 export default function OwnerRevenue() {
   const { user } = useAuth()
   const [tab, setTab] = useState('monthly')
@@ -298,11 +219,10 @@ export default function OwnerRevenue() {
   for (let y = 2023; y <= currentYear; y++) yearOptions.push(y)
 
   const displayFields = data ? Object.entries(data).filter(([, val]) => !Array.isArray(val)) : []
-  const maxBar = Math.max(...monthlyBars, 1)
   const totalYearRevenue = monthlyBars.reduce((s, v) => s + v, 0)
 
   // Status breakdown from all bookings
-  const statusCounts = { COMPLETED: 0, CONFIRMED: 0, PENDING: 0, CANCELLED: 0 }
+  const statusCounts = { COMPLETED: 0, STARTED: 0, CONFIRMED: 0, PENDING: 0, CANCELLED: 0 }
   allBookings.forEach(b => { if (statusCounts[b.status] !== undefined) statusCounts[b.status]++ })
 
   // Filtered bookings for the report table
@@ -407,199 +327,133 @@ export default function OwnerRevenue() {
     downloadExcel(tripHeaders, buildTripRows(), `NammaJourney_TripDetails_${params.year}.xlsx`, 'Trip Details')
   }
 
+  // Clicking (or pressing Enter on) a month bar selects that month, as before.
+  const pickMonth = (i) => {
+    setTab('monthly')
+    setParams(p => ({ ...p, month: i + 1 }))
+  }
+
+  const rate = (v) => (v ? `₹${Number(v).toLocaleString('en-IN')}` : '—')
+  const statusSlices = ['COMPLETED', 'STARTED', 'CONFIRMED', 'PENDING', 'CANCELLED']
+    .filter(k => statusCounts[k] > 0)
+    .map(k => [STATUS_META[k].label, statusCounts[k], STATUS_META[k].slot])
+  const toggleClass = (on) => (on ? 'pc-btn pc-btn-sm' : 'pc-btn pc-btn-ghost pc-btn-sm')
+
   return (
     <DashboardLayout navItems={navItems} role="ROLE_OWNER">
-      <div className="animate-fadeIn">
-        <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontFamily: 'Poppins', fontWeight: 900, fontSize: 26, color: '#0F172A', marginBottom: 4 }}>Revenue Analytics</h1>
-          <p style={{ fontSize: 14, color: '#64748b' }}>Track earnings, view reports and download data</p>
-        </div>
+      <PageHead title="Revenue Analytics" sub="Track earnings, view reports and download data" />
 
-        {/* Top Stats Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14, marginBottom: 24 }} className="stagger-children stats-grid">
-          {[
-            { label: 'Total Bookings', value: allBookings.length, icon: '📋', color: '#f97316' },
-            { label: 'Completed Trips', value: statusCounts.COMPLETED, icon: '✅', color: '#22c55e' },
-            { label: `${params.year} Revenue`, value: `₹${totalYearRevenue.toLocaleString()}`, icon: '💰', color: '#8b5cf6' },
-            { label: 'Price/km', value: `₹${pricing?.pricePerKm || '—'}`, icon: '🏷️', color: '#3b82f6' },
-            { label: 'Price/hour', value: `₹${pricing?.pricePerHour || '—'}`, icon: '🕐', color: '#8b5cf6' },
-          ].map((s, i) => (
-            <div key={i} className="stat-card-enhanced" style={{ '--accent-color': s.color, background: '#fff', borderRadius: 18, padding: '18px 16px', border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 14, background: `${s.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{s.icon}</div>
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 900, color: '#0F172A' }}>{s.value}</div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>{s.label}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+      <div className="pc-grid">
+        {/* Top Stats */}
+        <SummaryStrip
+          items={[
+            { icon: 'calendar', label: 'Total Bookings', value: allBookings.length.toLocaleString('en-IN'), sub: `${statusCounts.PENDING} pending · ${statusCounts.CONFIRMED} confirmed` },
+            { icon: 'check', label: 'Completed Trips', value: statusCounts.COMPLETED.toLocaleString('en-IN'), sub: `${statusCounts.CANCELLED} cancelled` },
+            { icon: 'wallet', label: `${params.year} Revenue`, value: inr(totalYearRevenue), sub: 'all months this year' },
+            { icon: 'route', label: 'Price/km', value: rate(pricing?.pricePerKm), sub: 'current rate' },
+            { icon: 'clock', label: 'Price/hour', value: rate(pricing?.pricePerHour), sub: 'current rate' },
+          ]}
+        />
 
-        <div className="dashboard-grid-main" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20, marginBottom: 24 }}>
-          {/* Revenue Line Chart */}
-          <div style={{ background: '#fff', borderRadius: 18, padding: 24, border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-              <h3 style={{ fontWeight: 700, fontSize: 15, color: '#0F172A' }}>Revenue Trend — {params.year}</h3>
-              <select className="input-field" style={{ maxWidth: 100, padding: '6px 10px', fontSize: 13, borderRadius: 10 }} value={params.year} onChange={e => setParams(p => ({ ...p, year: Number(e.target.value) }))}>
-                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-            <RevenueChart data={monthlyBars} labels={MONTHS} height={220} />
-            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 16, marginTop: 16 }}>
-              <div style={{ textAlign: 'center', minWidth: 90, overflowWrap: 'anywhere' }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: '#f97316' }}>₹{totalYearRevenue.toLocaleString()}</div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>Total Revenue</div>
-              </div>
-              <div style={{ textAlign: 'center', minWidth: 90, overflowWrap: 'anywhere' }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: '#0F172A' }}>₹{totalYearRevenue > 0 ? Math.round(totalYearRevenue / 12).toLocaleString() : 0}</div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>Avg/Month</div>
-              </div>
-              <div style={{ textAlign: 'center', minWidth: 90, overflowWrap: 'anywhere' }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: '#22c55e' }}>₹{Math.max(...monthlyBars).toLocaleString()}</div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>Best Month</div>
-              </div>
-            </div>
+        {/* Revenue Trend */}
+        <Panel
+          span={8}
+          title={`Revenue Trend — ${params.year}`}
+          action={(
+            <select aria-label="Year" className="input-field" style={{ width: 'auto', minHeight: 34, padding: '4px 10px', fontSize: 13 }} value={params.year} onChange={e => setParams(p => ({ ...p, year: Number(e.target.value) }))}>
+              {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          )}
+        >
+          <AreaChart data={MONTHS.map((m, i) => ({ label: m, value: monthlyBars[i] }))} format={inr} height={220} caption={`Revenue by month, ${params.year}`} />
+          <div className="pc-minis" style={{ marginTop: 14 }}>
+            <div><b>{inr(totalYearRevenue)}</b>Total Revenue</div>
+            <div><b>{inr(totalYearRevenue > 0 ? totalYearRevenue / 12 : 0)}</b>Avg/Month</div>
+            <div><b>{inr(Math.max(...monthlyBars))}</b>Best Month</div>
           </div>
+        </Panel>
 
-          {/* Right Column: Donut + Pricing */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ background: '#fff', borderRadius: 18, padding: 20, border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-              <h3 style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', marginBottom: 14 }}>Booking Status</h3>
-              <DonutChart segments={[
-                { label: 'Completed', value: statusCounts.COMPLETED, color: '#22c55e' },
-                { label: 'Confirmed', value: statusCounts.CONFIRMED, color: '#3b82f6' },
-                { label: 'Pending', value: statusCounts.PENDING, color: '#F59E0B' },
-                { label: 'Cancelled', value: statusCounts.CANCELLED, color: '#ef4444' },
-              ]} />
-            </div>
-            <div style={{ background: '#fff', borderRadius: 18, padding: 20, border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-              <h3 style={{ fontWeight: 700, fontSize: 14, color: '#0F172A', marginBottom: 12 }}>Pricing Config</h3>
-              <div style={{ padding: '12px 14px', borderRadius: 12, background: '#f3e8ff', border: '1px solid #d8b4fe', marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: '#8b5cf6', fontWeight: 600, marginBottom: 2 }}>Current Price/km</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#f97316' }}>₹{pricing?.pricePerKm || '—'}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-                <input className="input-field" style={{ flex: 1, padding: '8px 12px', fontSize: 13, borderRadius: 10 }} type="number" placeholder="New price/km" value={newPrice} onChange={e => setNewPrice(e.target.value)} />
-                <button onClick={handleSetPrice} disabled={priceLoading || !newPrice} style={{ padding: '0 14px', borderRadius: 10, fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', background: priceSuccess ? '#dcfce7' : 'linear-gradient(135deg,#f97316,#8b5cf6)', color: priceSuccess ? '#15803d' : '#fff' }}>
-                  {priceLoading ? '...' : priceSuccess ? '✓' : 'Set'}
-                </button>
-              </div>
-              <div style={{ padding: '12px 14px', borderRadius: 12, background: 'linear-gradient(135deg, #f3e8ff, #ffedd5)', border: '1px solid #d8b4fe', marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: '#8b5cf6', fontWeight: 600, marginBottom: 2 }}>Current Price/hour</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#8b5cf6' }}>₹{pricing?.pricePerHour || '—'}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input className="input-field" style={{ flex: 1, padding: '8px 12px', fontSize: 13, borderRadius: 10 }} type="number" placeholder="New price/hour" value={newHourlyPrice} onChange={e => setNewHourlyPrice(e.target.value)} />
-                <button onClick={handleSetHourlyPrice} disabled={hourlyPriceLoading || !newHourlyPrice} style={{ padding: '0 14px', borderRadius: 10, fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', background: hourlyPriceSuccess ? '#dcfce7' : 'linear-gradient(135deg,#8b5cf6,#f97316)', color: hourlyPriceSuccess ? '#15803d' : '#fff' }}>
-                  {hourlyPriceLoading ? '...' : hourlyPriceSuccess ? '✓' : 'Set'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Booking Status */}
+        <Panel span={4} title="Booking Status" meta="all bookings">
+          <Donut segments={statusSlices} label="total trips" caption="Booking status" />
+        </Panel>
 
-        {/* Bar Chart */}
-        <div style={{ background: '#fff', borderRadius: 18, padding: 24, marginBottom: 24, border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-            <h3 style={{ fontWeight: 700, fontSize: 15, color: '#0F172A' }}>Monthly Breakdown — {params.year}</h3>
-            <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', borderRadius: 10, padding: 3 }}>
-              {['daily','monthly','yearly'].map(t => (
-                <button key={t} onClick={() => setTab(t)} style={{ padding: '6px 14px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', background: tab === t ? 'linear-gradient(135deg,#8b5cf6,#f97316)' : 'transparent', color: tab === t ? '#fff' : '#64748b', textTransform: 'capitalize', transition: 'all 0.2s', boxShadow: tab === t ? '0 2px 8px rgba(139,92,246,0.25)' : 'none' }}>{t}</button>
+        {/* Monthly Breakdown */}
+        <Panel
+          span={8}
+          title={`Monthly Breakdown — ${params.year}`}
+          action={(
+            <div className="pc-chips" role="group" aria-label="Revenue period" style={{ gap: 4 }}>
+              {['daily', 'monthly', 'yearly'].map(t => (
+                <button key={t} type="button" aria-pressed={tab === t} className={toggleClass(tab === t)} style={{ textTransform: 'capitalize', minHeight: 30 }} onClick={() => setTab(t)}>{t}</button>
               ))}
             </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 180, padding: '0 4px' }}>
-            {MONTHS.map((m, i) => {
-              const pct = maxBar > 0 ? (monthlyBars[i] / maxBar) * 100 : 0
-              const isSelected = i === params.month - 1
-              return (
-                <div key={m} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  {monthlyBars[i] > 0 && (
-                    <span style={{ fontSize: 8, color: '#64748b', fontWeight: 700 }}>₹{Math.round(monthlyBars[i]).toLocaleString()}</span>
-                  )}
-                  <div style={{
-                    width: '100%', maxWidth: 40,
-                    borderRadius: '8px 8px 0 0',
-                    height: `${Math.max(pct, 4)}%`,
-                    background: isSelected ? 'linear-gradient(to top,#f97316,#8b5cf6)' : monthlyBars[i] > 0 ? 'linear-gradient(to top,#ffedd5,#fed7aa)' : '#f1f5f9',
-                    transition: 'all 0.4s cubic-bezier(0.16,1,0.3,1)',
-                    cursor: 'pointer',
-                    boxShadow: isSelected ? '0 4px 12px rgba(249,115,22,0.3)' : 'none',
-                  }}
-                    onClick={() => { setTab('monthly'); setParams(p => ({ ...p, month: i + 1 })) }}
-                  />
-                  <span style={{ fontSize: 10, color: isSelected ? '#f97316' : '#94a3b8', fontWeight: isSelected ? 700 : 400 }}>{m}</span>
-                </div>
-              )
-            })}
-          </div>
+          )}
+        >
+          <BarChart data={MONTHS.map((m, i) => ({ label: m, value: monthlyBars[i] }))} format={inr} height={180} highlight={params.month - 1} caption={`Monthly revenue, ${params.year}`} onSelect={pickMonth} />
           {/* Period stats below bar chart */}
           {!loading && data && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(140px,1fr))', gap: 10, marginTop: 20, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
+            <div className="pc-minis" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--pc-line)' }}>
               {displayFields.map(([key, val]) => (
-                <div key={key} style={{ padding: '10px 12px', borderRadius: 12, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 3, textTransform: 'capitalize' }}>{key.replace(/([A-Z])/g,' $1').trim()}</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: key.toLowerCase().includes('revenue') ? '#f97316' : '#0F172A' }}>
-                    {typeof val === 'number' && key.toLowerCase().includes('revenue') ? `₹${Number(val).toLocaleString()}` : String(val)}
-                  </div>
+                <div key={key} style={{ textTransform: 'capitalize', overflowWrap: 'anywhere' }}>
+                  <b style={{ color: key.toLowerCase().includes('revenue') ? 'var(--pc-brand-deep)' : 'var(--pc-ink)', textTransform: 'none' }}>
+                    {typeof val === 'number' && key.toLowerCase().includes('revenue') ? inr(val) : String(val)}
+                  </b>
+                  {key.replace(/([A-Z])/g, ' $1').trim()}
                 </div>
               ))}
             </div>
           )}
-          {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}><div className="spinner" /></div>}
-        </div>
+          {loading && <div style={{ marginTop: 16 }}><Skeleton rows={2} /></div>}
+        </Panel>
 
-        {/* Full Report Table + Download */}
-        <div style={{ background: '#fff', borderRadius: 18, padding: 24, border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-            <div>
-              <h3 style={{ fontWeight: 700, fontSize: 16, color: '#0F172A' }}>Complete Trip Report</h3>
-              <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{filteredBookings.length} trips found</p>
+        {/* Pricing Config */}
+        <Panel span={4} title="Pricing Config">
+          <div className="pc-rows">
+            <div style={{ padding: '4px 0 14px' }}>
+              <div style={{ fontSize: 12, color: 'var(--pc-muted)', fontWeight: 700, marginBottom: 4 }}>Current Price/km</div>
+              <div className="pc-figure" style={{ fontSize: 24, color: 'var(--pc-ink)', marginBottom: 10 }}>{rate(pricing?.pricePerKm)}</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input aria-label="New price per km" className="input-field" style={{ flex: 1, minWidth: 0 }} type="number" placeholder="New price/km" value={newPrice} onChange={e => setNewPrice(e.target.value)} />
+                <button type="button" className={priceSuccess ? 'pc-btn pc-btn-teal' : 'pc-btn'} onClick={handleSetPrice} disabled={priceLoading || !newPrice}>
+                  {priceLoading ? '...' : priceSuccess ? <><Icon name="check" size={16} />Saved</> : 'Set'}
+                </button>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {/* Status filter */}
-              {['all', 'COMPLETED', 'CONFIRMED', 'PENDING', 'CANCELLED'].map(f => (
-                <button key={f} onClick={() => setReportFilter(f)} style={{
-                  padding: '6px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none', textTransform: 'capitalize',
-                  background: reportFilter === f ? 'linear-gradient(135deg, #f97316, #8b5cf6)' : '#f1f5f9', color: reportFilter === f ? '#fff' : '#64748b',
-                  boxShadow: reportFilter === f ? '0 2px 8px rgba(249,115,22,0.25)' : 'none', transition: 'all 0.2s',
-                }}>{f === 'all' ? 'All' : f.charAt(0) + f.slice(1).toLowerCase()}</button>
-              ))}
-              {/* Download buttons */}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <button onClick={downloadReportPDF} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
-                  background: 'linear-gradient(135deg,#ef4444,#dc2626)', color: '#fff',
-                }}>
-                  📄 Report PDF
-                </button>
-                <button onClick={downloadReportExcel} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
-                  background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#fff',
-                }}>
-                  📊 Report Excel
-                </button>
-                <button onClick={downloadTripPDF} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
-                  background: 'linear-gradient(135deg,#8b5cf6,#f97316)', color: '#fff',
-                }}>
-                  📄 Trip+Driver PDF
-                </button>
-                <button onClick={downloadTripExcel} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 10, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
-                  background: 'linear-gradient(135deg,#3b82f6,#2563eb)', color: '#fff',
-                }}>
-                  📊 Trip+Driver Excel
+            <div style={{ padding: '14px 0 2px', borderTop: '1px solid var(--pc-line)' }}>
+              <div style={{ fontSize: 12, color: 'var(--pc-muted)', fontWeight: 700, marginBottom: 4 }}>Current Price/hour</div>
+              <div className="pc-figure" style={{ fontSize: 24, color: 'var(--pc-ink)', marginBottom: 10 }}>{rate(pricing?.pricePerHour)}</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input aria-label="New price per hour" className="input-field" style={{ flex: 1, minWidth: 0 }} type="number" placeholder="New price/hour" value={newHourlyPrice} onChange={e => setNewHourlyPrice(e.target.value)} />
+                <button type="button" className={hourlyPriceSuccess ? 'pc-btn pc-btn-teal' : 'pc-btn'} onClick={handleSetHourlyPrice} disabled={hourlyPriceLoading || !newHourlyPrice}>
+                  {hourlyPriceLoading ? '...' : hourlyPriceSuccess ? <><Icon name="check" size={16} />Saved</> : 'Set'}
                 </button>
               </div>
             </div>
           </div>
-          {filteredBookings.length === 0 ? (
-            <div className="empty-state" style={{ padding: '32px 0' }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-              <p style={{ color: '#64748b', fontSize: 13 }}>No bookings found for this filter</p>
+        </Panel>
+
+        {/* Full Report Table + Download */}
+        <Panel span={12} pad={false} title="Complete Trip Report" meta={`${filteredBookings.length} trips found`}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '0 20px 14px' }}>
+            {/* Status filter */}
+            <div className="pc-chips" role="group" aria-label="Filter by status" style={{ gap: 6 }}>
+              {['all', 'COMPLETED', 'CONFIRMED', 'PENDING', 'CANCELLED'].map(f => (
+                <button key={f} type="button" aria-pressed={reportFilter === f} className={toggleClass(reportFilter === f)} onClick={() => setReportFilter(f)}>
+                  {f === 'all' ? 'All' : f.charAt(0) + f.slice(1).toLowerCase()}
+                </button>
+              ))}
             </div>
+            {/* Download buttons */}
+            <div className="pc-chips" style={{ gap: 6 }}>
+              <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={downloadReportPDF}><Icon name="download" size={15} />Report PDF</button>
+              <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={downloadReportExcel}><Icon name="download" size={15} />Report Excel</button>
+              <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={downloadTripPDF}><Icon name="download" size={15} />Trip+Driver PDF</button>
+              <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={downloadTripExcel}><Icon name="download" size={15} />Trip+Driver Excel</button>
+            </div>
+          </div>
+          {filteredBookings.length === 0 ? (
+            <Empty icon="calendar" title="No bookings found for this filter">Try another status, or check back once trips are booked.</Empty>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table className="data-table animated-table">
@@ -611,7 +465,7 @@ export default function OwnerRevenue() {
                     <th>Dates</th>
                     <th>Details</th>
                     <th>Driver</th>
-                    <th>Amount</th>
+                    <th style={{ textAlign: 'right' }}>Amount</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -620,39 +474,37 @@ export default function OwnerRevenue() {
                     const drv = b.driver || driverMap[b.driverId] || {}
                     return (
                       <tr key={b.bookingId || b.id || i}>
-                        <td style={{ fontSize: 12, color: '#94a3b8' }}>{i + 1}</td>
+                        <td style={{ color: 'var(--pc-muted)' }}>{i + 1}</td>
                         <td>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A' }}>{b.userName || '—'}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8' }}>{b.userPhone || ''}</div>
+                          <div className="pc-row-title">{b.userName || '—'}</div>
+                          <small style={{ color: 'var(--pc-muted)' }}>{b.userPhone || ''}</small>
+                        </td>
+                        <td title={`${b.fromPlace || ''} → ${b.toPlace || ''}`}>
+                          <div className="pc-row-title">{shortPlace(b.fromPlace)}</div>
+                          <small style={{ color: 'var(--pc-muted)' }}>→ {shortPlace(b.toPlace)}</small>
                         </td>
                         <td>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: '#0F172A' }}>{b.fromPlace}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8' }}>→ {b.toPlace}</div>
+                          <div style={{ color: 'var(--pc-ink)' }}>{b.fromDate || '—'}</div>
+                          <small style={{ color: 'var(--pc-muted)' }}>to {b.toDate || '—'}</small>
                         </td>
                         <td>
-                          <div style={{ fontSize: 12, color: '#0F172A' }}>{b.fromDate || '—'}</div>
-                          <div style={{ fontSize: 11, color: '#94a3b8' }}>to {b.toDate || '—'}</div>
-                        </td>
-                        <td>
-                          <div style={{ fontSize: 11, color: '#475569' }}>
+                          <div style={{ fontSize: 12.5 }}>
                             {b.distanceKm ? `${Number(b.distanceKm).toFixed(1)} km` : '—'} · {b.travelDays || 0}d · {b.travelMembers || 0}p · {b.acType || '—'}
                           </div>
-                          <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                          <small style={{ color: 'var(--pc-muted)' }}>
                             {b.estimatedTimeFormatted || (b.estimatedTimeMinutes ? `${Math.floor(b.estimatedTimeMinutes / 60)}h ${b.estimatedTimeMinutes % 60}m` : '')}
-                          </div>
+                          </small>
                         </td>
                         <td>
                           {drv.name ? (
                             <div>
-                              <div style={{ fontWeight: 600, fontSize: 12, color: '#0F172A' }}>{drv.name}</div>
-                              <div style={{ fontSize: 11, color: '#94a3b8' }}>{drv.mobile || ''}</div>
+                              <div className="pc-row-title">{drv.name}</div>
+                              <small style={{ color: 'var(--pc-muted)' }}>{drv.mobile || ''}</small>
                             </div>
-                          ) : <span style={{ fontSize: 12, color: '#94a3b8' }}>Not assigned</span>}
+                          ) : <span style={{ color: 'var(--pc-muted)' }}>Not assigned</span>}
                         </td>
-                        <td style={{ fontWeight: 700, color: '#f97316', fontSize: 14, whiteSpace: 'nowrap' }}>₹{b.totalAmount?.toLocaleString() || 0}</td>
-                        <td>
-                          <span className={`badge badge-${b.status?.toLowerCase()}`} style={{ fontSize: 10 }}>{b.status}</span>
-                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--pc-ink)', whiteSpace: 'nowrap' }}>{inr(b.totalAmount)}</td>
+                        <td><StatusPill status={b.status} /></td>
                       </tr>
                     )
                   })}
@@ -660,7 +512,7 @@ export default function OwnerRevenue() {
               </table>
             </div>
           )}
-        </div>
+        </Panel>
       </div>
     </DashboardLayout>
   )

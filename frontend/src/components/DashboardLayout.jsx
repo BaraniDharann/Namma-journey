@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getNotifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } from '../utils/api'
+import Icon, { navIcon, navTint } from './dash/Icon'
+import { TipLayer } from './dash/ui'
 
 function timeAgo(dateStr) {
   const now = new Date()
@@ -22,29 +24,26 @@ const BOOKING_ROUTES = {
   ROLE_OWNER: '/owner/bookings',
 }
 
+const ROLE_LABEL = { ROLE_USER: 'Traveller', ROLE_DRIVER: 'Driver', ROLE_OWNER: 'Owner' }
+
+/**
+ * The Postcard shell every owner, driver and traveller page renders inside: teal rail with
+ * line icons (mapped from each page's routes, so pages keep passing their nav items as is),
+ * a top bar with notifications, and a drawer on narrow screens.
+ */
 export default function DashboardLayout({ children, navItems, role }) {
   const { logout, user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [railOpen, setRailOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024)
   const dropdownRef = useRef(null)
 
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 1024)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-
-  const roleConfig = {
-    ROLE_USER:   { label: 'Traveller', color: '#f97316', bg: '#fff7ed', icon: '🧳' },
-    ROLE_DRIVER: { label: 'Driver',    color: '#3b82f6', bg: '#eff6ff', icon: '🚗' },
-    ROLE_OWNER:  { label: 'Owner',     color: '#8b5cf6', bg: '#f5f3ff', icon: '👑' },
-  }
-  const rc = roleConfig[role] || roleConfig.ROLE_USER
+  const roleLabel = ROLE_LABEL[role] || 'Traveller'
+  const displayName = user?.name || user?.email || roleLabel
+  const current = navItems.find((n) => n.path === location.pathname)
 
   const handleLogout = () => { logout(); navigate('/') }
 
@@ -71,20 +70,28 @@ export default function DashboardLayout({ children, navItems, role }) {
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setDropdownOpen(false)
-      }
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setDropdownOpen(false)
+    }
+    const handleKey = (e) => {
+      if (e.key === 'Escape') { setDropdownOpen(false); setRailOpen(false) }
     }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKey)
+    }
   }, [])
+
+  // A route change from inside the drawer should close it.
+  useEffect(() => { setRailOpen(false) }, [location.pathname])
 
   const handleNotificationClick = async (notif) => {
     if (!notif.read) {
       try {
         await markNotificationAsRead(notif.id)
-        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n))
-        setUnreadCount(prev => Math.max(0, prev - 1))
+        setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)))
+        setUnreadCount((prev) => Math.max(0, prev - 1))
       } catch { /* already surfaced by the api error toast */ }
     }
     if (notif.bookingId && BOOKING_ROUTES[user?.role]) {
@@ -98,124 +105,105 @@ export default function DashboardLayout({ children, navItems, role }) {
     try {
       const recipientId = user.role === 'ROLE_OWNER' ? 'owner' : String(user.userId)
       await markAllNotificationsAsRead(recipientId, user.role)
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
       setUnreadCount(0)
     } catch { /* already surfaced by the api error toast */ }
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }} className="gradient-bg-animated">
-      {sidebarOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', zIndex: 20 }}
-          onClick={() => setSidebarOpen(false)} />
-      )}
+    <div className="pc pc-app" data-role={role}>
+      {railOpen && <div className="pc-scrim" onClick={() => setRailOpen(false)} aria-hidden="true" />}
 
-      <aside style={{
-        position: isMobile ? 'fixed' : 'static',
-        top: 0, left: 0, bottom: 0,
-        width: 240,
-        background: '#fff',
-        borderRight: '1px solid #e2e8f0',
-        display: 'flex',
-        flexDirection: 'column',
-        zIndex: 30,
-        transform: sidebarOpen || !isMobile ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 0.25s ease',
-        flexShrink: 0,
-      }}>
-        <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f1f5f9' }}>
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#f97316,#ea580c)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🚗</div>
-            <div>
-              <div style={{ fontFamily: 'Poppins', fontWeight: 800, fontSize: 16, color: '#0f172a', lineHeight: 1.2 }}>Namma</div>
-              <div style={{ fontSize: 11, color: '#f97316', fontWeight: 600 }}>Journey</div>
-            </div>
-          </Link>
+      <aside className={`pc-rail${railOpen ? ' is-open' : ''}`} aria-label="Main">
+        <Link to="/" className="pc-logo">
+          <span className="pc-logo-mark"><Icon name="car" size={19} /></span>
+          <span><b>Namma</b><small>Journey</small></span>
+        </Link>
+
+        <div className="pc-role">
+          <span className="pc-role-av">{String(displayName).trim().charAt(0).toUpperCase()}</span>
+          <span><b title={displayName}>{displayName}</b><small>{roleLabel}</small></span>
         </div>
 
-        <div style={{ margin: '12px 16px', padding: '12px 14px', borderRadius: 12, background: rc.bg, border: `1px solid ${rc.color}20` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: rc.color + '20', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{rc.icon}</div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{rc.label}</div>
-            </div>
-          </div>
-        </div>
-
-        <nav style={{ flex: 1, padding: '8px 12px', overflowY: 'auto' }}>
-          {navItems.map(item => (
-            <Link key={item.path} to={item.path}
-              className={`sidebar-link ${location.pathname === item.path ? 'active' : ''}`}
-              onClick={() => setSidebarOpen(false)}>
-              <span style={{ fontSize: 18 }}>{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
-          ))}
+        <nav className="pc-nav">
+          {navItems.map((item) => {
+            const on = location.pathname === item.path
+            return (
+              <Link key={item.path} to={item.path} className={on ? 'is-on' : undefined} aria-current={on ? 'page' : undefined}>
+                <span className={`pc-navic pc-tint-${navTint(item.path)}`}><Icon name={navIcon(item.path)} size={18} /></span>
+                <span>{item.label}</span>
+              </Link>
+            )
+          })}
         </nav>
 
-        <div style={{ padding: '12px', borderTop: '1px solid #f1f5f9' }}>
-          <button onClick={handleLogout} className="sidebar-link" style={{ width: '100%', color: '#ef4444', background: 'none', border: 'none' }}>
-            <span style={{ fontSize: 18 }}>🚪</span>
+        <div className="pc-rail-foot">
+          <button type="button" onClick={handleLogout}>
+            <Icon name="logout" />
             <span>Logout</span>
           </button>
         </div>
       </aside>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-        <header className="dashboard-topbar" style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '0 24px', height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <button className="hamburger-btn" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, color: '#64748b', display: 'block' }}
-            onClick={() => setSidebarOpen(s => !s)}>☰</button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="notification-wrapper" ref={dropdownRef}>
-              <button className="notification-bell" onClick={() => setDropdownOpen(prev => !prev)}>
-                🔔
-                {unreadCount > 0 && (
-                  <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-                )}
-              </button>
-              {dropdownOpen && (
-                <div className="notification-dropdown">
-                  <div className="notification-header">
-                    <h3>Notifications</h3>
-                    {unreadCount > 0 && (
-                      <button className="notification-mark-all" onClick={handleMarkAllRead}>
-                        Mark all as read
-                      </button>
-                    )}
-                  </div>
-                  <div className="notification-list">
-                    {notifications.length === 0 ? (
-                      <div className="notification-empty">No notifications</div>
-                    ) : (
-                      notifications.map(notif => (
-                        <div
-                          key={notif.id}
-                          className={`notification-item ${!notif.read ? 'unread' : ''}`}
-                          onClick={() => handleNotificationClick(notif)}
-                        >
-                          {!notif.read && <div className="notification-unread-dot" />}
-                          <div className="notification-content">
-                            <div className="notification-title">{notif.title}</div>
-                            <div className="notification-message">{notif.message}</div>
-                            <div className="notification-time">{timeAgo(notif.createdAt || notif.timestamp)}</div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+      <div className="pc-body">
+        <header className="pc-top">
+          <button type="button" className="pc-iconbtn pc-menu" onClick={() => setRailOpen((s) => !s)} aria-label="Open menu" aria-expanded={railOpen}>
+            <Icon name="menu" />
+          </button>
+          <span className="pc-top-title">{current?.label || roleLabel}</span>
+          <span className="pc-top-sp" />
+
+          <div className="pc-notes" ref={dropdownRef}>
+            <button
+              type="button"
+              className="pc-iconbtn notification-bell"
+              onClick={() => setDropdownOpen((prev) => !prev)}
+              aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+              aria-expanded={dropdownOpen}
+            >
+              <Icon name="bell" />
+              {unreadCount > 0 && <span className="pc-count notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+            </button>
+            {dropdownOpen && (
+              <div className="pc-notes-panel notification-dropdown" role="dialog" aria-label="Notifications">
+                <div className="pc-notes-hd">
+                  <h3>Notifications</h3>
+                  {unreadCount > 0 && <button type="button" onClick={handleMarkAllRead}>Mark all as read</button>}
                 </div>
-              )}
-            </div>
-            <div style={{ padding: '5px 12px', borderRadius: 20, background: rc.bg, color: rc.color, fontSize: 12, fontWeight: 700, border: `1px solid ${rc.color}30` }}>
-              {rc.label}
-            </div>
+                <div className="pc-notes-list">
+                  {notifications.length === 0 ? (
+                    <div className="pc-notes-empty">You&apos;re all caught up.</div>
+                  ) : (
+                    notifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        className={`pc-note${!notif.read ? ' is-unread' : ''}`}
+                        onClick={() => handleNotificationClick(notif)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleNotificationClick(notif) }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <span className="pc-note-dot" />
+                        <div>
+                          <b>{notif.title}</b>
+                          <p>{notif.message}</p>
+                          <small>{timeAgo(notif.createdAt || notif.timestamp)}</small>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
+          <span className="pc-rolechip">{roleLabel}</span>
         </header>
 
-        <main className="dashboard-content" style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+        <main className="pc-main dashboard-content">
           {children}
         </main>
       </div>
+      <TipLayer />
     </div>
   )
 }

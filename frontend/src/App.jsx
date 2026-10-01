@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Toaster } from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { CelebrationProvider } from './components/celebrate/Celebration'
 
 // Lazy load all pages for faster initial load
 const LandingPage     = lazy(() => import('./pages/LandingPage'))
@@ -122,7 +123,9 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <AppRoutes />
+        <CelebrationProvider>
+          <AppRoutes />
+        </CelebrationProvider>
         <Toaster
           position="top-right"
           toastOptions={{

@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext'
 import { createBooking, getPublicPricing } from '../../utils/api'
 import PlaceAutocomplete from '../PlaceAutocomplete'
 import { EASE } from '../motion/primitives'
+import Icon from '../dash/Icon'
+import { useCelebrate } from '../celebrate/Celebration'
 
 const TEMPLE_SHORTCUTS = ['Tirupati Balaji', 'Shirdi Sai Baba', 'Vaishno Devi', 'Kedarnath', 'Badrinath']
 const HOURS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 24]
@@ -17,6 +19,7 @@ const EMPTY = {
 export default function QuickBooking() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const celebrate = useCelebrate()
   const [qb, setQb] = useState(EMPTY)
   const [pricing, setPricing] = useState({ pricePerHour: 150 })
   const [loading, setLoading] = useState(false)
@@ -56,6 +59,12 @@ export default function QuickBooking() {
         bookingType: 'HOUR_BASED', bookingHours: qb.bookingHours,
       })
       setSuccess(res.data)
+      celebrate({
+        title: 'Your ride is booked',
+        message: `${res.data?.fromPlace || qb.fromPlace} → ${res.data?.toPlace || qb.toPlace} · ${qb.bookingHours}h. A verified driver will be assigned shortly.`,
+        actionLabel: 'View bookings',
+        onAction: () => navigate('/user/bookings'),
+      })
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -88,7 +97,7 @@ export default function QuickBooking() {
               animate={{ scale: 1, rotate: 0 }}
               transition={{ type: 'spring', stiffness: 220, damping: 14 }}
             >
-              🎉
+              <Icon name="check" size={30} />
             </motion.div>
             <h3>Your ride is booked</h3>
             <p className="qb-done-sub">A verified driver will be assigned shortly.</p>
@@ -97,7 +106,7 @@ export default function QuickBooking() {
                 ['From', success.fromPlace],
                 ['To', success.toPlace],
                 ['Hours', `${success.bookingHours}h`],
-                ['Amount', `₹${success.totalAmount?.toLocaleString('en-IN')}`],
+                ['Amount', `₹${Math.round(Number(success.totalAmount) || 0).toLocaleString('en-IN')}`],
               ].map(([k, v], i) => (
                 <motion.div
                   key={k}
@@ -152,7 +161,7 @@ export default function QuickBooking() {
                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
                   transition={{ duration: 0.3, ease: EASE }}
                 >
-                  <span className="qb-error-inner">⚠️ {error}</span>
+                  <span className="qb-error-inner"><Icon name="alert" size={16} /> {error}</span>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -182,7 +191,7 @@ export default function QuickBooking() {
                       className={`qb-chip${qb.toPlace === t ? ' is-on' : ''}`}
                       onClick={() => setQb((p) => ({ ...p, toPlace: t, toLat: null, toLon: null }))}
                     >
-                      🛕 {t}
+                      <Icon name="temple" size={14} /> {t}
                     </button>
                   ))}
                 </div>
@@ -250,7 +259,7 @@ export default function QuickBooking() {
                         className={`qb-toggle-btn${qb.acType === type ? ' is-on' : ''}`}
                         onClick={() => setQb((p) => ({ ...p, acType: type }))}
                       >
-                        {type === 'AC' ? '❄️ AC' : '🌬️ Non-AC'}
+                        {type === 'AC' ? 'AC' : 'Non-AC'}
                       </button>
                     ))}
                   </div>
@@ -265,7 +274,7 @@ export default function QuickBooking() {
                 whileHover={{ scale: loading ? 1 : 1.015 }}
                 whileTap={{ scale: loading ? 1 : 0.985 }}
               >
-                {loading ? 'Booking…' : '🚀 Confirm booking'}
+                {loading ? 'Booking…' : <>Confirm booking <Icon name="arrow" size={17} /></>}
               </motion.button>
               <p className="qb-note">Free to sign up · No hidden charges · Cancel anytime</p>
             </div>

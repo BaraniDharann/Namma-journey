@@ -160,6 +160,8 @@ export const confirmBooking = (userId, bookingId) => api.post(`/user/${userId}/b
 export const submitReview = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/reviews`, data).then(res => { invalidateCache('reviews'); return res })
 export const initiatePayment = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/payment`, data).then(res => { invalidateCache('payments'); return res })
 export const getUserPayments = (userId) => cachedGet(`/user/${userId}/payments`)
+/** Uncached and silent: for the background check that celebrates a verified payment. */
+export const pollUserPayments = (userId) => api.get(`/user/${userId}/payments`, { _silent: true })
 export const getTripSummary = (userId, bookingId) => api.get(`/user/${userId}/bookings/${bookingId}/summary`)
 
 // Driver APIs

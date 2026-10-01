@@ -839,3 +839,104 @@
     transition-duration: .01ms !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Road-trip story — the user dashboard's opening scene.
+   Four friends, one car, one polaroid. Driven by RoadTripStory.jsx.
+   ═══════════════════════════════════════════════════════════════ */
+
+.rts-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+}
+.rts-head h1 {
+  font-family: 'Poppins', sans-serif; font-weight: 800;
+  font-size: clamp(1.5rem, 2.6vw, 1.95rem); line-height: 1.15; letter-spacing: -.02em;
+  color: #0f172a; text-wrap: balance;
+}
+.rts-head p { margin-top: 4px; font-size: 15px; color: #64748b; }
+
+.rts {
+  position: relative; isolation: isolate; overflow: hidden;
+  margin-bottom: 26px; border-radius: 22px;
+  background: #fff4ea;
+  box-shadow: 0 22px 44px -28px rgba(15, 23, 42, .55), 0 2px 6px -2px rgba(15, 23, 42, .08);
+}
+.rts-shot { position: relative; aspect-ratio: 1200 / 380; transform-origin: 50% 50%; }
+.rts-svg { display: block; width: 100%; height: 100%; }
+@media (max-width: 640px) {
+  .rts { border-radius: 18px; }
+  .rts-shot { aspect-ratio: 704 / 380; }
+  .rts-chip-slot { top: 12px; bottom: auto; left: 12px; }
+  .rts-chip { font-size: 12px; padding: 6px 12px; }
+  .rts-frame { border-width: 7px; border-bottom-width: 34px; }
+  .rts-frame-cap { bottom: -27px; font-size: 13px; }
+}
+
+.rts-bubble { filter: drop-shadow(0 6px 10px rgba(15, 23, 42, .18)); }
+.rts-seat { transition: opacity .3s ease; }
+
+.rts-flash { position: absolute; inset: 0; background: #fff; pointer-events: none; }
+
+/* the polaroid the selfie lands in */
+.rts-frame {
+  position: absolute; inset: 0; pointer-events: none;
+  border: 10px solid #fff; border-bottom-width: 42px; border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .08);
+}
+.rts-frame-cap {
+  position: absolute; left: 4px; right: 4px; bottom: -32px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 15px; color: #0f172a;
+  white-space: nowrap;
+}
+.rts-frame-brand { font-size: 12px; font-weight: 800; color: #ea580c; }
+
+.rts-chip-slot { position: absolute; left: 16px; bottom: 16px; pointer-events: none; }
+.rts-chip {
+  display: inline-block; padding: 7px 14px; border-radius: 999px;
+  background: rgba(255, 255, 255, .95); color: #0f172a;
+  font-size: 13px; font-weight: 700; line-height: 1.2;
+  box-shadow: 0 8px 18px -10px rgba(15, 23, 42, .6);
+}
+
+.rts-progress {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: #f97316; transform-origin: 0 50%; opacity: .85;
+}
+
+.rts-ctrl {
+  position: absolute; top: 12px; right: 12px; z-index: 2;
+  width: 36px; height: 36px; border: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: rgba(255, 255, 255, .92); color: #0f172a;
+  box-shadow: 0 6px 16px -8px rgba(15, 23, 42, .55);
+  transition: transform .25s cubic-bezier(.16, 1, .3, 1), background .2s ease;
+}
+.rts-ctrl:hover { transform: scale(1.08); background: #fff; }
+.rts-ctrl:focus-visible { outline: 2px solid #f97316; outline-offset: 3px; }
+
+/* motion vocabulary */
+.rts-walking .rts-leg-a { animation: rts-swing-a .42s ease-in-out infinite alternate; }
+.rts-walking .rts-leg-b { animation: rts-swing-b .42s ease-in-out infinite alternate; }
+.rts-walking .rts-bob { animation: rts-bob .21s ease-in-out infinite alternate; }
+.rts-driving .rts-wheel { animation: rts-spin .45s linear infinite; }
+.rts-driving .rts-carbody { animation: rts-rumble .3s ease-in-out infinite alternate; }
+.rts-talk { transform-box: fill-box; transform-origin: center; animation: rts-mouth .17s ease-in-out infinite alternate; }
+.rts-heart { animation: rts-rise 1.9s cubic-bezier(.16, 1, .3, 1) both; }
+.rts.is-paused * { animation-play-state: paused !important; }
+
+@keyframes rts-swing-a { from { transform: rotate(18deg); } to { transform: rotate(-18deg); } }
+@keyframes rts-swing-b { from { transform: rotate(-18deg); } to { transform: rotate(18deg); } }
+@keyframes rts-bob { to { transform: translateY(-3px); } }
+@keyframes rts-spin { to { transform: rotate(360deg); } }
+@keyframes rts-rumble { to { transform: translateY(-1.6px); } }
+@keyframes rts-mouth { from { transform: scaleY(.35); } to { transform: scaleY(1.15); } }
+@keyframes rts-rise {
+  from { opacity: 0; transform: translateY(10px) scale(.4); }
+  25% { opacity: 1; }
+  to { opacity: 0; transform: translateY(-72px) scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rts * { animation: none !important; transition: none !important; }
+}

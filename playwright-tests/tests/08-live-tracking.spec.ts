@@ -47,7 +47,7 @@ async function tctx(label: string): Promise<Ctxs> {
 
 /**
  * Earlier specs leave several trackable bookings behind. Drive every one of them to a
- * terminal state so exactly one "📍 Track" button exists on each page and the test can
+ * terminal state so exactly one "Track" button exists on each page and the test can
  * click it unambiguously.
  */
 async function quiesceOtherTrips(c: Ctxs, keepBookingId?: string) {
@@ -124,7 +124,7 @@ async function waitForStoredLocation(bookingId: string, timeoutMs = 45000) {
  * button — robust no matter how many other bookings are on the page.
  */
 async function openTracking(page: Page, heading: string, label: string) {
-  const anyTrack = page.getByRole('button', { name: '📍 Track' });
+  const anyTrack = page.getByRole('button', { name: 'Track', exact: true });
 
   // The list is fetched after mount. Wait on the header count, which renders for any
   // status — a Track button may legitimately be absent from the first page.
@@ -154,7 +154,7 @@ async function openTracking(page: Page, heading: string, label: string) {
   }
 
   await expect(card, `no trackable booking card found for "${label}"`).toBeVisible({ timeout: 30000 });
-  await card.getByRole('button', { name: '📍 Track' }).click();
+  await card.getByRole('button', { name: 'Track', exact: true }).click();
   await expect(page.getByText(heading, { exact: false })).toBeVisible({ timeout: 15000 });
   await expect(page.locator('.leaflet-container').first()).toBeVisible({ timeout: 20000 });
 }

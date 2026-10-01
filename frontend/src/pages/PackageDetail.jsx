@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getPublicPackageById, bookPackage } from '../utils/api'
+import { useCelebrate } from '../components/celebrate/Celebration'
 
 const getCategoryColor = (cat) => {
   const colors = { TEMPLE: '#f59e0b', HONEYMOON: '#ec4899', ADVENTURE: '#10b981', HILL_STATION: '#f97316', BEACH: '#06b6d4', HERITAGE: '#8b5cf6', WILDLIFE: '#84cc16', PILGRIMAGE: '#f97316', FAMILY: '#3b82f6', STATE_SPECIAL: '#ef4444' }
@@ -16,6 +17,7 @@ export default function PackageDetail() {
   const { id } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
+  const celebrate = useCelebrate()
   const [pkg, setPkg] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showBooking, setShowBooking] = useState(false)
@@ -48,6 +50,12 @@ export default function PackageDetail() {
       await bookPackage(user.userId, { ...booking, packageId: pkg.id })
       setSuccess(true)
       setShowBooking(false)
+      celebrate({
+        title: 'Package booked',
+        message: `${pkg.name} for ${booking.numberOfPersons} ${Number(booking.numberOfPersons) === 1 ? 'person' : 'people'}. We'll confirm it shortly.`,
+        actionLabel: 'View my packages',
+        onAction: () => navigate('/user/package-bookings'),
+      })
     } catch (err) {
       setError(err.response?.data?.message || 'Booking failed')
     }
