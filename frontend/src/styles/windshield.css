@@ -78,7 +78,7 @@
 .rw-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
 .rw-btn-light { background: #fff; color: var(--ink); box-shadow: 0 14px 26px -18px rgba(9, 32, 34, .8); }
 .rw-btn-light:hover { box-shadow: 0 20px 34px -18px rgba(9, 32, 34, .9); }
-.rw-book .qb { max-height: min(68vh, 640px); box-shadow: 0 40px 70px -34px rgba(9, 32, 34, .75); }
+.rw-book .qb { box-shadow: 0 40px 70px -34px rgba(9, 32, 34, .75); }
 .rw-book-m { padding: 28px 0 8px; background: var(--cream); }
 .rw-book-m .qb { max-height: none; box-shadow: 0 24px 50px -36px rgba(15, 42, 43, .6); }
 .ws .qb-submit { display: flex; align-items: center; justify-content: center; gap: 8px; }

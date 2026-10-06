@@ -72,6 +72,10 @@ export default function PlaceAutocomplete({ value, onChange, placeholder, requir
     if (!value && query) {
       setQuery('')
       setSelected(false)
+    } else if (value && value !== query) {
+      // Set from outside (a shortcut chip, an edit form): show it, and treat it as chosen.
+      setQuery(value)
+      setSelected(true)
     }
   }, [value])
 

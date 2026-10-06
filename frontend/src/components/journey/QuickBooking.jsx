@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../../context/AuthContext'
@@ -8,12 +8,40 @@ import { EASE } from '../motion/primitives'
 import Icon from '../dash/Icon'
 import { useCelebrate } from '../celebrate/Celebration'
 
-const TEMPLE_SHORTCUTS = ['Tirupati Balaji', 'Shirdi Sai Baba', 'Vaishno Devi', 'Kedarnath', 'Badrinath']
-const HOURS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 24]
+// Shortcuts carry their coordinates, so picking one is a complete destination.
+const TEMPLES = [
+  { name: 'Tirupati Balaji', short: 'Tirupati', lat: 13.6833, lon: 79.3474 },
+  { name: 'Shirdi Sai Baba', short: 'Shirdi', lat: 19.7667, lon: 74.4771 },
+  { name: 'Vaishno Devi', short: 'Vaishno Devi', lat: 33.0308, lon: 74.9490 },
+  { name: 'Kedarnath', short: 'Kedarnath', lat: 30.7352, lon: 79.0669 },
+]
 
 const EMPTY = {
   fromPlace: '', toPlace: '', fromLat: null, fromLon: null, toLat: null, toLon: null,
-  fromDate: '', toDate: '', travelMembers: 1, acType: 'AC', bookingHours: 2,
+  travelMembers: 1, acType: 'AC', bookingHours: 2,
+}
+
+/** Local calendar date n days from today, as yyyy-mm-dd (not UTC, which is yesterday before 5:30 IST). */
+function dayAfter(n) {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const shortDate = (iso) => new Date(iso + 'T00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+
+/** A compact − value + control, so a number never needs a dropdown or a row of chips. */
+function Stepper({ label, value, min, max, unit = '', onChange }) {
+  const id = `qb-${label.toLowerCase()}`
+  return (
+    <div className="qb-field">
+      <span className="qb-label" id={id}>{label}</span>
+      <div className="qb-step" role="group" aria-labelledby={id}>
+        <button type="button" aria-label={`Fewer ${label.toLowerCase()}`} disabled={value <= min} onClick={() => onChange(Math.max(min, value - 1))}>−</button>
+        <output aria-live="polite">{value}{unit && <small>{unit}</small>}</output>
+        <button type="button" aria-label={`More ${label.toLowerCase()}`} disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))}>+</button>
+      </div>
+    </div>
+  )
 }
 
 export default function QuickBooking() {
@@ -25,12 +53,25 @@ export default function QuickBooking() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(null)
+  // An hourly ride happens on one day: today unless they say otherwise.
+  const [when, setWhen] = useState('today')
+  const [laterDate, setLaterDate] = useState('')
+  const dateRef = useRef(null)
+  const travelDate = when === 'today' ? dayAfter(0) : when === 'tomorrow' ? dayAfter(1) : laterDate
+
+  const openPicker = () => {
+    const el = dateRef.current
+    if (!el) return
+    try { el.showPicker() } catch { el.focus() }
+    if (laterDate) setWhen('later')
+  }
 
   useEffect(() => {
     getPublicPricing().then((res) => { if (res.data) setPricing(res.data) }).catch(() => {})
   }, [])
 
-  const estimate = (pricing.pricePerHour || 150) * qb.bookingHours
+  const rate = pricing.pricePerHour || 150
+  const estimate = rate * qb.bookingHours
 
   const submit = async () => {
     if (!user) {
@@ -41,8 +82,8 @@ export default function QuickBooking() {
       setError('Pick both locations from the dropdown suggestions.')
       return
     }
-    if (!qb.fromDate || !qb.toDate) {
-      setError('Choose your travel dates.')
+    if (!travelDate) {
+      setError('Pick the day you want to travel.')
       return
     }
     setLoading(true)
@@ -54,7 +95,7 @@ export default function QuickBooking() {
         fromPlace: qb.fromPlace, toPlace: qb.toPlace,
         fromLat: qb.fromLat, fromLon: qb.fromLon,
         toLat: qb.toLat, toLon: qb.toLon,
-        fromDate: qb.fromDate, toDate: qb.toDate,
+        fromDate: travelDate, toDate: travelDate,
         travelMembers: qb.travelMembers, acType: qb.acType,
         bookingType: 'HOUR_BASED', bookingHours: qb.bookingHours,
       })
@@ -75,8 +116,6 @@ export default function QuickBooking() {
       setLoading(false)
     }
   }
-
-  const today = new Date().toISOString().split('T')[0]
 
   return (
     <div className="qb">
@@ -127,7 +166,7 @@ export default function QuickBooking() {
               <button
                 type="button"
                 className="qb-reset"
-                onClick={() => { setSuccess(null); setQb(EMPTY) }}
+                onClick={() => { setSuccess(null); setQb(EMPTY); setWhen('today'); setLaterDate('') }}
               >
                 New booking
               </button>
@@ -143,12 +182,12 @@ export default function QuickBooking() {
           >
             <div className="qb-head">
               <div>
-                <span className="qb-eyebrow">Plan your leg of the journey</span>
                 <h3>Quick booking</h3>
+                <p className="qb-sub">An hourly ride with a verified driver</p>
               </div>
-              <div className="qb-price">
+              <div className="qb-price" aria-live="polite">
                 <b>₹{estimate.toLocaleString('en-IN')}</b>
-                <span>est. {qb.bookingHours}h</span>
+                <span>{qb.bookingHours} h × ₹{rate}</span>
               </div>
             </div>
 
@@ -167,100 +206,70 @@ export default function QuickBooking() {
             </AnimatePresence>
 
             <div className="qb-fields">
-              <div className="qb-field">
-                <label>Pickup</label>
-                <PlaceAutocomplete
-                  value={qb.fromPlace}
-                  onChange={({ name, lat, lon }) => setQb((p) => ({ ...p, fromPlace: name, fromLat: lat, fromLon: lon }))}
-                  placeholder="Your city, town or area…"
-                />
-              </div>
-
-              <div className="qb-field">
-                <label>Destination</label>
-                <PlaceAutocomplete
-                  value={qb.toPlace}
-                  onChange={({ name, lat, lon }) => setQb((p) => ({ ...p, toPlace: name, toLat: lat, toLon: lon }))}
-                  placeholder="Temple, city or destination…"
-                />
-                <div className="qb-chips qb-chips-row">
-                  {TEMPLE_SHORTCUTS.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      className={`qb-chip${qb.toPlace === t ? ' is-on' : ''}`}
-                      onClick={() => setQb((p) => ({ ...p, toPlace: t, toLat: null, toLon: null }))}
-                    >
-                      <Icon name="temple" size={14} /> {t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="qb-field">
-                <label>Hours</label>
-                <div className="qb-chips qb-chips-row">
-                  {HOURS.map((h) => (
-                    <button
-                      key={h}
-                      type="button"
-                      className={`qb-chip qb-chip-hour${qb.bookingHours === h ? ' is-on' : ''}`}
-                      onClick={() => setQb((p) => ({ ...p, bookingHours: h }))}
-                    >
-                      {h}h
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="qb-row">
-                <div className="qb-field">
-                  <label>From date</label>
-                  <input
-                    type="date"
-                    className="qb-input"
-                    value={qb.fromDate}
-                    min={today}
-                    onChange={(e) => setQb((p) => ({ ...p, fromDate: e.target.value }))}
+              {/* the route: pickup and destination joined by one line, like a trip */}
+              <div className="qb-route">
+                <div className="qb-stop">
+                  <span className="qb-dot" aria-hidden />
+                  <PlaceAutocomplete
+                    value={qb.fromPlace}
+                    onChange={({ name, lat, lon }) => setQb((p) => ({ ...p, fromPlace: name, fromLat: lat, fromLon: lon }))}
+                    placeholder="Pickup: city, town or area"
                   />
                 </div>
-                <div className="qb-field">
-                  <label>To date</label>
-                  <input
-                    type="date"
-                    className="qb-input"
-                    value={qb.toDate}
-                    min={qb.fromDate || today}
-                    onChange={(e) => setQb((p) => ({ ...p, toDate: e.target.value }))}
+                <div className="qb-stop">
+                  <span className="qb-dot qb-dot-end" aria-hidden><Icon name="pin" size={13} weight="fill" /></span>
+                  <PlaceAutocomplete
+                    value={qb.toPlace}
+                    onChange={({ name, lat, lon }) => setQb((p) => ({ ...p, toPlace: name, toLat: lat, toLon: lon }))}
+                    placeholder="Where to? Temple, city or place"
                   />
                 </div>
               </div>
-
-              <div className="qb-row">
-                <div className="qb-field">
-                  <label>Travellers</label>
-                  <select
-                    className="qb-input"
-                    value={qb.travelMembers}
-                    onChange={(e) => setQb((p) => ({ ...p, travelMembers: Number(e.target.value) }))}
+              <div className="qb-quick" aria-label="Popular destinations">
+                {TEMPLES.map((t) => (
+                  <button
+                    key={t.name}
+                    type="button"
+                    className={`qb-chip${qb.toPlace === t.name ? ' is-on' : ''}`}
+                    onClick={() => setQb((p) => ({ ...p, toPlace: t.name, toLat: t.lat, toLon: t.lon }))}
                   >
-                    {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-                      <option key={n} value={n}>{n} {n > 1 ? 'people' : 'person'}</option>
-                    ))}
-                  </select>
+                    {t.short}
+                  </button>
+                ))}
+              </div>
+
+              <div className="qb-field">
+                <span className="qb-label" id="qb-when">When</span>
+                <div className="qb-seg qb-seg-3" role="group" aria-labelledby="qb-when">
+                  <button type="button" aria-pressed={when === 'today'} onClick={() => setWhen('today')}>Today</button>
+                  <button type="button" aria-pressed={when === 'tomorrow'} onClick={() => setWhen('tomorrow')}>Tomorrow</button>
+                  <button type="button" aria-pressed={when === 'later'} onClick={openPicker} className="qb-seg-date">
+                    <Icon name="calendar" size={15} />
+                    {when === 'later' && laterDate ? shortDate(laterDate) : 'Later'}
+                    <input
+                      ref={dateRef}
+                      type="date"
+                      className="qb-date-native"
+                      tabIndex={-1}
+                      aria-label="Pick a travel date"
+                      min={dayAfter(1)}
+                      value={laterDate}
+                      onChange={(e) => { if (e.target.value) { setLaterDate(e.target.value); setWhen('later') } }}
+                    />
+                  </button>
                 </div>
+              </div>
+
+              <div className="qb-trio">
+                <Stepper label="Hours" value={qb.bookingHours} min={1} max={24} unit="h"
+                  onChange={(v) => setQb((p) => ({ ...p, bookingHours: v }))} />
+                <Stepper label="People" value={qb.travelMembers} min={1} max={20}
+                  onChange={(v) => setQb((p) => ({ ...p, travelMembers: v }))} />
                 <div className="qb-field">
-                  <label>Vehicle</label>
-                  <div className="qb-toggle">
-                    {['AC', 'NON_AC'].map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        className={`qb-toggle-btn${qb.acType === type ? ' is-on' : ''}`}
-                        onClick={() => setQb((p) => ({ ...p, acType: type }))}
-                      >
-                        {type === 'AC' ? 'AC' : 'Non-AC'}
-                      </button>
+                  <span className="qb-label" id="qb-ac">Car</span>
+                  <div className="qb-seg" role="group" aria-labelledby="qb-ac">
+                    {[['AC', 'AC'], ['NON_AC', 'Non-AC']].map(([v, l]) => (
+                      <button key={v} type="button" aria-pressed={qb.acType === v} onClick={() => setQb((p) => ({ ...p, acType: v }))}>{l}</button>
                     ))}
                   </div>
                 </div>
@@ -276,7 +285,7 @@ export default function QuickBooking() {
               >
                 {loading ? 'Booking…' : <>Confirm booking <Icon name="arrow" size={17} /></>}
               </motion.button>
-              <p className="qb-note">Free to sign up · No hidden charges · Cancel anytime</p>
+              <p className="qb-note">No hidden charges · Cancel anytime</p>
             </div>
           </motion.div>
         )}
