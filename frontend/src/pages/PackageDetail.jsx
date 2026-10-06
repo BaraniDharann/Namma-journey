@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getPublicPackageById, bookPackage } from '../utils/api'
 import { useCelebrate } from '../components/celebrate/Celebration'
+import Icon from '../components/dash/Icon'
 
 const getCategoryColor = (cat) => {
   const colors = { TEMPLE: '#f59e0b', HONEYMOON: '#ec4899', ADVENTURE: '#10b981', HILL_STATION: '#f97316', BEACH: '#06b6d4', HERITAGE: '#8b5cf6', WILDLIFE: '#84cc16', PILGRIMAGE: '#f97316', FAMILY: '#3b82f6', STATE_SPECIAL: '#ef4444' }
@@ -184,12 +185,12 @@ export default function PackageDetail() {
                 {[
                   { ok: pkg.foodIncluded, label: '🍽️ Food', detail: pkg.foodDetails },
                   { ok: pkg.accommodationIncluded, label: '🏨 Stay', detail: pkg.accommodationDetails },
-                  { ok: pkg.transportIncluded, label: '🚗 Transport', detail: pkg.transportDetails },
+                  { ok: pkg.transportIncluded, label: <><Icon name="car" size={18} />Transport</>, detail: pkg.transportDetails },
                   { ok: pkg.tollFree, label: '🛣️ Toll Free' },
                   { ok: pkg.guideIncluded, label: '🗣️ Guide' },
                   { ok: pkg.sightseeingIncluded, label: '📸 Sightseeing' },
                 ].map((item, i) => (
-                  <span key={i} style={{ padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: item.ok ? '#ecfdf5' : '#fef2f2', color: item.ok ? '#16a34a' : '#dc2626', border: `1px solid ${item.ok ? '#bbf7d0' : '#fecaca'}` }}>
+                  <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600, background: item.ok ? '#ecfdf5' : '#fef2f2', color: item.ok ? '#16a34a' : '#dc2626', border: `1px solid ${item.ok ? '#bbf7d0' : '#fecaca'}` }}>
                     {item.label} {item.ok ? '✓' : '✕'}
                   </span>
                 ))}

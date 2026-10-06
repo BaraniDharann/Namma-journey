@@ -3,6 +3,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BIOMES, SEG, segmentDistance, biomeAt, lookAt } from '../../landing/biomes'
+import ErtigaCar from './ErtigaCar'
 
 /**
  * The landing hero: a game-style chase view of the Namma Journey car cruising, by itself,
@@ -307,55 +308,6 @@ function Temple({ lite }) {
 
 const PLACE = { valley: Valley, waterfall: Waterfall, beach: Beach, backwaters: Backwaters, temple: Temple }
 
-/* ── the car ───────────────────────────────────────────────────── */
-
-function Car() {
-  const body = useRef(), wheels = useRef([])
-  useFrame((s, dt) => {
-    const t = s.clock.elapsedTime
-    if (body.current) {
-      body.current.position.y = 0.06 + Math.abs(Math.sin(t * 7)) * 0.03
-      body.current.rotation.z = Math.sin(t * 0.8) * 0.012
-      body.current.position.x = Math.sin(t * 0.35) * 0.35
-    }
-    wheels.current.forEach((w) => { if (w) w.rotation.x -= dt * SPEED / 0.42 })
-  })
-  const wheel = (x, z, k) => (
-    <group key={k} position={[x, 0.42, z]} ref={(el) => { wheels.current[k] = el }}>
-      <mesh rotation={[0, 0, Math.PI / 2]}><cylinderGeometry args={[0.42, 0.42, 0.34, 14]} /><meshLambertMaterial color="#1f2328" /></mesh>
-      <mesh rotation={[0, 0, Math.PI / 2]} position={[x > 0 ? 0.18 : -0.18, 0, 0]}><cylinderGeometry args={[0.22, 0.22, 0.02, 10]} /><meshLambertMaterial color="#d7dce2" /></mesh>
-    </group>
-  )
-  return (
-    <group position={[-1.9, 0, 0]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <planeGeometry args={[2.6, 5.2]} />
-        <meshBasicMaterial color="#000" transparent opacity={0.22} />
-      </mesh>
-      <group ref={body}>
-        <mesh position={[0, 0.85, 0]}><boxGeometry args={[2, 0.9, 4.6]} /><meshLambertMaterial color="#f97316" /></mesh>
-        <mesh position={[0, 0.52, 0]}><boxGeometry args={[2.02, 0.26, 4.62]} /><meshLambertMaterial color="#c2410c" /></mesh>
-        <mesh position={[0, 1.62, 0.25]}><boxGeometry args={[1.86, 0.72, 3.4]} /><meshLambertMaterial color="#f97316" /></mesh>
-        <mesh position={[0, 1.62, 0.25]}><boxGeometry args={[1.9, 0.5, 3.1]} /><meshLambertMaterial color="#bfe1f2" emissive="#6aa9c9" emissiveIntensity={0.15} /></mesh>
-        <mesh position={[0, 1.55, -1.5]} rotation={[0.55, 0, 0]}><boxGeometry args={[1.8, 0.05, 1]} /><meshLambertMaterial color="#bfe1f2" /></mesh>
-        <mesh position={[0, 2.03, 0.25]}><boxGeometry args={[1.6, 0.08, 2.8]} /><meshLambertMaterial color="#334155" /></mesh>
-        <mesh position={[-0.35, 2.28, 0.6]}><boxGeometry args={[0.8, 0.42, 1.2]} /><meshLambertMaterial color="#0f766e" /></mesh>
-        <mesh position={[0.45, 2.22, -0.2]}><boxGeometry args={[0.7, 0.3, 0.9]} /><meshLambertMaterial color="#eda100" /></mesh>
-        <mesh position={[0, 1.66, 1.96]}><boxGeometry args={[1.56, 0.5, 0.04]} /><meshLambertMaterial color="#9fd0ea" emissive="#5d9cc0" emissiveIntensity={0.25} /></mesh>
-        <mesh position={[0, 0.98, 2.31]}><boxGeometry args={[1.7, 0.08, 0.04]} /><meshBasicMaterial color="#ffffff" /></mesh>
-        <mesh position={[0, 0.66, 2.33]}><boxGeometry args={[0.7, 0.22, 0.03]} /><meshBasicMaterial color="#fef3c7" /></mesh>
-        {[-0.72, 0.72].map((x) => (
-          <mesh key={`t${x}`} position={[x, 0.92, 2.32]}><boxGeometry args={[0.36, 0.2, 0.05]} /><meshBasicMaterial color="#ef4444" /></mesh>
-        ))}
-        {[-0.72, 0.72].map((x) => (
-          <mesh key={`h${x}`} position={[x, 0.92, -2.31]}><boxGeometry args={[0.4, 0.2, 0.05]} /><meshBasicMaterial color="#fff7cc" /></mesh>
-        ))}
-      </group>
-      {wheel(-1.02, -1.45, 0)}{wheel(1.02, -1.45, 1)}{wheel(-1.02, 1.45, 2)}{wheel(1.02, 1.45, 3)}
-    </group>
-  )
-}
-
 /* ── the world loop ────────────────────────────────────────────── */
 
 function World({ lite, onPlace }) {
@@ -379,8 +331,9 @@ function World({ lite, onPlace }) {
     if (hemi.current) hemi.current.intensity = 0.95 * look.light
     if (sun.current) sun.current.intensity = 1.05 * look.light
     const t = s.clock.elapsedTime
-    camera.position.set(-1.9 + Math.sin(t * 0.21) * 1.2, 4.3 + Math.sin(t * 0.17) * 0.25, 11.8)
-    camera.lookAt(-1.9 + Math.sin(t * 0.21) * 0.5, 1.4, -10)
+    // Rear three-quarter chase view: the car's side and its turning wheels stay in shot.
+    camera.position.set(1.4 + Math.sin(t * 0.21) * 0.8, 3.2 + Math.sin(t * 0.17) * 0.2, 10.2)
+    camera.lookAt(-4.4 + Math.sin(t * 0.21) * 0.3, 1.2, -10)
     const { index } = biomeAt(o + 30)
     if (index !== placeIdx.current) { placeIdx.current = index; onPlace?.(index) }
   })
@@ -398,7 +351,7 @@ function World({ lite, onPlace }) {
           </group>
         )
       })}
-      <Car />
+      <ErtigaCar speed={SPEED} x={-1.9} />
     </group>
   )
 }
@@ -416,7 +369,7 @@ export default function RoadWorld({ active = true, lite = false, onPlace }) {
       className="rw-canvas"
       dpr={lite ? [1, 1] : [1, 1.5]}
       gl={{ antialias: !lite, powerPreference: 'high-performance' }}
-      camera={{ fov: 52, near: 0.1, far: 600, position: [-1.9, 4.3, 11.8] }}
+      camera={{ fov: 52, near: 0.1, far: 600, position: [1.4, 3.2, 10.2] }}
       aria-hidden="true"
     >
       <Pause active={active} />

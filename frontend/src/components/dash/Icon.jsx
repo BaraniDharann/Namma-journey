@@ -1,6 +1,6 @@
 import React from 'react'
 import {
-  House, CalendarBlank, Car, Wallet, Star, Package, Ticket, ChartBar, User, Users, Bell, Plus,
+  House, CalendarBlank, Wallet, Star, Package, Ticket, ChartBar, User, Users, Bell, Plus,
   ArrowRight, ArrowLeft, WarningCircle, Check, X, Path, MapPin, MagnifyingGlass, Phone,
   NavigationArrow, Clock, SignOut, List, CurrencyInr, TrendUp, ShieldCheck, PencilSimple, Trash,
   Eye, DownloadSimple, Funnel, MapTrifold, Power, EnvelopeSimple, Camera, Link as LinkIcon,
@@ -8,6 +8,7 @@ import {
   ChartLine, ChartLineUp, SteeringWheel, Lock, Eye as EyeOpen, EyeSlash, GoogleLogo, IdentificationCard,
   Crown, Suitcase, Gauge, Sun, Moon,
 } from '@phosphor-icons/react'
+import ErtigaIcon from '../brand/ErtigaIcon'
 
 /**
  * The app's one icon set, backed by Phosphor so every glyph is drawn to the same grid and stroke.
@@ -15,7 +16,7 @@ import {
  * ones the friendlier duotone.
  */
 const SET = {
-  home: House, calendar: CalendarBlank, car: Car, wallet: Wallet, star: Star, package: Package,
+  home: House, calendar: CalendarBlank, car: ErtigaIcon, wallet: Wallet, star: Star, package: Package,
   ticket: Ticket, chart: ChartBar, user: User, users: Users, bell: Bell, plus: Plus, arrow: ArrowRight,
   back: ArrowLeft, alert: WarningCircle, check: Check, x: X, route: Path, pin: MapPin,
   search: MagnifyingGlass, phone: Phone, nav: NavigationArrow, clock: Clock, logout: SignOut,
