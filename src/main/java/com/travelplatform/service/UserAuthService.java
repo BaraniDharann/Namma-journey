@@ -72,6 +72,9 @@ public class UserAuthService {
             user = userRepository.findByEmail(request.getEmail())
                     .orElseThrow(() -> new IllegalArgumentException("User not found"));
             
+            if (user.getPassword() == null || user.getPassword().isBlank()) {
+                throw new IllegalArgumentException("This account signs in with Google. Use Continue with Google, then save a password for next time.");
+            }
             if (request.getPassword() == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
                 throw new IllegalArgumentException("Invalid credentials");
             }
@@ -99,6 +102,7 @@ public class UserAuthService {
         response.setName(user.getName());
         response.setEmail(user.getEmail());
         response.setMobile(user.getPhone());
+        response.setHasPassword(user.getPassword() != null && !user.getPassword().isBlank());
         return response;
     }
 

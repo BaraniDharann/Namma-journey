@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { GoogleLogin } from '@react-oauth/google'
 import { useAuth } from '../context/AuthContext'
-import { userLogin, googleLogin, sendOtp, userForgotPassword } from '../utils/api'
+import { userLogin, googleLogin, sendOtp, userForgotPassword, saveUserPassword } from '../utils/api'
+import { offerToSaveLogin, wasSaveOfferSkipped, skipSaveOffer } from '../utils/rememberLogin'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
 
 export default function LoginPage() {
@@ -13,12 +14,45 @@ export default function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
 
+  // Google sign-in waiting on the "save a password" step: { token, userId, email, name, ... }
+  const [saveFor, setSaveFor] = useState(null)
+  const [savePw, setSavePw] = useState({ password: '', confirm: '' })
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  const finishGoogle = (auth) => {
+    login(auth)
+    navigate('/user/dashboard')
+  }
+
+  const handleSavePassword = async (e) => {
+    e.preventDefault()
+    if (savePw.password.length < 8) { setSaveError('Password must be at least 8 characters'); return }
+    if (savePw.password !== savePw.confirm) { setSaveError('Passwords do not match'); return }
+    setSaving(true); setSaveError('')
+    try {
+      await saveUserPassword(saveFor.userId, savePw.password, saveFor.token)
+      void offerToSaveLogin(saveFor.email, savePw.password, saveFor.name)
+      finishGoogle(saveFor)
+    } catch (err) {
+      setSaveError(err.response?.data?.error || 'Could not save the password. Try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const skipSave = () => {
+    skipSaveOffer(saveFor.email)
+    finishGoogle(saveFor)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
     try {
       const res = await userLogin({ loginType: 'EMAIL', email: form.email, password: form.password })
+      void offerToSaveLogin(form.email, form.password, res.data?.name)
       login(res.data)
       navigate('/user/dashboard')
     } catch (err) {
@@ -33,6 +67,12 @@ export default function LoginPage() {
     setError('')
     try {
       const res = await googleLogin(credentialResponse.credential)
+      // First time in with Google there is no password for the browser to remember, so offer
+      // to save one before the session starts (storing it redirects away from this page).
+      if (res.data?.hasPassword === false && !wasSaveOfferSkipped(res.data.email)) {
+        setSaveFor(res.data)
+        return
+      }
       login(res.data)
       navigate('/user/dashboard')
     } catch (err) {
@@ -86,6 +126,27 @@ export default function LoginPage() {
       setForgotError(err.response?.data?.error || 'Reset failed. Check OTP and try again.')
     } finally { setForgotLoading(false) }
   }
+
+  if (saveFor) return (
+    <AuthShell role="user" title="Save your login" sub={<>Add a password for <strong>{saveFor.email}</strong> and your browser can remember it. Next time, tap the email box and pick it.</>}>
+      <Alert>{saveError}</Alert>
+      <form onSubmit={handleSavePassword} className="au-form">
+        <Field label="Email address" icon="mail">
+          <input type="email" name="username" autoComplete="username" value={saveFor.email} readOnly />
+        </Field>
+        <Field label="Password" icon="lock">
+          <PasswordInput name="new-password" placeholder="Min 8 characters" value={savePw.password} autoComplete="new-password" autoFocus
+            onChange={e => setSavePw(p => ({ ...p, password: e.target.value }))} required />
+        </Field>
+        <Field label="Confirm password" icon="lock">
+          <PasswordInput placeholder="Repeat password" value={savePw.confirm} autoComplete="new-password"
+            onChange={e => setSavePw(p => ({ ...p, confirm: e.target.value }))} required />
+        </Field>
+        <Submit loading={saving} loadingText="Saving...">Save and continue</Submit>
+        <TextButton back onClick={skipSave}>Not now, continue with Google only</TextButton>
+      </form>
+    </AuthShell>
+  )
 
   if (showForgot) return (
     <AuthShell role="user" title="Reset your password" sub={forgotStep === 1 ? 'We will email you a one-time code.' : forgotStep === 2 ? <>Code sent to <strong>{forgotForm.email}</strong></> : null}>
@@ -145,11 +206,11 @@ export default function LoginPage() {
 
       <form onSubmit={handleSubmit} className="au-form">
         <Field label="Email address" icon="mail">
-          <input type="email" placeholder="you@example.com" value={form.email} autoComplete="email"
+          <input type="email" name="username" placeholder="you@example.com" value={form.email} autoComplete="username"
             onChange={e => setForm({ ...form, email: e.target.value })} required />
         </Field>
         <Field label="Password" icon="lock" aside={<TextButton onClick={() => setShowForgot(true)}>Forgot password?</TextButton>}>
-          <PasswordInput placeholder="Enter your password" value={form.password} autoComplete="current-password"
+          <PasswordInput name="password" placeholder="Enter your password" value={form.password} autoComplete="current-password"
             onChange={e => setForm({ ...form, password: e.target.value })} required />
         </Field>
         <Submit loading={loading} loadingText="Signing in...">Sign in</Submit>

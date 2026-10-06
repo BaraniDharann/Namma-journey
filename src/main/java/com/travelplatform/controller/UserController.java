@@ -139,6 +139,16 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
+    /** Lets a Google-only traveller save a password once; see UserService#setPassword. */
+    @PutMapping("/{userId}/password")
+    @PreAuthorize(SAME_USER)
+    public ResponseEntity<java.util.Map<String, String>> setPassword(
+            @PathVariable UUID userId,
+            @RequestBody java.util.Map<String, String> body) {
+        userService.setPassword(userId, body.get("password"));
+        return ResponseEntity.ok(java.util.Map.of("message", "Password saved"));
+    }
+
     @GetMapping("/route-preview")
     public ResponseEntity<RouteInfo> getRoutePreview(
             @RequestParam double fromLat,

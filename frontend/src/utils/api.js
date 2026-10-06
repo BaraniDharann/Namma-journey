@@ -134,6 +134,10 @@ function debouncedGet(url, delay = 300) {
 export const sendOtp = (email) => api.post('/auth/otp/send', { email })
 export const userSignup = (data) => api.post('/auth/user/signup', data)
 export const userLogin = (data) => api.post('/auth/user/login', data)
+// A Google-only traveller saves a password once. The token is passed explicitly because this runs
+// before the session is stored (the login page redirects the moment it is).
+export const saveUserPassword = (userId, password, token) =>
+  api.put(`/user/${userId}/password`, { password }, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
 export const googleLogin = (token) => api.post('/auth/user/login', { loginType: 'GOOGLE', token })
 export const driverLogin = (data) => api.post('/auth/driver/login', data)
 export const ownerLogin = (data) => api.post('/auth/owner/login', data)

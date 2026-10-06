@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { driverLogin, driverForgotPassword, driverVerifyOtp, driverRequestResetOtp } from '../utils/api'
+import { offerToSaveLogin } from '../utils/rememberLogin'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
 import Icon from '../components/dash/Icon'
 
@@ -54,6 +55,7 @@ export default function DriverLoginPage() {
         setOtpExpiresAt(Date.now() + OTP_VALIDITY_SECONDS * 1000)
         return
       }
+      void offerToSaveLogin(form.mobile, form.password, res.data?.name)
       login(res.data)
       navigate('/driver/dashboard')
     } catch (err) {
@@ -213,7 +215,7 @@ export default function DriverLoginPage() {
       <Alert>{error}</Alert>
       <form onSubmit={handleSubmit} className="au-form">
         <Field label="Mobile number" icon="phone">
-          <input type="tel" inputMode="numeric" placeholder="9876543210" maxLength={10} value={form.mobile} autoComplete="tel"
+          <input type="tel" inputMode="numeric" placeholder="9876543210" maxLength={10} value={form.mobile} name="username" autoComplete="username"
             onChange={e => setForm({ ...form, mobile: e.target.value })} required />
         </Field>
         <Field label="Password" icon="lock" aside={<TextButton onClick={() => setShowForgot(true)}>Forgot password?</TextButton>}>

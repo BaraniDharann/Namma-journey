@@ -299,6 +299,25 @@ public class UserService {
         return java.util.Map.of("message", "Password reset successfully");
     }
 
+    /**
+     * A traveller who joined through Google has no password. They may save one, once, so the
+     * browser can remember it and the email form works for them too. Changing an existing
+     * password stays behind the OTP-checked forgot-password flow.
+     */
+    @Transactional
+    public void setPassword(UUID userId, String password) {
+        com.travelplatform.entity.User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        if (user.getPassword() != null && !user.getPassword().isBlank()) {
+            throw new IllegalArgumentException("This account already has a password. Use Forgot password to change it.");
+        }
+        if (password == null || password.length() < 8) {
+            throw new IllegalArgumentException("Password must be at least 8 characters");
+        }
+        user.setPassword(passwordEncoder.encode(password));
+        userRepository.save(user);
+    }
+
     @Transactional
     public com.travelplatform.entity.User updateProfile(UUID userId, com.travelplatform.dto.UserUpdateRequest request) {
         com.travelplatform.entity.User user = userRepository.findById(userId)

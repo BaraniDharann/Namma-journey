@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ownerLogin, ownerForgotPassword, sendOtp } from '../utils/api'
+import { offerToSaveLogin } from '../utils/rememberLogin'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
 
 export default function OwnerLoginPage() {
@@ -23,6 +24,7 @@ export default function OwnerLoginPage() {
     setError('')
     try {
       const res = await ownerLogin(form)
+      void offerToSaveLogin(form.email, form.password, res.data?.name)
       login(res.data)
       navigate('/owner/dashboard')
     } catch (err) {
@@ -110,7 +112,7 @@ export default function OwnerLoginPage() {
       <Alert>{error}</Alert>
       <form onSubmit={handleSubmit} className="au-form">
         <Field label="Email address" icon="mail">
-          <input type="email" placeholder="owner@example.com" value={form.email} autoComplete="email"
+          <input type="email" placeholder="owner@example.com" value={form.email} name="username" autoComplete="username"
             onChange={e => setForm({ ...form, email: e.target.value })} required />
         </Field>
         <Field label="Password" icon="lock" aside={<TextButton onClick={() => setShowForgot(true)}>Forgot password?</TextButton>}>

@@ -15,6 +15,8 @@ public class AuthResponse {
     private String name;
     private String email;
     private String mobile;
+    /** False for a Google-only traveller, so the app can offer to save a password. */
+    private Boolean hasPassword;
     
     public AuthResponse(String token, String role, Object userId) {
         this.token = token;
