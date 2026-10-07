@@ -494,14 +494,6 @@ export default function LandingPage() {
               © {new Date().getFullYear()} Namma Journey. All rights reserved. · Built by{' '}
               <a href="https://www.linkedin.com/in/barani-dharan-16b452253/" target="_blank" rel="noopener noreferrer">Barani T</a>
             </p>
-            <div className="ws-social">
-              {[
-                ['Twitter', 'https://twitter.com/nammajourney'],
-                ['Facebook', 'https://www.facebook.com/nammajourney'],
-                ['Instagram', 'https://www.instagram.com/nammajourney'],
-                ['YouTube', 'https://www.youtube.com/@nammajourney'],
-              ].map(([label, href]) => <a key={label} href={href} target="_blank" rel="noopener noreferrer">{label}</a>)}
-            </div>
           </div>
         </div>
       </footer>
