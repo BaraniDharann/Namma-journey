@@ -29,6 +29,7 @@ public class OwnerService {
     private final PricingConfigRepository pricingConfigRepository;
     private final DriverRepository driverRepository;
     private final TripDriverPhotoRepository tripDriverPhotoRepository;
+    private final NotificationService notificationService;
     
     public List<TravelBooking> getAllBookings() {
         return travelBookingRepository.findAll();
@@ -281,9 +282,16 @@ public class OwnerService {
                             + booking.getFromDate() + " to " + booking.getToDate() + ")");
         }
 
+        Long previousDriverId = booking.getDriverId();
         booking.setDriverId(driverId);
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         TravelBooking updatedBooking = travelBookingRepository.save(booking);
+
+        // A driver given a trip by hand must hear about it the same way an auto-assigned one does
+        // (in-app alert, email, Telegram card). Re-saving the same driver is not news.
+        if (!driverId.equals(previousDriverId)) {
+            notificationService.notifyDriverAssigned(updatedBooking, driver);
+        }
 
         return mapToResponse(updatedBooking, driver);
     }
