@@ -6,7 +6,7 @@ import {
   Eye, DownloadSimple, Funnel, MapTrifold, Power, EnvelopeSimple, Camera, Link as LinkIcon,
   PaperPlaneTilt, ArrowsClockwise, Sparkle, HandsPraying, CreditCard, QrCode, ChartPie,
   ChartLine, ChartLineUp, SteeringWheel, Lock, Eye as EyeOpen, EyeSlash, GoogleLogo, IdentificationCard,
-  Crown, Suitcase, Gauge, Sun, Moon,
+  Crown, Suitcase, Gauge, Sun, Moon, TelegramLogo,
 } from '@phosphor-icons/react'
 import ErtigaIcon from '../brand/ErtigaIcon'
 
@@ -27,6 +27,7 @@ const SET = {
   pie: ChartPie, bar: ChartBar, line: ChartLine, area: ChartLineUp,
   wheel: SteeringWheel, lock: Lock, 'eye-open': EyeOpen, 'eye-off': EyeSlash, google: GoogleLogo,
   id: IdentificationCard, crown: Crown, suitcase: Suitcase, gauge: Gauge, sun: Sun, moon: Moon,
+  telegram: TelegramLogo,
 }
 
 export default function Icon({ name, size = 18, className = '', style, title, weight }) {

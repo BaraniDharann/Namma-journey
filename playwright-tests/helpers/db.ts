@@ -65,6 +65,19 @@ export async function setDriverPassword(driverId: string | number, plaintext: st
 }
 
 /**
+ * Telegram is mandatory for drivers: an unlinked driver sees only the connect screen. Test
+ * drivers get a dummy chat id so the suite can reach the real driver pages. It is negative and
+ * huge, which no real Telegram chat uses, so a send to it fails with 400 "chat not found" (not
+ * 403), and the test driver stays linked.
+ */
+export async function markDriverTelegramLinked(driverId: string | number) {
+  await query(
+    'UPDATE drivers SET telegram_chat_id = $1, telegram_linked_at = now() WHERE id = $2',
+    [`-99${driverId}${Date.now()}`, driverId],
+  );
+}
+
+/**
  * Provision a throwaway owner with a password we know, so the owner login form can be tested
  * for real rather than by injecting a minted token.
  *

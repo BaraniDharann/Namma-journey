@@ -173,6 +173,10 @@ export const getDriverBookings = (driverId) => cachedGet(`/driver/${driverId}/bo
 export const driverBookingAction = (driverId, bookingId, action) => api.post(`/driver/${driverId}/bookings/${bookingId}/action`, { action }).then(res => { invalidateCache('bookings'); return res })
 export const endTrip = (driverId, bookingId) => api.post(`/driver/${driverId}/bookings/${bookingId}/end-trip`).then(res => { invalidateCache('bookings'); invalidateCache('payments'); return res })
 export const markCashReceived = (driverId, bookingId, data) => api.post(`/driver/${driverId}/bookings/${bookingId}/cash-payment`, data).then(res => { invalidateCache('bookings'); invalidateCache('payments'); return res })
+// Telegram trip alerts are mandatory for drivers: { required, linked } decides whether the app
+// shows only the connect screen. The link is the driver's own one-time t.me connect link.
+export const getDriverTelegramStatus = (driverId) => api.get(`/driver/${driverId}/telegram`, { _silent: true })
+export const createOwnTelegramLink = (driverId) => api.post(`/driver/${driverId}/telegram-link`)
 export const startTrip = (driverId, bookingId) => api.post(`/driver/${driverId}/bookings/${bookingId}/start-trip`).then(res => { invalidateCache('bookings'); return res })
 export const uploadEndTripPhoto = (driverId, bookingId, photoFile) => {
   const formData = new FormData()

@@ -4,10 +4,12 @@ import com.travelplatform.config.ExternalHttpClients;
 import com.travelplatform.config.TelegramProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -45,9 +47,11 @@ public class TelegramClient {
 
     private final TelegramProperties properties;
     private final RestTemplate restTemplate;
+    private final ApplicationEventPublisher events;
 
-    public TelegramClient(TelegramProperties properties) {
+    public TelegramClient(TelegramProperties properties, ApplicationEventPublisher events) {
         this.properties = properties;
+        this.events = events;
         // Timeout-bounded: an unresponsive Telegram must not pin the request thread that is
         // completing a booking assignment. See ExternalHttpClients.
         this.restTemplate = ExternalHttpClients.forThirdPartyApis();
@@ -151,6 +155,16 @@ public class TelegramClient {
         try {
             restTemplate.postForEntity(url, new HttpEntity<>(body, headers), String.class);
             return true;
+        } catch (HttpClientErrorException.Forbidden e) {
+            // 403 means the person blocked the bot (or deleted their account). Telegram alerts are
+            // mandatory for drivers, so this is announced and the driver is unlinked, which locks
+            // their app until they reconnect. Retrying would never succeed.
+            Object chatId = body.get("chat_id");
+            log.warn("Telegram {} refused with 403 for chat {}; the bot was blocked", method, chatId);
+            if (chatId != null) {
+                events.publishEvent(new TelegramChatBlockedEvent(chatId.toString()));
+            }
+            return false;
         } catch (RestClientException e) {
             // The bot token appears in the URL, so the message - which may echo it - is never
             // logged. Only the method name and the exception type are safe to record.

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { getNotifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } from '../utils/api'
 import Icon, { navIcon, navTint } from './dash/Icon'
 import { TipLayer } from './dash/ui'
+import TelegramGate from './driver/TelegramGate'
 
 function timeAgo(dateStr) {
   const now = new Date()
@@ -200,7 +201,7 @@ export default function DashboardLayout({ children, navItems, role }) {
         </header>
 
         <main className="pc-main dashboard-content">
-          {children}
+          {role === 'ROLE_DRIVER' ? <TelegramGate driverId={user?.userId}>{children}</TelegramGate> : children}
         </main>
       </div>
       <TipLayer />

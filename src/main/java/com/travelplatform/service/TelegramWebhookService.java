@@ -61,6 +61,18 @@ public class TelegramWebhookService {
      */
     public void handleUpdate(Map<String, Object> update) {
         try {
+            // Telegram reports a block the moment it happens, as a my_chat_member update whose new
+            // status is "kicked". Alerts are mandatory for drivers, so that driver is unlinked
+            // straight away and their app locks until they reconnect.
+            Map<String, Object> chatMember = asMap(update.get("my_chat_member"));
+            if (chatMember != null) {
+                Map<String, Object> newMember = asMap(chatMember.get("new_chat_member"));
+                Map<String, Object> chat = asMap(chatMember.get("chat"));
+                if (newMember != null && chat != null && "kicked".equals(newMember.get("status"))) {
+                    linkService.unlinkChat(asId(chat.get("id")));
+                }
+                return;
+            }
             Map<String, Object> callbackQuery = asMap(update.get("callback_query"));
             if (callbackQuery != null) {
                 handleCallbackQuery(callbackQuery);

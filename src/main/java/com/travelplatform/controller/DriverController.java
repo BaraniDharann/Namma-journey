@@ -9,6 +9,8 @@ import com.travelplatform.dto.TravelBookingResponse;
 import com.travelplatform.service.DriverService;
 import com.travelplatform.service.LocationTrackingService;
 import com.travelplatform.service.PaymentService;
+import com.travelplatform.service.TelegramLinkService;
+import com.travelplatform.config.TelegramProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,6 +33,12 @@ public class DriverController {
 
     @Autowired
     private LocationTrackingService locationTrackingService;
+
+    @Autowired
+    private TelegramLinkService telegramLinkService;
+
+    @Autowired
+    private TelegramProperties telegramProperties;
 
     // SpEL guard reused on per-driver endpoints. Without it any logged-in driver could read
     // or mutate another driver's bookings simply by changing the URL.
@@ -99,6 +107,27 @@ public class DriverController {
     @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<DriverDetailsResponse> getDriverProfile(@PathVariable Long driverId) {
         return ResponseEntity.ok(driverService.getDriverProfile(driverId));
+    }
+
+    /**
+     * Telegram trip alerts are mandatory for drivers. The driver app reads this after login and
+     * shows only the connect screen until {@code linked} is true. {@code required} is false when
+     * the Telegram integration is switched off, so drivers are never locked out by a missing bot.
+     */
+    @GetMapping("/{driverId}/telegram")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<Map<String, Object>> getTelegramStatus(@PathVariable Long driverId) {
+        boolean required = telegramProperties.isOperational() && !telegramProperties.getBotUsername().isBlank();
+        return ResponseEntity.ok(Map.of(
+                "required", required,
+                "linked", telegramLinkService.isLinked(driverId)));
+    }
+
+    /** The driver's own one-time connect link, so they can connect without waiting for the owner. */
+    @PostMapping("/{driverId}/telegram-link")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<Map<String, String>> createOwnTelegramLink(@PathVariable Long driverId) {
+        return ResponseEntity.ok(Map.of("linkUrl", telegramLinkService.createLinkUrl(driverId)));
     }
 
     @PostMapping("/{driverId}/bookings/{bookingId}/start-trip")

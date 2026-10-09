@@ -3,6 +3,7 @@ import { readAccounts, backendEnv, API_BASE } from '../helpers/env';
 import { apiContext, freshIp } from '../helpers/api';
 import { contexts, disposeAll, bookingPayload, Ctxs } from '../helpers/booking';
 import crypto from 'crypto';
+import { query, markDriverTelegramLinked } from '../helpers/db';
 
 /**
  * Telegram driver dispatch, end to end, without a real bot.
@@ -140,6 +141,15 @@ test.describe('Telegram driver dispatch', () => {
       await probe.dispose();
     }
     test.skip(disabled, 'Telegram integration is off or the backend is not running');
+
+    // Setup links the test driver (Telegram is mandatory for drivers, so the UI suites need it).
+    // These tests are about linking, so they start from an unlinked driver and put the link
+    // back afterwards for the suites that run next.
+    await query('UPDATE drivers SET telegram_chat_id = NULL, telegram_linked_at = NULL WHERE id = $1', [D]);
+  });
+
+  test.afterAll(async () => {
+    await markDriverTelegramLinked(D);
   });
 
   test.beforeEach(async ({}, testInfo) => {

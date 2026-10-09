@@ -147,4 +147,51 @@ class TelegramLinkServiceTest {
         assertNotEquals(firstToken, secondToken);
         assertTrue(driver.getTelegramLinkTokenExpiresAt().isAfter(LocalDateTime.now()));
     }
+
+    @Test
+    @DisplayName("blocking the bot unlinks the driver, which locks their app")
+    void blockedChatUnlinksDriver() {
+        Driver driver = new Driver();
+        driver.setId(9L);
+        driver.setTelegramChatId(CHAT_ID);
+        driver.setTelegramLinkedAt(LocalDateTime.now());
+        when(driverRepository.findByTelegramChatId(CHAT_ID)).thenReturn(Optional.of(driver));
+
+        assertTrue(service.unlinkChat(CHAT_ID));
+        assertNull(driver.getTelegramChatId());
+        assertNull(driver.getTelegramLinkedAt());
+        verify(driverRepository).save(driver);
+    }
+
+    @Test
+    @DisplayName("a block from a chat no driver owns changes nothing")
+    void unknownChatIsIgnored() {
+        when(driverRepository.findByTelegramChatId("999")).thenReturn(Optional.empty());
+        assertEquals(false, service.unlinkChat("999"));
+        verify(driverRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("a refused send (403) unlinks the driver too")
+    void refusedSendUnlinksDriver() {
+        Driver driver = new Driver();
+        driver.setId(9L);
+        driver.setTelegramChatId(CHAT_ID);
+        when(driverRepository.findByTelegramChatId(CHAT_ID)).thenReturn(Optional.of(driver));
+
+        service.onChatBlocked(new TelegramChatBlockedEvent(CHAT_ID));
+        assertNull(driver.getTelegramChatId());
+        verify(driverRepository).save(driver);
+    }
+
+    @Test
+    @DisplayName("isLinked reflects whether the driver has a chat id")
+    void linkStatus() {
+        Driver linked = new Driver();
+        linked.setTelegramChatId(CHAT_ID);
+        when(driverRepository.findById(1L)).thenReturn(Optional.of(linked));
+        when(driverRepository.findById(2L)).thenReturn(Optional.of(new Driver()));
+        assertTrue(service.isLinked(1L));
+        assertEquals(false, service.isLinked(2L));
+    }
 }

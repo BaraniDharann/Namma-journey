@@ -530,3 +530,31 @@ button.pc-chip:hover { background: var(--pc-wash-2); color: var(--pc-ink); }
 @media (prefers-reduced-motion: reduce) {
   .pc-head h1, .pc .pc-today h2 { animation: none; background-position: 0 0; }
 }
+
+/* ═════════════  Driver Telegram gate  ═════════════
+   Alerts are mandatory: until Telegram is connected this is the only thing a driver sees. */
+.pc-tg { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; padding: 32px; max-width: 920px; }
+.pc-tg-copy { min-width: 0; }
+.pc-tg-badge { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; color: #fff; background: linear-gradient(145deg, #37aee2, #1e96c8); box-shadow: 0 0 0 6px rgba(42, 171, 238, .16), 0 14px 26px -12px #229ed9; }
+.pc-tg-title { margin: 18px 0 8px; font-family: var(--pc-fd); font-size: clamp(22px, 3vw, 28px); line-height: 1.15; letter-spacing: -.02em; color: var(--pc-ink); text-wrap: balance; }
+.pc-tg-lead { margin: 0 0 20px; max-width: 54ch; font-size: 15.5px; line-height: 1.6; color: var(--pc-ink-2); }
+.pc-tg-steps { list-style: none; margin: 0 0 22px; padding: 0; display: grid; gap: 10px; }
+.pc-tg-steps li { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--pc-ink); }
+.pc-tg-steps b { width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 13px; color: #1e7fb0; background: #e3f3fb; box-shadow: inset 0 0 0 1px #bfe3f5; }
+.pc-tg-steps em { font-style: normal; font-weight: 800; }
+.pc-tg-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.pc-tg-actions .pc-btn { min-height: 48px; padding: 0 20px; gap: 8px; }
+.pc-tg-actions .is-disabled { opacity: .55; pointer-events: none; }
+.pc-tg-error { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; font-size: 14px; color: var(--pc-bad); }
+.pc-tg-wait { display: flex; align-items: center; gap: 10px; margin: 18px 0 0; font-size: 14px; font-weight: 700; color: var(--pc-muted); }
+.pc-tg-pulse { width: 10px; height: 10px; border-radius: 50%; background: #229ed9; animation: pc-tg-pulse 1.6s ease-out infinite; }
+.pc-tg-qr { display: grid; justify-items: center; gap: 10px; padding: 16px; border-radius: 20px; background: #fff; box-shadow: inset 0 0 0 1px var(--pc-line); }
+.pc-tg-qr img { display: block; border-radius: 10px; }
+.pc-tg-qr small { font-size: 13px; font-weight: 600; color: var(--pc-muted); }
+@keyframes pc-tg-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 158, 217, .5); } 100% { box-shadow: 0 0 0 12px rgba(34, 158, 217, 0); } }
+@media (max-width: 760px) {
+  .pc-tg { grid-template-columns: minmax(0, 1fr); padding: 22px 18px; gap: 20px; }
+  .pc-tg-qr, .pc-tg-desk { display: none; }   /* on the phone itself, Open Telegram is the way in */
+  .pc-tg-actions .pc-btn { flex: 1 1 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) { .pc-tg-pulse { animation: none; } }

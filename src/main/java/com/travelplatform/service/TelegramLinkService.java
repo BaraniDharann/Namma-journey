@@ -7,7 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
@@ -126,6 +128,60 @@ public class TelegramLinkService {
 
         log.info("Driver {} linked Telegram successfully", driver.getId());
         return new RedeemResult(Status.SUCCESS, driver.getName());
+    }
+
+    /** Whether this driver currently receives trips on Telegram. */
+    @Transactional(readOnly = true)
+    public boolean isLinked(Long driverId) {
+        return driverRepository.findById(driverId)
+                .map(d -> d.getTelegramChatId() != null && !d.getTelegramChatId().isBlank())
+                .orElse(false);
+    }
+
+    /**
+     * Unlinks whichever driver owns this chat, because the person blocked the bot.
+     *
+     * <p>Telegram alerts are mandatory for drivers, so an unlinked driver is locked out of the
+     * app until they reconnect. Returns false when no driver owns the chat.
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "allDrivers", allEntries = true),
+            @CacheEvict(value = "driverById", allEntries = true)
+    })
+    public boolean unlinkChat(String chatId) {
+        if (chatId == null || chatId.isBlank()) {
+            return false;
+        }
+        Optional<Driver> match = driverRepository.findByTelegramChatId(chatId);
+        if (match.isEmpty()) {
+            return false;
+        }
+        Driver driver = match.get();
+        driver.setTelegramChatId(null);
+        driver.setTelegramLinkedAt(null);
+        driverRepository.save(driver);
+        log.warn("Driver {} blocked the Telegram bot; unlinked, app locked until they reconnect", driver.getId());
+        return true;
+    }
+
+    /**
+     * A send was refused with 403. Runs in its own transaction: the send can happen inside an
+     * assignment that is still committing, and the unlink must stand on its own either way.
+     */
+    @EventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Caching(evict = {
+            @CacheEvict(value = "allDrivers", allEntries = true),
+            @CacheEvict(value = "driverById", allEntries = true)
+    })
+    public void onChatBlocked(TelegramChatBlockedEvent event) {
+        driverRepository.findByTelegramChatId(event.chatId()).ifPresent(driver -> {
+            driver.setTelegramChatId(null);
+            driver.setTelegramLinkedAt(null);
+            driverRepository.save(driver);
+            log.warn("Driver {} blocked the Telegram bot (send refused); unlinked", driver.getId());
+        });
     }
 
     public enum Status {

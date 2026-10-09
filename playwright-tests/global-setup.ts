@@ -3,7 +3,7 @@ import path from 'path';
 import { request } from '@playwright/test';
 import { API_BASE, WEB_BASE, OWNER_EMAIL, OWNER_PASSWORD, ACCOUNTS_FILE, Accounts } from './helpers/env';
 import { apiContext, unique, freshIp } from './helpers/api';
-import { waitForOtp, setDriverPassword, query } from './helpers/db';
+import { waitForOtp, setDriverPassword, markDriverTelegramLinked, query } from './helpers/db';
 
 /**
  * Creates the two brand-new accounts the whole suite runs on:
@@ -176,6 +176,7 @@ export default async function globalSetup() {
 
   // Stand in for the credentials email.
   await setDriverPassword(driverId, seedPassword);
+  await markDriverTelegramLinked(driverId);
 
   const dAuth = await apiContext({ ip: freshIp('setup-driver-auth') });
   const first = await dAuth.post('/api/auth/driver/login', { data: { mobile: ids.driverMobile, password: seedPassword } });

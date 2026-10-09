@@ -156,4 +156,24 @@ class TelegramWebhookServiceTest {
 
         verify(linkService).redeem("555000111", "");
     }
+
+    @Test
+    @DisplayName("a driver blocking the bot is unlinked at once")
+    void blockUpdateUnlinks() {
+        Map<String, Object> update = Map.of("my_chat_member", Map.of(
+                "chat", Map.of("id", Long.parseLong(LINKED_CHAT_ID), "type", "private"),
+                "new_chat_member", Map.of("status", "kicked")));
+        service.handleUpdate(update);
+        verify(linkService).unlinkChat(LINKED_CHAT_ID);
+    }
+
+    @Test
+    @DisplayName("unblocking (status member) does not unlink anyone")
+    void unblockUpdateIsIgnored() {
+        Map<String, Object> update = Map.of("my_chat_member", Map.of(
+                "chat", Map.of("id", Long.parseLong(LINKED_CHAT_ID), "type", "private"),
+                "new_chat_member", Map.of("status", "member")));
+        service.handleUpdate(update);
+        verify(linkService, never()).unlinkChat(anyString());
+    }
 }
