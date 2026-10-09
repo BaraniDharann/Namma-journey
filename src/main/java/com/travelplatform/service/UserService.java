@@ -11,13 +11,18 @@ import com.travelplatform.repository.DriverRepository;
 import com.travelplatform.repository.TravelBookingRepository;
 import com.travelplatform.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.travelplatform.repository.TripDriverPhotoRepository;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -36,6 +41,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final NotificationService notificationService;
     private final TripDriverPhotoRepository tripDriverPhotoRepository;
+    private final TransactionTemplate transactionTemplate;
     
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -47,7 +53,22 @@ public class UserService {
     /** Indian mobile numbers, same shape the signup and booking forms already enforce. */
     private static final java.util.regex.Pattern MOBILE_PATTERN = java.util.regex.Pattern.compile("^[6-9]\\d{9}$");
 
-    @Transactional
+    /**
+     * How many drivers a booking will try before it settles for no driver at all. Each retry only
+     * happens because another booking claimed the candidate in the same instant, so needing more
+     * than a couple means the fleet is effectively full for those dates.
+     */
+    private static final int MAX_DRIVER_ATTEMPTS = 3;
+
+    /** Postgres SQLSTATE for "violates exclusion constraint" - here, no_driver_overlap. */
+    private static final String EXCLUSION_VIOLATION = "23P01";
+
+    /**
+     * Deliberately not {@code @Transactional}. The route lookup below calls a third-party map API
+     * that can take up to 8s (ExternalHttpClients' timeouts), and inside a transaction that whole
+     * wait pinned one of only 20 pooled DB connections. The database work runs afterwards in its
+     * own short transaction per attempt, see {@link #saveWithDriver}.
+     */
     public TravelBookingResponse createBooking(UUID userId, TravelBookingRequest request) {
         // A trip with no way to reach the traveller is not a trip anyone can drive. Accounts
         // created through Sign-in with Google never collect a number, so this is the first point
@@ -65,8 +86,6 @@ public class UserService {
         if (request.getToDate().isBefore(request.getFromDate())) {
             throw new IllegalArgumentException("To date cannot be before from date");
         }
-        
-        int travelDays = (int) ChronoUnit.DAYS.between(request.getFromDate(), request.getToDate()) + 1;
 
         // Use exact coordinates from frontend for accurate distance calculation
         RouteInfo routeInfo;
@@ -78,6 +97,70 @@ public class UserService {
         } else {
             routeInfo = routingService.calculateRoute(request.getFromPlace(), request.getToPlace());
         }
+
+        // Two travellers can see the same free driver at the same moment. The database settles
+        // it (EXCLUDE constraint no_driver_overlap, V5): the second insert is refused, and that
+        // attempt's transaction rolls back. We then ask again, leaving out every driver already
+        // lost, and after MAX_DRIVER_ATTEMPTS save the booking unassigned so the owner can place
+        // it - the traveller's booking never fails because of a clash they cannot see.
+        List<Long> lostDrivers = new ArrayList<>();
+        for (int attempt = 0; attempt < MAX_DRIVER_ATTEMPTS; attempt++) {
+            try {
+                return saveWithDriver(userId, request, routeInfo, lostDrivers, true);
+            } catch (DriverTakenException taken) {
+                lostDrivers.add(taken.driverId);
+            }
+        }
+        return saveWithDriver(userId, request, routeInfo, lostDrivers, false);
+    }
+
+    /**
+     * One attempt: pick a driver (unless {@code assign} is false), insert, notify - all in one
+     * short transaction, so a refused insert takes its notifications down with it.
+     */
+    private TravelBookingResponse saveWithDriver(UUID userId, TravelBookingRequest request, RouteInfo routeInfo,
+                                                 List<Long> lostDrivers, boolean assign) {
+        return transactionTemplate.execute(tx -> {
+            Driver driver = null;
+            if (assign) {
+                List<Driver> candidates = lostDrivers.isEmpty()
+                        ? driverRepository.findAvailableDrivers(request.getFromDate(), request.getToDate())
+                        : driverRepository.findAvailableDriversExcluding(
+                                request.getFromDate(), request.getToDate(), lostDrivers);
+                driver = candidates.isEmpty() ? null : candidates.get(0);
+            }
+
+            TravelBooking savedBooking;
+            try {
+                // saveAndFlush, not save: the INSERT has to reach Postgres here, inside the try,
+                // or the constraint would only fire at commit where it can no longer be caught
+                // per attempt.
+                savedBooking = bookingRepository.saveAndFlush(buildBooking(userId, request, routeInfo, driver));
+            } catch (DataIntegrityViolationException ex) {
+                if (driver != null && isDriverOverlap(ex)) {
+                    throw new DriverTakenException(driver.getId());
+                }
+                throw ex;
+            } catch (PessimisticLockingFailureException ex) {
+                // Several bookings racing for one driver wait on each other's uncommitted rows,
+                // and Postgres sometimes breaks that up as a deadlock (40P01) rather than the
+                // constraint error. Same meaning: someone else is getting this driver.
+                if (driver != null) {
+                    throw new DriverTakenException(driver.getId());
+                }
+                throw ex;
+            }
+
+            notificationService.notifyBookingCreated(savedBooking);
+            if (driver != null) {
+                notificationService.notifyDriverAssigned(savedBooking, driver);
+            }
+            return mapToResponse(savedBooking);
+        });
+    }
+
+    private TravelBooking buildBooking(UUID userId, TravelBookingRequest request, RouteInfo routeInfo, Driver driver) {
+        int travelDays = (int) ChronoUnit.DAYS.between(request.getFromDate(), request.getToDate()) + 1;
 
         // Determine booking type and calculate amount
         TravelBooking.BookingType bookingType = TravelBooking.BookingType.DISTANCE_BASED;
@@ -94,9 +177,6 @@ public class UserService {
             Double pricePerKm = ownerService.getCurrentPricePerKm();
             totalAmount = routeInfo.getDistanceKm() * pricePerKm;
         }
-
-        List<Driver> availableDrivers = driverRepository.findAvailableDrivers(request.getFromDate(), request.getToDate());
-        Long assignedDriverId = availableDrivers.isEmpty() ? null : availableDrivers.get(0).getId();
 
         TravelBooking booking = new TravelBooking();
         booking.setUserId(userId);
@@ -121,21 +201,34 @@ public class UserService {
         booking.setBookingHours(bookingHours);
         booking.setPricePerHourAtBooking(pricePerHourAtBooking);
         booking.setBookingDate(LocalDateTime.now());
-        booking.setDriverId(assignedDriverId);
+        booking.setDriverId(driver != null ? driver.getId() : null);
         booking.setStatus(TravelBooking.BookingStatus.PENDING);
-        
-        TravelBooking savedBooking = bookingRepository.save(booking);
-
-        // Send notifications
-        notificationService.notifyBookingCreated(savedBooking);
-        if (assignedDriverId != null) {
-            Driver assignedDriver = availableDrivers.get(0);
-            notificationService.notifyDriverAssigned(savedBooking, assignedDriver);
-        }
-
-        return mapToResponse(savedBooking);
+        return booking;
     }
-    
+
+    /** True when Postgres refused the insert because the driver already has an overlapping trip. */
+    private static boolean isDriverOverlap(DataIntegrityViolationException ex) {
+        for (Throwable t = ex; t != null && t.getCause() != t; t = t.getCause()) {
+            if (t instanceof SQLException sql && EXCLUSION_VIOLATION.equals(sql.getSQLState())) {
+                return true;
+            }
+            if (t.getMessage() != null && t.getMessage().contains("no_driver_overlap")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Signals, inside one attempt, that another booking claimed this driver first. */
+    private static final class DriverTakenException extends RuntimeException {
+        private final Long driverId;
+
+        DriverTakenException(Long driverId) {
+            super(null, null, false, false);
+            this.driverId = driverId;
+        }
+    }
+
     public List<TravelBookingResponse> getAllBookings(UUID userId) {
         return bookingRepository.findByUserId(userId)
                 .stream()

@@ -93,6 +93,17 @@ public class DriverService {
             throw new RuntimeException("This booking is not assigned to you");
         }
 
+        // Accepting again is a no-op, not an error: Telegram redelivers webhook updates and a
+        // driver double-taps, and neither should re-notify the passenger.
+        if (booking.getStatus() == TravelBooking.BookingStatus.CONFIRMED) {
+            return mapToResponse(booking);
+        }
+        // Anything past PENDING is settled. Without this a stale button could drag a cancelled
+        // or completed trip back to CONFIRMED.
+        if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
+            throw new RuntimeException("Only pending bookings can be accepted");
+        }
+
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         TravelBooking updated = bookingRepository.save(booking);
 
@@ -122,6 +133,12 @@ public class DriverService {
 
         if (booking.getDriverId() == null || !booking.getDriverId().equals(driverId)) {
             throw new RuntimeException("This booking is not assigned to you");
+        }
+
+        // A trip under way or finished cannot be handed to someone else - reassigning it would
+        // reset it to PENDING mid-journey.
+        if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
+            throw new RuntimeException("Only pending bookings can be rejected");
         }
 
         Driver driver = driverRepository.findById(driverId)

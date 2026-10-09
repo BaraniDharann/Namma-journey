@@ -10,6 +10,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -41,7 +43,8 @@ class UserServiceSetPasswordTest {
         userRepository = mock(UserRepository.class);
         service = new UserService(mock(TravelBookingRepository.class), mock(RoutingService.class),
                 mock(DriverRepository.class), mock(OwnerService.class), userRepository, mock(OtpService.class),
-                encoder, mock(NotificationService.class), mock(TripDriverPhotoRepository.class));
+                encoder, mock(NotificationService.class), mock(TripDriverPhotoRepository.class),
+                new TransactionTemplate(mock(PlatformTransactionManager.class)));
     }
 
     private User googleUser(String password) {

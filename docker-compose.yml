@@ -6,8 +6,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Loopback only. A bare "5432:5432" listens on every interface, and Docker writes its own
+    # iptables rules ahead of ufw/firewalld, so on a VPS the database was open to the internet
+    # whatever the firewall said. The backend reaches it over travel-network and needs no
+    # published port at all; this one exists only for a DB client on the host itself.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -27,8 +31,19 @@ services:
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       APP_CACHE_TYPE: ${APP_CACHE_TYPE:-redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env - Redis now requires a password}
+      # Every request reaches the backend from the nginx container, so without this the rate
+      # limiter saw one IP for all users: the 10/min login budget was shared by everybody, and
+      # one person's typos locked the whole site out of signing in. Trusting the Docker bridge
+      # ranges lets it read the real client from nginx's X-Forwarded-For (rightmost untrusted
+      # hop, see ClientIpResolver). Safe ONLY because 8080 is not reachable from outside, below.
+      RATELIMIT_TRUSTED_PROXIES: ${RATELIMIT_TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16}
+    # Loopback only: the public way in is nginx on :80, which serves /api from the same origin.
+    # Published on all interfaces, anyone could skip nginx, hit 8080 directly with a forged
+    # X-Forwarded-For, and - arriving from the Docker gateway, a trusted range - pick a fresh
+    # identity per request to walk through every rate limit.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       # Driver licences, Aadhaar scans and trip photos. Without this they live only inside the
       # container and every redeploy throws them away.
@@ -45,6 +60,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # VITE_* values are baked into the bundle at build time; .dockerignore keeps frontend/.env*
+      # out of the image, so they have to come in from the root .env this way. Leave
+      # VITE_API_BASE_URL unset: nginx serves /api from the same origin.
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
     ports:
       - "80:80"
     depends_on:
@@ -54,12 +74,21 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    # requirepass: Redis holds cache entries the backend deserialises and live trip positions.
+    # With no password, anything that could reach the port could read where every passenger is
+    # and plant cache entries (CacheConfig limits what those can turn into, but should not be the
+    # only lock on the door).
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru",
+              "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env - Redis now requires a password}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    # Loopback only, for the same reason as Postgres: "6379:6379" put Redis on the internet.
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
+      # REDISCLI_AUTH above authenticates redis-cli without putting the password on its argv.
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
