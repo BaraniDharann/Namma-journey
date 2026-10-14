@@ -26,7 +26,7 @@ import java.util.Optional;
  *       for its whole lifetime;</li>
  *   <li>never logged. The old code logged every guess and, on a miss, the expected code - one
  *       deliberate wrong guess plus log access was an account takeover;</li>
- *   <li>at most one new code per email every {@link #RESEND_COOLDOWN}, so nobody can flood an
+ *   <li>at most one new code per email every otp.resend-cooldown-seconds (default 30), so nobody can flood an
  *       inbox or churn codes to dodge the attempt cap.</li>
  * </ul>
  */
@@ -35,7 +35,9 @@ import java.util.Optional;
 public class OtpService {
 
     static final int MAX_ATTEMPTS = 5;
-    static final Duration RESEND_COOLDOWN = Duration.ofSeconds(30);
+    /** Seconds before another code may be sent to the same email. 0 disables it (end-to-end tests). */
+    @Value("${otp.resend-cooldown-seconds:30}")
+    private long resendCooldownSeconds = 30;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -77,7 +79,7 @@ public class OtpService {
     private boolean sentRecently(String email) {
         return otpRepository.findTopByEmailOrderByCreatedAtDesc(email)
                 .map(Otp::getCreatedAt)
-                .filter(created -> created.isAfter(LocalDateTime.now().minus(RESEND_COOLDOWN)))
+                .filter(created -> created.isAfter(LocalDateTime.now().minusSeconds(resendCooldownSeconds)))
                 .isPresent();
     }
 

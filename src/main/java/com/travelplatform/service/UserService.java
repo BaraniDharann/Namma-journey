@@ -264,7 +264,7 @@ public class UserService {
      * and under load that alone exhausted the connection pool (see UserServiceBookingListTest).
      */
     public List<TravelBookingResponse> getAllBookings(UUID userId) {
-        List<TravelBooking> bookings = bookingRepository.findByUserId(userId);
+        List<TravelBooking> bookings = bookingRepository.findByUserIdOrderByBookingDateDesc(userId);
         if (bookings.isEmpty()) {
             return List.of();
         }

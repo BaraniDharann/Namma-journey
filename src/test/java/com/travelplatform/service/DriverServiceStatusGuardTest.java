@@ -97,8 +97,16 @@ class DriverServiceStatusGuardTest {
         verify(notificationService, never()).notifyTripAccepted(any(), any());
     }
 
+    @Test
+    @DisplayName("a driver the owner assigned by hand (CONFIRMED) can still decline before the trip starts")
+    void ownerAssignedTripCanBeDeclined() {
+        booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
+        var response = service.rejectBooking(DRIVER_ID, BOOKING_ID.toString());
+        assertEquals("PENDING", response.getStatus());
+    }
+
     @ParameterizedTest(name = "rejecting a {0} trip is refused")
-    @EnumSource(value = TravelBooking.BookingStatus.class, names = {"CONFIRMED", "STARTED", "COMPLETED", "CANCELLED"})
+    @EnumSource(value = TravelBooking.BookingStatus.class, names = {"STARTED", "COMPLETED", "CANCELLED"})
     void rejectRefusedOutsidePending(TravelBooking.BookingStatus status) {
         booking.setStatus(status);
 

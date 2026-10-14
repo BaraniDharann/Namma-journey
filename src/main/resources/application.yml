@@ -114,6 +114,10 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost,http://localhost:5173,http://localhost:4173}
 
+  trips:
+    # Days before its date a confirmed trip may be started. 0 = not before the trip date.
+    early-start-days: ${TRIP_EARLY_START_DAYS:0}
+
   booking:
     # Open (pending/confirmed/started) bookings one passenger may hold at once, so a single account
     # cannot tie up the whole fleet with reservations (TripRules).
@@ -227,6 +231,8 @@ otp:
     minutes: ${OTP_EXPIRY_MINUTES:5}
   test:
     mode: ${OTP_TEST_MODE:false}
+  # Seconds before another code may be sent to the same email (stops inbox flooding). 0 = off.
+  resend-cooldown-seconds: ${OTP_RESEND_COOLDOWN_SECONDS:30}
 
 # File Upload Configuration
 file:

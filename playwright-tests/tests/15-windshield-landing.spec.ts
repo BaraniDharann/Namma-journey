@@ -190,7 +190,11 @@ test.describe('Celebrations', () => {
     const created = await c.user.post(`/api/user/${acc.user.userId}/bookings`, { data: bookingPayload({ toPlace: `Chennai ${label}` }) });
     expect(created.status(), (await created.text()).slice(0, 300)).toBe(201);
     const booking = await created.json();
-    const confirm = await c.user.post(`/api/user/${acc.user.userId}/bookings/${booking.bookingId}/confirm`);
+    // A booking becomes CONFIRMED when a driver is assigned - passengers can no longer confirm their
+    // own booking over the driver's head (that endpoint was removed).
+    const confirm = await c.owner.post(`/api/owner/bookings/${booking.bookingId}/assign-driver`, {
+      data: { driverId: Number(acc.driver.driverId) },
+    });
     expect(confirm.status(), (await confirm.text()).slice(0, 300)).toBe(200);
 
     const { ctx, page } = await signedInTraveller(browser, 'cel-pay-ui');

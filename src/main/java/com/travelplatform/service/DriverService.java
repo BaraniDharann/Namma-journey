@@ -35,6 +35,10 @@ public class DriverService {
     /** Trip dates are Indian calendar days. Not final so tests can fix "today". */
     private java.time.Clock clock = java.time.Clock.system(java.time.ZoneId.of("Asia/Kolkata"));
 
+    /** Days before its date a trip may be started. 0 in production; the end-to-end suite raises it. */
+    @org.springframework.beans.factory.annotation.Value("${app.trips.early-start-days:0}")
+    private long earlyStartDays = 0;
+
     // A driver viewing their own documents gets the same expiring signed links the owner does.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.storage.SignedUploadUrls signedUploadUrls;
@@ -148,10 +152,12 @@ public class DriverService {
             throw new RuntimeException("This booking is not assigned to you");
         }
 
-        // A trip under way or finished cannot be handed to someone else - reassigning it would
-        // reset it to PENDING mid-journey.
-        if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
-            throw new RuntimeException("Only pending bookings can be rejected");
+        // A driver may decline any trip that has not started - including one the owner assigned
+        // by hand, which arrives already CONFIRMED. A trip under way or finished cannot be handed
+        // to someone else: reassigning it would reset it to PENDING mid-journey.
+        if (booking.getStatus() != TravelBooking.BookingStatus.PENDING
+                && booking.getStatus() != TravelBooking.BookingStatus.CONFIRMED) {
+            throw new RuntimeException("A trip that has started or ended can no longer be declined");
         }
 
         Driver driver = driverRepository.findById(driverId)
@@ -204,7 +210,8 @@ public class DriverService {
         }
         // A December trip could be started in October: tracking switched on, the passenger told
         // the car was on its way, and the trip blocked from being cancelled.
-        if (booking.getFromDate() != null && java.time.LocalDate.now(clock).isBefore(booking.getFromDate())) {
+        if (booking.getFromDate() != null
+                && java.time.LocalDate.now(clock).isBefore(booking.getFromDate().minusDays(earlyStartDays))) {
             throw new RuntimeException("This trip starts on " + booking.getFromDate() + " and cannot be started before then");
         }
 

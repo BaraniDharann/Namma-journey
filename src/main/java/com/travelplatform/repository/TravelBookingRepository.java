@@ -17,7 +17,9 @@ import java.util.UUID;
 
 @Repository
 public interface TravelBookingRepository extends JpaRepository<TravelBooking, UUID> {
-    List<TravelBooking> findByUserId(UUID userId);
+    /** Newest first. Unordered, Postgres returned rows in storage order and an UPDATE moves a row
+     *  to the end - a just-confirmed trip landed on the last page of the passenger's list. */
+    List<TravelBooking> findByUserIdOrderByBookingDateDesc(UUID userId);
 
     Page<TravelBooking> findByUserId(UUID userId, Pageable pageable);
 
@@ -58,7 +60,7 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
            "AND b.status IN ('PENDING', 'CONFIRMED', 'STARTED')")
     long countOpenBookingsByUserId(@Param("userId") UUID userId);
 
-    @Query("SELECT b FROM TravelBooking b WHERE b.driverId = :driverId")
+    @Query("SELECT b FROM TravelBooking b WHERE b.driverId = :driverId ORDER BY b.bookingDate DESC") // newest first, as for passengers
     List<TravelBooking> findByDriverId(@Param("driverId") Long driverId);
 
     @Query("SELECT COUNT(b) FROM TravelBooking b WHERE b.driverId = :driverId " +

@@ -192,6 +192,15 @@ class BookingLifecycleTest {
     }
 
     @Test
+    @DisplayName("an operator-configured early-start window lets a trip start ahead of its date (default: none)")
+    void earlyStartWindowIsConfigurable() {
+        booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
+        DriverService service = driverService(mock(FileStorageService.class));
+        ReflectionTestUtils.setField(service, "earlyStartDays", 5L);
+        assertDoesNotThrow(() -> service.startTrip(7L, bookingId.toString()));
+    }
+
+    @Test
     @DisplayName("the end-of-trip photo needs a started trip")
     void photoNeedsAStartedTrip() {
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);

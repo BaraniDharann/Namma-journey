@@ -158,7 +158,11 @@ for (const role of ROLES) {
       // Every chart either draws or says plainly that there is nothing to chart yet.
       await expect(card.locator('.pc-donut')).toHaveCount(0);
       const charts = page.locator('main .pc-chart, main .pc-donut, main .pc-gauge, main .pc-hbars, main .pc-nodata, main .pc-empty');
-      expect(await charts.count(), 'charts or honest empty states are present').toBeGreaterThanOrEqual(2);
+      // The traveller dashboard has one chart (the analytics card); its second "chart" used to be the
+      // "No trip planned" empty state, which only shows for an account with no upcoming trip - so the
+      // old ">= 2" passed or failed depending on what earlier specs left behind.
+      expect(await charts.count(), 'charts or honest empty states are present')
+        .toBeGreaterThanOrEqual(role.name === 'traveller' ? 1 : 2);
 
       if (role.name === 'owner') {
         await expect(page.locator('.pc-today'), 'the "needs you today" block').toBeVisible();

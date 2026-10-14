@@ -54,7 +54,7 @@ class UserServiceBookingListTest {
         TravelBooking withDriverAndPhoto = booking(7L);
         TravelBooking sameDriver = booking(7L);
         TravelBooking unassigned = booking(null);
-        when(bookings.findByUserId(USER)).thenReturn(List.of(withDriverAndPhoto, sameDriver, unassigned));
+        when(bookings.findByUserIdOrderByBookingDateDesc(USER)).thenReturn(List.of(withDriverAndPhoto, sameDriver, unassigned));
 
         Driver murugan = new Driver();
         murugan.setId(7L);

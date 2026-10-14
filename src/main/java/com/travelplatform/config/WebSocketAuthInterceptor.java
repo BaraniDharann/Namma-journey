@@ -49,6 +49,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     @Autowired
     private com.travelplatform.security.TokenVersionService tokenVersionService;
 
+    @Autowired(required = false)
+    private com.travelplatform.security.RevokedTokenStore revokedTokens;
+
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
@@ -76,7 +79,8 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 String role = jwtUtil.extractRole(token);
                 // Same revocation rule as REST: a token from before a reset or logout is refused.
                 if (userId != null && role != null
-                        && tokenVersionService.isCurrent(role, userId, jwtUtil.extractTokenVersion(token))) {
+                        && tokenVersionService.isCurrent(role, userId, jwtUtil.extractTokenVersion(token))
+                        && (revokedTokens == null || !revokedTokens.isRevoked(jwtUtil.extractJti(token)))) {
                     return new UsernamePasswordAuthenticationToken(
                             userId, null, List.of(new SimpleGrantedAuthority(role)));
                 }

@@ -104,6 +104,7 @@ class TokenRevocationTest {
         JwtAuthenticationFilter filter = new JwtAuthenticationFilter();
         ReflectionTestUtils.setField(filter, "jwtUtil", jwt);
         ReflectionTestUtils.setField(filter, "tokenVersionService", versions);
+        ReflectionTestUtils.setField(filter, "revokedTokens", mock(RevokedTokenStore.class)); // no session logged out
 
         String stale = jwt.generateToken(userId.toString(), "ROLE_USER", 0L);
         versions.revokeUser(user);

@@ -1,5 +1,6 @@
 import { Browser, BrowserContext, Page } from '@playwright/test';
 import { freshIp } from './api';
+import { API_BASE, WEB_BASE } from './env';
 
 export type Session = { token: string; userId: string; role: string; name: string; email: string; mobile: string };
 
@@ -43,7 +44,8 @@ export async function withApiIp(ctx: BrowserContext, label: string) {
   const ip = freshIp(label);
   await ctx.route('**/*', async (route) => {
     const url = route.request().url();
-    if (/localhost:(8080|5173)/.test(url)) {
+    // Our own servers, whichever ports they run on (E2E_API_BASE / E2E_WEB_BASE).
+    if (url.startsWith(API_BASE) || url.startsWith(WEB_BASE)) {
       await route.continue({ headers: { ...route.request().headers(), 'x-forwarded-for': ip } });
     } else {
       await route.continue();

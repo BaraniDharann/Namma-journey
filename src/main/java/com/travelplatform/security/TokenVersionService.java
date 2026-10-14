@@ -72,20 +72,6 @@ public class TokenVersionService {
         versions.invalidate("ROLE_OWNER:" + owner.getId());
     }
 
-    /** Logs the caller out everywhere: every token issued so far for this account stops working. */
-    public void revoke(String role, String principal) {
-        try {
-            switch (role) {
-                case "ROLE_USER" -> users.findById(UUID.fromString(principal)).ifPresent(this::revokeUser);
-                case "ROLE_DRIVER" -> drivers.findById(Long.valueOf(principal)).ifPresent(this::revokeDriver);
-                case "ROLE_OWNER" -> owners.findById(Long.valueOf(principal)).ifPresent(this::revokeOwner);
-                default -> { }
-            }
-        } catch (IllegalArgumentException malformedId) {
-            // nothing to revoke
-        }
-    }
-
     private Long lookup(String role, String principal) {
         try {
             return switch (role) {

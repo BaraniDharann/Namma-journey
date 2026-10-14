@@ -13,6 +13,9 @@ export const backendEnv: Record<string, string> = (() => {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
     if (m) out[m[1]] = m[2].trim();
   }
+  // Point the suite at a throwaway database (e.g. a clone of the dev DB) without editing .env:
+  // the backend under test gets the same URL as its DB_URL.
+  if (process.env.E2E_DB_URL) out.DB_URL = process.env.E2E_DB_URL;
   return out;
 })();
 

@@ -23,6 +23,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Autowired
     private com.travelplatform.security.TokenVersionService tokenVersionService;
+
+    @Autowired
+    private com.travelplatform.security.RevokedTokenStore revokedTokens;
     
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -42,7 +45,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     role = jwtUtil.extractRole(token);
                     // A correctly signed token is not enough: the account must still exist and the
                     // token must not predate a password reset or logout (token_version).
-                    current = tokenVersionService.isCurrent(role, userId, jwtUtil.extractTokenVersion(token));
+                    current = tokenVersionService.isCurrent(role, userId, jwtUtil.extractTokenVersion(token))
+                            && !revokedTokens.isRevoked(jwtUtil.extractJti(token)); // logged out on this device
                 }
                 if (current) {
 

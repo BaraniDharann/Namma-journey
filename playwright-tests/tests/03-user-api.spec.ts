@@ -89,7 +89,11 @@ test.describe('User API', () => {
     const b = await created.json();
 
     // Payment is gated on confirmation — that gate is asserted separately below.
-    const confirm = await c.user.post(`/api/user/${U}/bookings/${b.bookingId}/confirm`);
+    // A booking becomes CONFIRMED when a driver is assigned - passengers can no longer confirm their
+    // own booking over the driver's head (that endpoint was removed).
+    const confirm = await c.owner.post(`/api/owner/bookings/${b.bookingId}/assign-driver`, {
+      data: { driverId: Number(acc.driver.driverId) },
+    });
     expect(confirm.status(), (await confirm.text()).slice(0, 300)).toBe(200);
 
     const pay = await c.user.post(`/api/user/${U}/bookings/${b.bookingId}/payment`, {
@@ -105,9 +109,14 @@ test.describe('User API', () => {
   test('rejects a payment with no method', async () => {
     const created = await c.user.post(`/api/user/${U}/bookings`, { data: bookingPayload() });
     const b = await created.json();
-    await c.user.post(`/api/user/${U}/bookings/${b.bookingId}/confirm`);
+    // Confirm it first (driver assigned), so the 400 below is about the missing method and not the
+    // booking still being PENDING.
+    expect((await c.owner.post(`/api/owner/bookings/${b.bookingId}/assign-driver`, {
+      data: { driverId: Number(acc.driver.driverId) },
+    })).status()).toBe(200);
     const pay = await c.user.post(`/api/user/${U}/bookings/${b.bookingId}/payment`, { data: { paymentMethod: '' } });
     expect(pay.status()).toBe(400);
+    expect(await pay.text()).toContain('method');
   });
 
   test('payment is refused before the booking is confirmed', async () => {

@@ -61,6 +61,8 @@ public class JwtUtil {
         return Jwts.builder()
                 .claims(claims)
                 .subject(userId)
+                // Unique per token, so logout can end exactly this session (RevokedTokenStore).
+                .id(java.util.UUID.randomUUID().toString())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(signingKey, Jwts.SIG.HS256)
@@ -77,6 +79,15 @@ public class JwtUtil {
 
     public String extractUserId(String token) {
         return extractAllClaims(token).getSubject();
+    }
+
+    /** The token's unique session id (jti); null for tokens issued before session ids existed. */
+    public String extractJti(String token) {
+        return extractAllClaims(token).getId();
+    }
+
+    public java.time.Instant extractExpiry(String token) {
+        return extractAllClaims(token).getExpiration().toInstant();
     }
 
     /** Tokens issued before versioning existed carry no claim; they count as version 0. */

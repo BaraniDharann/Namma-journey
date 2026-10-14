@@ -143,6 +143,20 @@ class SecurityEndpointsTest {
     }
 
     @Test
+    @DisplayName("logging out on one device ends that session only - the other device stays signed in")
+    void logoutEndsOnlyThatSession() throws Exception {
+        String phone = "Bearer " + jwt.generateToken(alice.getId().toString(), "ROLE_USER", alice.getTokenVersion());
+        String laptop = "Bearer " + jwt.generateToken(alice.getId().toString(), "ROLE_USER", alice.getTokenVersion());
+
+        mvc.perform(post("/api/auth/logout").header("Authorization", phone)).andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/user/" + alice.getId() + "/bookings").header("Authorization", phone))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/user/" + alice.getId() + "/bookings").header("Authorization", laptop))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("identity documents are not served without a signed link")
     void identityDocumentsNeedASignature() throws Exception {
         mvc.perform(get("/uploads/drivers/aadhaar_" + UUID.randomUUID() + ".jpg")).andExpect(status().isNotFound());

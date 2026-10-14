@@ -115,6 +115,16 @@ class OtpServiceSecurityTest {
     }
 
     @Test
+    @DisplayName("the resend cooldown is configurable; 0 turns it off (used by the end-to-end suite)")
+    void cooldownIsConfigurable() {
+        Otp justSent = new Otp();
+        justSent.setCreatedAt(LocalDateTime.now().minusSeconds(5));
+        when(repo.findTopByEmailOrderByCreatedAtDesc(EMAIL)).thenReturn(Optional.of(justSent));
+        ReflectionTestUtils.setField(service, "resendCooldownSeconds", 0L);
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.sendOtp(EMAIL));
+    }
+
+    @Test
     @DisplayName("background sends (driver login, reset by mobile) skip quietly during the cooldown instead of failing")
     void quietSendSkipsDuringCooldown() {
         Otp justSent = new Otp();
