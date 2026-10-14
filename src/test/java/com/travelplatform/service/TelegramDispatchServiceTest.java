@@ -44,7 +44,7 @@ class TelegramDispatchServiceTest {
         booking.setToPlace(toPlace);
         booking.setFromDate(LocalDate.of(2026, 7, 28));
         booking.setDistanceKm(32.0);
-        booking.setTotalAmount(850.0);
+        booking.setTotalAmount(new java.math.BigDecimal("850.0"));
         return booking;
     }
 

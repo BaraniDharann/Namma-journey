@@ -1,0 +1,18 @@
+# Scrapes the backend's Micrometer metrics every 15s and evaluates the alert rules.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: namma-backend
+    metrics_path: /actuator/prometheus
+    # /actuator/prometheus refuses anyone without METRICS_SCRAPE_TOKEN
+    # (ScrapeTokenAuthorizationManager). docker-compose mounts the token as this file.
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/scrape-token
+    static_configs:
+      - targets: ["backend:8080"]

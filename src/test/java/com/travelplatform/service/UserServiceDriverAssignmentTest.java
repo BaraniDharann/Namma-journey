@@ -81,7 +81,7 @@ class UserServiceDriverAssignmentTest {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(routingService.calculateRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(new RouteInfo(460.0, 480L, "NH38"));
-        when(ownerService.getCurrentPricePerKm()).thenReturn(14.0);
+        when(ownerService.getCurrentPricePerKm()).thenReturn(new java.math.BigDecimal("14.0"));
         when(photoRepository.findByBookingId(any())).thenReturn(Optional.empty());
         when(driverRepository.findById(any())).thenReturn(Optional.empty());
     }
@@ -188,6 +188,45 @@ class UserServiceDriverAssignmentTest {
         assertNull(saved.getValue().getDriverId());
         assertNull(driverIdsAtSave.get(driverIdsAtSave.size() - 1));
         verify(notificationService, never()).notifyDriverAssigned(any(), any());
+    }
+
+    @Test
+    @DisplayName("the fare is rounded to whole paise when the booking is created")
+    void fareIsRoundedToPaise() {
+        // OSRM distances carry metres: 461.237 km x 14/km = 6457.318, which is not an amount of
+        // money anyone can pay. It used to be stored as-is, while the UPI link showed 6457.32.
+        when(routingService.calculateRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
+                .thenReturn(new RouteInfo(461.237, 480L, "NH38"));
+        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of());
+        savesFailingForDrivers();
+
+        service.createBooking(USER_ID, request());
+
+        ArgumentCaptor<TravelBooking> saved = ArgumentCaptor.forClass(TravelBooking.class);
+        verify(bookingRepository).saveAndFlush(saved.capture());
+        // equals, not compareTo: the scale must be exactly 2 too, i.e. whole paise.
+        assertEquals(new java.math.BigDecimal("6457.32"), saved.getValue().getTotalAmount());
+    }
+
+    @Test
+    @DisplayName("lost driver races and created bookings are counted for the dashboard")
+    void raceAndCreationAreCounted() {
+        io.micrometer.core.instrument.simple.SimpleMeterRegistry registry =
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        io.micrometer.core.instrument.Metrics.addRegistry(registry);
+        try {
+            when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of(driver(1)));
+            when(driverRepository.findAvailableDriversExcluding(any(), any(), eq(List.of(1L))))
+                    .thenReturn(List.of(driver(2)));
+            savesFailingForDrivers(1L);
+
+            service.createBooking(USER_ID, request());
+
+            assertEquals(1.0, registry.get("namma.bookings.driver_race_lost").counter().count());
+            assertEquals(1.0, registry.get("namma.bookings.placed").tag("assigned", "true").counter().count());
+        } finally {
+            io.micrometer.core.instrument.Metrics.removeRegistry(registry);
+        }
     }
 
     @Test

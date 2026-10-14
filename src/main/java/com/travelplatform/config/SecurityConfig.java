@@ -1,5 +1,6 @@
 package com.travelplatform.config;
 
+import com.travelplatform.observability.ScrapeTokenAuthorizationManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -37,6 +38,9 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
 
+    @Value("${app.metrics.scrape-token:}")
+    private String metricsScrapeToken;
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
@@ -63,6 +67,9 @@ public class SecurityConfig {
                 // request volumes, endpoint names and internal timings, and /actuator/caches
                 // accepts DELETE, which would let an anonymous caller evict every cache.
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                // Prometheus cannot hold a user JWT; it presents METRICS_SCRAPE_TOKEN instead.
+                // Unset token = nobody, so metrics never become public by omission.
+                .requestMatchers("/actuator/prometheus").access(new ScrapeTokenAuthorizationManager(metricsScrapeToken))
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/places/**").permitAll()
                 .requestMatchers("/api/user/forgot-password").permitAll()

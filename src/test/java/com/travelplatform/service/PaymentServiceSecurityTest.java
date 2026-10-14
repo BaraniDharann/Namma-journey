@@ -71,7 +71,7 @@ class PaymentServiceSecurityTest {
         b.setId(BOOKING_ID);
         b.setUserId(USER_ID);
         b.setDriverId(DRIVER_ID);
-        b.setTotalAmount(2500.00);
+        b.setTotalAmount(new java.math.BigDecimal("2500.00"));
         b.setStatus(status);
         return b;
     }
@@ -82,7 +82,7 @@ class PaymentServiceSecurityTest {
         p.setBookingId(BOOKING_ID);
         p.setUserId(USER_ID);
         p.setDriverId(DRIVER_ID);
-        p.setAmount(2500.00);
+        p.setAmount(new java.math.BigDecimal("2500.00"));
         p.setPaymentMethod(method);
         p.setStatus(status);
         p.setCreatedAt(LocalDateTime.now());
@@ -98,7 +98,7 @@ class PaymentServiceSecurityTest {
                 .thenReturn(Optional.of(payment(Payment.PaymentMethod.CASH, Payment.PaymentStatus.VERIFIED)));
 
         CashPaymentRequest request = new CashPaymentRequest();
-        request.setAmountReceived(2500.00);
+        request.setAmountReceived(new java.math.BigDecimal("2500.00"));
 
         RuntimeException ex = assertThrows(RuntimeException.class,
                 () -> service.markCashReceived(DRIVER_ID, BOOKING_ID, request));
@@ -118,13 +118,29 @@ class PaymentServiceSecurityTest {
                 .thenReturn(Optional.of(payment(Payment.PaymentMethod.CASH, Payment.PaymentStatus.PENDING)));
 
         CashPaymentRequest request = new CashPaymentRequest();
-        request.setAmountReceived(1.00);
+        request.setAmountReceived(new java.math.BigDecimal("1.00"));
 
         assertThrows(IllegalArgumentException.class,
                 () -> service.markCashReceived(DRIVER_ID, BOOKING_ID, request));
 
         verify(paymentRepository, never()).save(any(Payment.class));
         verify(notificationService, never()).notifyPaymentReceived(any());
+    }
+
+    @Test
+    @DisplayName("even one paisa short is a shortfall: money is compared exactly, not within a tolerance")
+    void cashPaymentRejectsOnePaisaShort() {
+        when(bookingRepository.findById(BOOKING_ID))
+                .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.CONFIRMED)));
+        when(paymentRepository.findByBookingId(BOOKING_ID))
+                .thenReturn(Optional.of(payment(Payment.PaymentMethod.CASH, Payment.PaymentStatus.PENDING)));
+
+        CashPaymentRequest request = new CashPaymentRequest();
+        request.setAmountReceived(new java.math.BigDecimal("2499.99"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.markCashReceived(DRIVER_ID, BOOKING_ID, request));
+        verify(paymentRepository, never()).save(any(Payment.class));
     }
 
     @Test
@@ -136,7 +152,7 @@ class PaymentServiceSecurityTest {
                 .thenReturn(Optional.of(payment(Payment.PaymentMethod.CASH, Payment.PaymentStatus.PENDING)));
 
         CashPaymentRequest request = new CashPaymentRequest();
-        request.setAmountReceived(2500.00);
+        request.setAmountReceived(new java.math.BigDecimal("2500.00"));
 
         PaymentResponse response = service.markCashReceived(DRIVER_ID, BOOKING_ID, request);
 

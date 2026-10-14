@@ -28,13 +28,13 @@ public class TravelBookingResponse {
     private Double distanceKm;
     private Long estimatedTimeMinutes;
     private String estimatedTimeFormatted;
-    private Double totalAmount;
+    private java.math.BigDecimal totalAmount;
     private String routeDetails;
     private LocalDateTime bookingDate;
     private String status;
     private String bookingType;
     private Integer bookingHours;
-    private Double pricePerHourAtBooking;
+    private java.math.BigDecimal pricePerHourAtBooking;
     private String driverEndTripPhoto;
     private DriverDetailsResponse driver;
 }

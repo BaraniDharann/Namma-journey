@@ -13,7 +13,7 @@ public class TravelPackageResponse {
     private String state;
     private Integer durationDays;
     private Integer durationNights;
-    private Double pricePerPerson;
+    private java.math.BigDecimal pricePerPerson;
     private Integer maxGroupSize;
     private List<String> placesIncluded;
     private Boolean foodIncluded;

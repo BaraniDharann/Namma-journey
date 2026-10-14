@@ -23,4 +23,23 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /**
+     * Runs outbound notifications (Telegram, email hand-off) after their transaction commits,
+     * so the request thread and its DB connection never wait on a third-party API. Bounded queue:
+     * when it is full AfterCommitDispatcher drops and logs rather than blocking the request -
+     * the in-app notification row is the durable record either way.
+     */
+    @Bean(name = "dispatchExecutor")
+    public Executor dispatchExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("dispatch-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(20);
+        executor.initialize();
+        return executor;
+    }
 }

@@ -26,6 +26,7 @@ public class NotificationService {
     private final EmailService emailService;
     private final UserRepository userRepository;
     private final TelegramDispatchService telegramDispatchService;
+    private final AfterCommitDispatcher dispatcher;
 
     public void notifyBookingCreated(TravelBooking booking) {
         Notification notification = new Notification();
@@ -56,20 +57,17 @@ public class NotificationService {
         notificationRepository.save(notification);
 
         if (driver.getEmail() != null) {
-            emailService.sendTripAssignedEmail(driver.getEmail(), driver.getName(), booking);
+            dispatcher.dispatch("email", () ->
+                    emailService.sendTripAssignedEmail(driver.getEmail(), driver.getName(), booking));
         }
 
         // The point of the whole Telegram channel: a driver at the wheel will not read an
         // email or open the web app, but their phone does alert for Telegram, and the card
-        // carries an Accept button they can hit without navigating anywhere. Best-effort by
-        // design - the assignment is already committed and the rows above remain the record
-        // of it, so a Telegram outage must not fail the caller.
-        try {
-            telegramDispatchService.sendTripAssigned(booking, driver);
-        } catch (Exception e) {
-            log.warn("Telegram dispatch failed for driver {} on booking {}: {}",
-                    driver.getId(), booking.getId(), e.toString());
-        }
+        // carries an Accept button they can hit without navigating anywhere. Sent only after
+        // commit - a card for a booking that then rolled back would have an Accept button for
+        // a trip that does not exist - and best-effort: the row above stays the record of it,
+        // so a Telegram outage never fails the caller (AfterCommitDispatcher logs it).
+        dispatcher.dispatch("telegram", () -> telegramDispatchService.sendTripAssigned(booking, driver));
 
         log.info("Notification sent to driver {} for booking: {}", driver.getId(), booking.getId());
     }
@@ -88,7 +86,8 @@ public class NotificationService {
         notificationRepository.save(notification);
 
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
-            emailService.sendTripAcceptedEmail(user.getEmail(), user.getName(), booking, driver);
+            dispatcher.dispatch("email", () ->
+                    emailService.sendTripAcceptedEmail(user.getEmail(), user.getName(), booking, driver));
         });
         log.info("Notification sent to user {} for trip accepted: {}", booking.getUserId(), booking.getId());
     }
@@ -118,7 +117,8 @@ public class NotificationService {
         notificationRepository.save(userNotification);
 
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
-            emailService.sendTripRejectedEmail(user.getEmail(), user.getName(), booking);
+            dispatcher.dispatch("email", () ->
+                    emailService.sendTripRejectedEmail(user.getEmail(), user.getName(), booking));
         });
 
         // Notify owner
@@ -173,7 +173,8 @@ public class NotificationService {
         notificationRepository.save(userNotification);
 
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
-            emailService.sendTripEndedEmail(user.getEmail(), user.getName(), booking);
+            dispatcher.dispatch("email", () ->
+                    emailService.sendTripEndedEmail(user.getEmail(), user.getName(), booking));
         });
 
         // Notify owner
@@ -218,7 +219,8 @@ public class NotificationService {
         notificationRepository.save(userNotification);
 
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
-            emailService.sendPaymentConfirmationEmail(user.getEmail(), user.getName(), booking);
+            dispatcher.dispatch("email", () ->
+                    emailService.sendPaymentConfirmationEmail(user.getEmail(), user.getName(), booking));
         });
 
         log.info("Payment notifications sent for booking: {}", booking.getId());

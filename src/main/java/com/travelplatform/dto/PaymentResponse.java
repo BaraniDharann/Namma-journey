@@ -12,7 +12,7 @@ import java.util.UUID;
 public class PaymentResponse {
     private UUID paymentId;
     private UUID bookingId;
-    private Double amount;
+    private java.math.BigDecimal amount;
     private String paymentMethod;
     private String status;
     private String upiQrCode;       // base64 encoded PNG QR code image

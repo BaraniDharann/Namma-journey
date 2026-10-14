@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import PlaceAutocomplete from '../../components/PlaceAutocomplete'
 import RouteMap from '../../components/RouteMap'
 import { useAuth } from '../../context/AuthContext'
 import { createBooking, getCurrentPricing } from '../../utils/api'
+import { actionKey } from '../../utils/idempotency'
 import { MobileRequiredPanel, needsMobileNumber } from '../../components/MobileNumberGate'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty } from '../../components/dash/ui'
@@ -27,6 +28,8 @@ export default function NewBooking() {
   const navigate = useNavigate()
   const celebrate = useCelebrate()
   const [searchParams] = useSearchParams()
+  // One key per booking attempt, reused if the request is retried, so it can only book once.
+  const bookingKey = useRef(actionKey())
 
   const [form, setForm] = useState({
     fromPlace: searchParams.get('from') || '', toPlace: searchParams.get('to') || '',
@@ -91,7 +94,9 @@ export default function NewBooking() {
         acType: form.acType,
         bookingType: form.bookingType,
         bookingHours: form.bookingType === 'HOUR_BASED' ? Number(form.bookingHours) : null,
-      })
+      }, bookingKey.current.get())
+      // Done: the next booking is a new action and needs its own key.
+      bookingKey.current.reset()
       setSuccess(res.data)
       celebrate({
         title: 'Trip booked',

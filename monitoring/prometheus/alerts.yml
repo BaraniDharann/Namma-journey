@@ -1,0 +1,65 @@
+# Alert rules. Each one names a user-visible symptom, not just a number crossing a line.
+# Visible at http://localhost:9090/alerts and on the Grafana dashboard. To be paged, point an
+# Alertmanager at this Prometheus (alerting.alertmanagers in prometheus.yml).
+groups:
+  - name: namma-journey
+    rules:
+      - alert: BackendDown
+        expr: up{job="namma-backend"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Backend is not answering - nobody can book or track a trip"
+
+      - alert: HighErrorRate
+        # Share of API requests answered with a 5xx over the last 5 minutes.
+        expr: |
+          sum(rate(http_server_requests_seconds_count{uri!~"/actuator.*", status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_server_requests_seconds_count{uri!~"/actuator.*"}[5m])), 1e-9)
+            > 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "More than 5% of requests are failing with server errors"
+
+      - alert: SlowRequests
+        # p95 across every endpoint and instance. Above 2s users notice and start re-tapping.
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{uri!~"/actuator.*"}[5m]))) > 2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "95th percentile response time is above 2 seconds"
+
+      - alert: DatabasePoolExhausted
+        # Requests are queueing for one of the 20 pooled connections. Next stop: timeouts.
+        expr: max(hikaricp_connections_pending) > 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Requests are waiting for a database connection"
+
+      - alert: NotificationsFailing
+        # Telegram/email sends that failed or were dropped. Drivers may be missing trip offers.
+        expr: sum(increase(namma_notifications_dispatch_total{outcome!="sent"}[15m])) > 5
+        for: 0m
+        labels: { severity: warning }
+        annotations:
+          summary: "Telegram or email notifications are failing - drivers may not hear about trips"
+
+      - alert: HeavyRateLimiting
+        # Sustained 429s: either an attack, or limits set too tight for real traffic.
+        expr: sum(rate(http_server_requests_seconds_count{status="429"}[5m])) > 1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than one request per second is being rate limited"
+
+      - alert: HeapNearlyFull
+        expr: |
+          sum(jvm_memory_used_bytes{area="heap"}) / sum(jvm_memory_max_bytes{area="heap"}) > 0.9
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "JVM heap above 90% for 10 minutes - risk of OutOfMemoryError"

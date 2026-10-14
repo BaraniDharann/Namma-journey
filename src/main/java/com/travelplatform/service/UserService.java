@@ -7,9 +7,11 @@ import com.travelplatform.dto.TravelBookingRequest;
 import com.travelplatform.dto.TravelBookingResponse;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.entity.TravelBooking;
+import com.travelplatform.entity.TripDriverPhoto;
 import com.travelplatform.repository.DriverRepository;
 import com.travelplatform.repository.TravelBookingRepository;
 import com.travelplatform.repository.UserRepository;
+import io.micrometer.core.instrument.Metrics;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -19,12 +21,16 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.travelplatform.repository.TripDriverPhotoRepository;
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -109,6 +115,9 @@ public class UserService {
                 return saveWithDriver(userId, request, routeInfo, lostDrivers, true);
             } catch (DriverTakenException taken) {
                 lostDrivers.add(taken.driverId);
+                // How often two bookings collide on one driver: a rising rate means the fleet is
+                // too small for demand on those dates.
+                Metrics.counter("namma.bookings.driver_race_lost").increment();
             }
         }
         return saveWithDriver(userId, request, routeInfo, lostDrivers, false);
@@ -155,6 +164,7 @@ public class UserService {
             if (driver != null) {
                 notificationService.notifyDriverAssigned(savedBooking, driver);
             }
+            Metrics.counter("namma.bookings.placed", "assigned", String.valueOf(driver != null)).increment();
             return mapToResponse(savedBooking);
         });
     }
@@ -165,17 +175,17 @@ public class UserService {
         // Determine booking type and calculate amount
         TravelBooking.BookingType bookingType = TravelBooking.BookingType.DISTANCE_BASED;
         Integer bookingHours = null;
-        Double pricePerHourAtBooking = null;
-        Double totalAmount;
+        BigDecimal pricePerHourAtBooking = null;
+        BigDecimal totalAmount;
 
         if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
             bookingType = TravelBooking.BookingType.HOUR_BASED;
             bookingHours = request.getBookingHours();
             pricePerHourAtBooking = ownerService.getCurrentPricePerHour();
-            totalAmount = bookingHours * pricePerHourAtBooking;
+            totalAmount = Money.times(pricePerHourAtBooking, bookingHours);
         } else {
-            Double pricePerKm = ownerService.getCurrentPricePerKm();
-            totalAmount = routeInfo.getDistanceKm() * pricePerKm;
+            // Rounded to paise once, here: distances carry metres (461.237 km), money does not.
+            totalAmount = Money.times(ownerService.getCurrentPricePerKm(), routeInfo.getDistanceKm());
         }
 
         TravelBooking booking = new TravelBooking();
@@ -229,10 +239,35 @@ public class UserService {
         }
     }
 
+    /**
+     * Every booking of a traveller, with driver and end-trip photo attached.
+     *
+     * <p>Three queries whatever the list size. Mapping each booking on its own looked up its photo
+     * and its driver separately - two queries per booking, ~60 per page for a regular traveller -
+     * and under load that alone exhausted the connection pool (see UserServiceBookingListTest).
+     */
     public List<TravelBookingResponse> getAllBookings(UUID userId) {
-        return bookingRepository.findByUserId(userId)
-                .stream()
-                .map(this::mapToResponse)
+        List<TravelBooking> bookings = bookingRepository.findByUserId(userId);
+        if (bookings.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, String> photoByBooking = new HashMap<>();
+        tripDriverPhotoRepository.findByBookingIdIn(bookings.stream().map(TravelBooking::getId).toList())
+                .forEach(photo -> photoByBooking.putIfAbsent(photo.getBookingId(), photo.getPhotoPath()));
+
+        Set<Long> driverIds = bookings.stream()
+                .map(TravelBooking::getDriverId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Driver> driverById = new HashMap<>();
+        if (!driverIds.isEmpty()) {
+            driverRepository.findAllById(driverIds).forEach(d -> driverById.put(d.getId(), d));
+        }
+
+        return bookings.stream()
+                .map(b -> mapToResponse(b, photoByBooking.get(b.getId()),
+                        b.getDriverId() == null ? null : driverById.get(b.getDriverId())))
                 .collect(Collectors.toList());
     }
     
@@ -277,17 +312,17 @@ public class UserService {
 
         TravelBooking.BookingType bookingType = TravelBooking.BookingType.DISTANCE_BASED;
         Integer bookingHours = null;
-        Double pricePerHourAtBooking = null;
-        Double totalAmount;
+        BigDecimal pricePerHourAtBooking = null;
+        BigDecimal totalAmount;
 
         if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
             bookingType = TravelBooking.BookingType.HOUR_BASED;
             bookingHours = request.getBookingHours();
             pricePerHourAtBooking = ownerService.getCurrentPricePerHour();
-            totalAmount = bookingHours * pricePerHourAtBooking;
+            totalAmount = Money.times(pricePerHourAtBooking, bookingHours);
         } else {
-            Double pricePerKm = ownerService.getCurrentPricePerKm();
-            totalAmount = routeInfo.getDistanceKm() * pricePerKm;
+            // Rounded to paise once, here: distances carry metres (461.237 km), money does not.
+            totalAmount = Money.times(ownerService.getCurrentPricePerKm(), routeInfo.getDistanceKm());
         }
 
         booking.setUserName(request.getUserName());
@@ -327,7 +362,17 @@ public class UserService {
         bookingRepository.delete(booking);
     }
     
+    /** One booking: looks up its own photo and driver. Lists use the batched getAllBookings path. */
     private TravelBookingResponse mapToResponse(TravelBooking booking) {
+        String photoPath = tripDriverPhotoRepository.findByBookingId(booking.getId())
+                .map(TripDriverPhoto::getPhotoPath)
+                .orElse(null);
+        Driver driver = booking.getDriverId() == null ? null
+                : driverRepository.findById(booking.getDriverId()).orElse(null);
+        return mapToResponse(booking, photoPath, driver);
+    }
+
+    private TravelBookingResponse mapToResponse(TravelBooking booking, String endTripPhotoPath, Driver driver) {
         TravelBookingResponse response = new TravelBookingResponse();
         response.setBookingId(booking.getId());
         response.setUserName(booking.getUserName());
@@ -355,20 +400,16 @@ public class UserService {
         response.setPricePerHourAtBooking(booking.getPricePerHourAtBooking());
 
         // Include driver end-trip photo if exists
-        tripDriverPhotoRepository.findByBookingId(booking.getId()).ifPresent(photo ->
-            response.setDriverEndTripPhoto(photo.getPhotoPath())
-        );
+        response.setDriverEndTripPhoto(endTripPhotoPath);
 
-        if (booking.getDriverId() != null) {
-            driverRepository.findById(booking.getDriverId()).ifPresent(driver -> {
-                DriverDetailsResponse driverDetails = new DriverDetailsResponse();
-                driverDetails.setDriverId(driver.getId());
-                driverDetails.setName(driver.getName());
-                driverDetails.setMobile(driver.getMobile());
-                driverDetails.setPhoto(driver.getPhoto());
-                driverDetails.setLicenseNumber(driver.getLicenseNumber());
-                response.setDriver(driverDetails);
-            });
+        if (driver != null) {
+            DriverDetailsResponse driverDetails = new DriverDetailsResponse();
+            driverDetails.setDriverId(driver.getId());
+            driverDetails.setName(driver.getName());
+            driverDetails.setMobile(driver.getMobile());
+            driverDetails.setPhoto(driver.getPhoto());
+            driverDetails.setLicenseNumber(driver.getLicenseNumber());
+            response.setDriver(driverDetails);
         }
 
         return response;

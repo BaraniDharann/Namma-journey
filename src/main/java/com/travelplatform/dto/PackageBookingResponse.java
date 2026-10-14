@@ -13,7 +13,7 @@ public class PackageBookingResponse {
     private String packageCategory;
     private Integer durationDays;
     private Integer durationNights;
-    private Double pricePerPerson;
+    private java.math.BigDecimal pricePerPerson;
     private UUID userId;
     private String userName;
     private String userEmail;
@@ -21,7 +21,7 @@ public class PackageBookingResponse {
     private Integer numberOfPersons;
     private LocalDate travelDate;
     private String specialRequests;
-    private Double totalAmount;
+    private java.math.BigDecimal totalAmount;
     private String status;
     private LocalDateTime bookingDate;
     private LocalDateTime confirmedAt;

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../../context/AuthContext'
 import { createBooking, getPublicPricing } from '../../utils/api'
+import { actionKey } from '../../utils/idempotency'
 import PlaceAutocomplete from '../PlaceAutocomplete'
 import { EASE } from '../motion/primitives'
 import Icon from '../dash/Icon'
@@ -48,6 +49,8 @@ export default function QuickBooking() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const celebrate = useCelebrate()
+  // One key per booking attempt, reused if the request is retried, so it can only book once.
+  const bookingKey = useRef(actionKey())
   const [qb, setQb] = useState(EMPTY)
   const [pricing, setPricing] = useState({ pricePerHour: 150 })
   const [loading, setLoading] = useState(false)
@@ -98,7 +101,9 @@ export default function QuickBooking() {
         fromDate: travelDate, toDate: travelDate,
         travelMembers: qb.travelMembers, acType: qb.acType,
         bookingType: 'HOUR_BASED', bookingHours: qb.bookingHours,
-      })
+      }, bookingKey.current.get())
+      // Done: the next booking is a new action and needs its own key.
+      bookingKey.current.reset()
       setSuccess(res.data)
       celebrate({
         title: 'Your ride is booked',

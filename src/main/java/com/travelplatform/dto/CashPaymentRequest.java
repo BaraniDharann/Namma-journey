@@ -9,5 +9,5 @@ public class CashPaymentRequest {
     
     @NotNull(message = "Amount received is required")
     @Positive(message = "Amount must be positive")
-    private Double amountReceived;
+    private java.math.BigDecimal amountReceived;
 }

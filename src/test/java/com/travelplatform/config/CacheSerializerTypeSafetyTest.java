@@ -58,6 +58,12 @@ class CacheSerializerTypeSafetyTest {
         assertEquals("Ooty getaway", ((TravelPackageResponse) roundTrip(pkg)).getName());
 
         assertEquals(14.0, roundTrip(14.0));
+
+        // Money is BigDecimal since V8: prices are cached bare, revenue inside maps.
+        assertEquals(new java.math.BigDecimal("14.50"), roundTrip(new java.math.BigDecimal("14.50")));
+        Map<String, Object> withMoney = new HashMap<>();
+        withMoney.put("totalRevenue", new java.math.BigDecimal("6457.62"));
+        assertEquals(new java.math.BigDecimal("6457.62"), ((Map<?, ?>) roundTrip(withMoney)).get("totalRevenue"));
     }
 
     @Test

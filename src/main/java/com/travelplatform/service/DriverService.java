@@ -16,11 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -35,6 +30,7 @@ public class DriverService {
     private final NotificationService notificationService;
     private final TripDriverPhotoRepository tripDriverPhotoRepository;
     private final BookingDriverRejectionRepository rejectionRepository;
+    private final FileStorageService fileStorageService;
 
     @Value("${file.upload-dir:uploads}")
     private String uploadDir;
@@ -79,8 +75,18 @@ public class DriverService {
 
     public List<TravelBookingResponse> getAssignedBookings(Long driverId) {
         // Indexed lookup; avoids a full table scan that previously degraded as the bookings table grew.
-        return bookingRepository.findByDriverId(driverId).stream()
-                .map(this::mapToResponse)
+        List<TravelBooking> trips = bookingRepository.findByDriverId(driverId);
+        if (trips.isEmpty()) {
+            return List.of();
+        }
+        // Three queries for the whole list: the trips, all their end-trip photos, and the driver -
+        // who is the same person on every row. Mapping each trip alone ran two queries per trip.
+        java.util.Map<UUID, String> photoByTrip = new java.util.HashMap<>();
+        tripDriverPhotoRepository.findByBookingIdIn(trips.stream().map(TravelBooking::getId).toList())
+                .forEach(p -> photoByTrip.putIfAbsent(p.getBookingId(), p.getPhotoPath()));
+        Driver driver = driverRepository.findById(driverId).orElse(null);
+        return trips.stream()
+                .map(t -> mapToResponse(t, photoByTrip.get(t.getId()), driver))
                 .collect(Collectors.toList());
     }
 
@@ -213,46 +219,34 @@ public class DriverService {
             throw new RuntimeException("Photo is required");
         }
 
-        String contentType = photo.getContentType();
-        if (contentType == null || !contentType.startsWith("image/")) {
-            throw new RuntimeException("Only image files are allowed");
-        }
+        // Through the shared FileStore (disk volume or S3/R2), not ./driverphoto: that folder sat
+        // outside the Docker uploads volume, so every redeploy deleted the photos, and a second
+        // instance could never see them. Type checking and naming live in FileStorageService.
+        String photoPath = fileStorageService.storeImage(photo, "trips/trip_" + bookingId, "driver_" + driverId);
 
-        try {
-            String tripFolder = "trip_" + bookingId;
-            Path dirPath = Paths.get("driverphoto", tripFolder);
-            Files.createDirectories(dirPath);
+        // Remove existing photo if re-uploading
+        tripDriverPhotoRepository.findByBookingIdAndDriverId(bookingId, driverId)
+                .ifPresent(tripDriverPhotoRepository::delete);
 
-            String filename = "driver_" + driverId + "_" + System.currentTimeMillis()
-                    + getExtension(photo.getOriginalFilename());
-            Path filePath = dirPath.resolve(filename);
-            Files.copy(photo.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+        TripDriverPhoto tripPhoto = new TripDriverPhoto();
+        tripPhoto.setBookingId(bookingId);
+        tripPhoto.setDriverId(driverId);
+        tripPhoto.setPhotoPath(photoPath);
 
-            String photoPath = "/driverphoto/" + tripFolder + "/" + filename;
-
-            // Remove existing photo if re-uploading
-            tripDriverPhotoRepository.findByBookingIdAndDriverId(bookingId, driverId)
-                    .ifPresent(tripDriverPhotoRepository::delete);
-
-            TripDriverPhoto tripPhoto = new TripDriverPhoto();
-            tripPhoto.setBookingId(bookingId);
-            tripPhoto.setDriverId(driverId);
-            tripPhoto.setPhotoPath(photoPath);
-
-            return tripDriverPhotoRepository.save(tripPhoto);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to save photo: " + e.getMessage());
-        }
+        return tripDriverPhotoRepository.save(tripPhoto);
     }
 
-    private String getExtension(String filename) {
-        if (filename != null && filename.contains(".")) {
-            return filename.substring(filename.lastIndexOf("."));
-        }
-        return ".jpg";
-    }
-
+    /** One trip: looks up its own photo and driver. The list uses the batched getAssignedBookings path. */
     private TravelBookingResponse mapToResponse(TravelBooking booking) {
+        String photoPath = tripDriverPhotoRepository.findByBookingId(booking.getId())
+                .map(TripDriverPhoto::getPhotoPath)
+                .orElse(null);
+        Driver driver = booking.getDriverId() == null ? null
+                : driverRepository.findById(booking.getDriverId()).orElse(null);
+        return mapToResponse(booking, photoPath, driver);
+    }
+
+    private TravelBookingResponse mapToResponse(TravelBooking booking, String endTripPhotoPath, Driver driver) {
         TravelBookingResponse response = new TravelBookingResponse();
         response.setBookingId(booking.getId());
         response.setUserName(booking.getUserName());
@@ -279,22 +273,18 @@ public class DriverService {
         response.setPricePerHourAtBooking(booking.getPricePerHourAtBooking());
         response.setTotalAmount(booking.getTotalAmount());
 
-        tripDriverPhotoRepository.findByBookingId(booking.getId()).ifPresent(photo ->
-            response.setDriverEndTripPhoto(photo.getPhotoPath())
-        );
+        response.setDriverEndTripPhoto(endTripPhotoPath);
 
-        if (booking.getDriverId() != null) {
-            driverRepository.findById(booking.getDriverId()).ifPresent(driver -> {
-                DriverDetailsResponse driverDetails = new DriverDetailsResponse();
-                driverDetails.setDriverId(driver.getId());
-                driverDetails.setName(driver.getName());
-                driverDetails.setMobile(driver.getMobile());
-                driverDetails.setPhoto(driver.getPhoto());
-                driverDetails.setLicenseNumber(driver.getLicenseNumber());
-                response.setDriver(driverDetails);
-            });
+        if (driver != null) {
+            DriverDetailsResponse driverDetails = new DriverDetailsResponse();
+            driverDetails.setDriverId(driver.getId());
+            driverDetails.setName(driver.getName());
+            driverDetails.setMobile(driver.getMobile());
+            driverDetails.setPhoto(driver.getPhoto());
+            driverDetails.setLicenseNumber(driver.getLicenseNumber());
+            response.setDriver(driverDetails);
         }
-        
+
         return response;
     }
     

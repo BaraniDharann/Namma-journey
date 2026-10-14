@@ -1,9 +1,9 @@
 package com.travelplatform.config;
 
-import io.github.bucket4j.Bandwidth;
-import io.github.bucket4j.Bucket;
+import com.travelplatform.ratelimit.BucketStore;
+import com.travelplatform.ratelimit.LocalBucketStore;
+import com.travelplatform.ratelimit.RedisBucketStore;
 import io.github.bucket4j.ConsumptionProbe;
-import io.github.bucket4j.Refill;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,9 +21,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Token-bucket rate limiting.
@@ -51,12 +48,8 @@ public class RateLimitingFilter implements Filter {
 
     private static final Logger logger = LoggerFactory.getLogger(RateLimitingFilter.class);
 
-    private static final Duration REFILL_DURATION = Duration.ofMinutes(1);
-    private static final long STALE_THRESHOLD_MS = Duration.ofMinutes(10).toMillis();
-
-    private final Map<String, BucketEntry> generalBuckets = new ConcurrentHashMap<>();
-    private final Map<String, BucketEntry> authBuckets = new ConcurrentHashMap<>();
-    private final Map<String, BucketEntry> paymentBuckets = new ConcurrentHashMap<>();
+    // Where the buckets live: Redis (shared by every instance) or this JVM - see RateLimitConfig.
+    private final BucketStore buckets;
 
     private final ClientIpResolver clientIpResolver;
     private final JwtUtil jwtUtil;
@@ -83,9 +76,10 @@ public class RateLimitingFilter implements Filter {
     @Value("${app.ratelimit.authenticated-limit:300}")
     private int authenticatedLimit;
 
-    public RateLimitingFilter(ClientIpResolver clientIpResolver, JwtUtil jwtUtil) {
+    public RateLimitingFilter(ClientIpResolver clientIpResolver, JwtUtil jwtUtil, BucketStore buckets) {
         this.clientIpResolver = clientIpResolver;
         this.jwtUtil = jwtUtil;
+        this.buckets = buckets;
     }
 
     @Override
@@ -140,8 +134,8 @@ public class RateLimitingFilter implements Filter {
             }
         }
 
-        Bucket bucket = resolveBucket(key, limit, scope);
-        ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
+        // Scope prefix keeps the three budgets apart even for the same caller.
+        ConsumptionProbe probe = buckets.tryConsume(scope.name().toLowerCase() + ":" + key, limit);
 
         response.setHeader("X-Rate-Limit-Remaining", String.valueOf(probe.getRemainingTokens()));
 
@@ -198,70 +192,20 @@ public class RateLimitingFilter implements Filter {
                 || path.contains("/payments/");
     }
 
-    private Bucket resolveBucket(String key, int limit, Scope scope) {
-        Map<String, BucketEntry> buckets = switch (scope) {
-            case AUTH -> authBuckets;
-            case PAYMENT -> paymentBuckets;
-            case GENERAL -> generalBuckets;
-        };
-
-        BucketEntry entry = buckets.computeIfAbsent(key, ignored -> {
-            Bandwidth bandwidth = Bandwidth.classic(limit, Refill.greedy(limit, REFILL_DURATION));
-            Bucket bucket = Bucket.builder().addLimit(bandwidth).build();
-            return new BucketEntry(bucket);
-        });
-
-        entry.updateLastAccessTime();
-        return entry.getBucket();
-    }
-
-    /** Which budget a request draws on. Each has its own bucket map, so keys never collide. */
+    /** Which budget a request draws on. Part of the bucket key, so budgets never collide. */
     private enum Scope { AUTH, PAYMENT, GENERAL }
 
+    /**
+     * Frees in-memory buckets nobody has used for 10 minutes. Redis buckets expire on their own;
+     * this covers the local store and the local fallback Redis mode keeps for outages.
+     */
     @Scheduled(fixedRate = 600_000)
     public void cleanUpStaleBuckets() {
-        long now = System.currentTimeMillis();
-        int removed = 0;
-        removed += removeStaleEntries(generalBuckets, now);
-        removed += removeStaleEntries(authBuckets, now);
-        removed += removeStaleEntries(paymentBuckets, now);
+        LocalBucketStore local = buckets instanceof RedisBucketStore redis ? redis.fallback()
+                : buckets instanceof LocalBucketStore store ? store : null;
+        int removed = local == null ? 0 : local.removeStale();
         if (removed > 0) {
             logger.info("Cleaned up {} stale rate limit bucket(s)", removed);
-        }
-    }
-
-    private int removeStaleEntries(Map<String, BucketEntry> buckets, long now) {
-        int count = 0;
-        var iterator = buckets.entrySet().iterator();
-        while (iterator.hasNext()) {
-            var entry = iterator.next();
-            if (now - entry.getValue().getLastAccessTime() > STALE_THRESHOLD_MS) {
-                iterator.remove();
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private static class BucketEntry {
-        private final Bucket bucket;
-        private volatile long lastAccessTime;
-
-        BucketEntry(Bucket bucket) {
-            this.bucket = bucket;
-            this.lastAccessTime = System.currentTimeMillis();
-        }
-
-        Bucket getBucket() {
-            return bucket;
-        }
-
-        long getLastAccessTime() {
-            return lastAccessTime;
-        }
-
-        void updateLastAccessTime() {
-            this.lastAccessTime = System.currentTimeMillis();
         }
     }
 }

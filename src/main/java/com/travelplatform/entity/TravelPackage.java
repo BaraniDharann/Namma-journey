@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -37,8 +38,8 @@ public class TravelPackage {
     @Column(nullable = false)
     private Integer durationNights;
 
-    @Column(nullable = false)
-    private Double pricePerPerson;
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal pricePerPerson;
 
     @Column(nullable = false)
     private Integer maxGroupSize;

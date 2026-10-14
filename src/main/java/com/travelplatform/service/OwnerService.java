@@ -1,6 +1,8 @@
 package com.travelplatform.service;
 
 import com.travelplatform.dto.DriverDetailsResponse;
+import com.travelplatform.dto.MonthlyRevenue;
+import com.travelplatform.dto.RevenueTotals;
 import com.travelplatform.dto.TravelBookingResponse;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.entity.PricingConfig;
@@ -16,6 +18,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -24,6 +27,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class OwnerService {
+
+    /** Used until the owner sets prices for the first time. */
+    private static final BigDecimal DEFAULT_PRICE_PER_KM = new BigDecimal("10.00");
+    private static final BigDecimal DEFAULT_PRICE_PER_HOUR = new BigDecimal("150.00");
     
     private final TravelBookingRepository travelBookingRepository;
     private final PricingConfigRepository pricingConfigRepository;
@@ -36,7 +43,8 @@ public class OwnerService {
     }
     
     @CacheEvict(value = "pricing", allEntries = true)
-    public Map<String, Object> setPricePerKm(Double pricePerKm, Long ownerId) {
+    public Map<String, Object> setPricePerKm(BigDecimal requestedPricePerKm, Long ownerId) {
+        BigDecimal pricePerKm = Money.positivePrice(requestedPricePerKm, "Price per km");
         PricingConfig config = new PricingConfig();
         config.setPricePerKm(pricePerKm);
         config.setUpdatedAt(LocalDateTime.now());
@@ -51,18 +59,19 @@ public class OwnerService {
     }
     
     @Cacheable(value = "pricing")
-    public Double getCurrentPricePerKm() {
+    public BigDecimal getCurrentPricePerKm() {
         return pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
             .map(PricingConfig::getPricePerKm)
-            .orElse(10.0);
+            .orElse(DEFAULT_PRICE_PER_KM);
     }
 
     @CacheEvict(value = "hourlyPricing", allEntries = true)
-    public Map<String, Object> setPricePerHour(Double pricePerHour, Long ownerId) {
+    public Map<String, Object> setPricePerHour(BigDecimal requestedPricePerHour, Long ownerId) {
+        BigDecimal pricePerHour = Money.positivePrice(requestedPricePerHour, "Price per hour");
         PricingConfig config = pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
             .orElse(new PricingConfig());
         config.setPricePerHour(pricePerHour);
-        if (config.getPricePerKm() == null) config.setPricePerKm(10.0);
+        if (config.getPricePerKm() == null) config.setPricePerKm(DEFAULT_PRICE_PER_KM);
         config.setUpdatedAt(LocalDateTime.now());
         config.setUpdatedBy(ownerId);
         pricingConfigRepository.save(config);
@@ -75,10 +84,10 @@ public class OwnerService {
     }
 
     @Cacheable(value = "hourlyPricing")
-    public Double getCurrentPricePerHour() {
+    public BigDecimal getCurrentPricePerHour() {
         return pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
             .map(PricingConfig::getPricePerHour)
-            .orElse(150.0); // default ₹150/hour
+            .orElse(DEFAULT_PRICE_PER_HOUR);
     }
 
     public Map<String, Object> getDriverPhotoForBooking(UUID bookingId) {
@@ -92,72 +101,55 @@ public class OwnerService {
         return response;
     }
     
+    /*
+     * Revenue is summed by Postgres over NUMERIC money (TravelBookingRepository.revenueTotals,
+     * monthlyRevenue, revenueTrips) instead of loading every completed booking as a full entity
+     * and adding doubles in Java: exact to the paisa, and memory no longer grows with a year of
+     * trips. Every window is half-open [start, end), so a booking at exactly midnight on the 1st
+     * is counted once, in the new period. The JSON shape is unchanged.
+     */
+
     @Cacheable(value = "dailyRevenue", key = "#date.toString()")
     public Map<String, Object> getDailyRevenue(LocalDate date) {
-        LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.plusDays(1).atStartOfDay();
-        List<TravelBooking> bookings = travelBookingRepository.findCompletedBookingsBetween(
-                TravelBooking.BookingStatus.COMPLETED, start, end);
-        return buildRevenueResponse(bookings, "Daily", date.toString());
+        return revenueReport(date.atStartOfDay(), date.plusDays(1).atStartOfDay(), "Daily", date.toString());
     }
 
     @Cacheable(value = "monthlyRevenue", key = "#year + '-' + #month")
     public Map<String, Object> getMonthlyRevenue(int year, int month) {
         LocalDate startDate = LocalDate.of(year, month, 1);
-        LocalDateTime start = startDate.atStartOfDay();
-        LocalDateTime end = startDate.plusMonths(1).atStartOfDay();
-        List<TravelBooking> bookings = travelBookingRepository.findCompletedBookingsBetween(
-                TravelBooking.BookingStatus.COMPLETED, start, end);
-        return buildRevenueResponse(bookings, "Monthly", year + "-" + String.format("%02d", month));
+        return revenueReport(startDate.atStartOfDay(), startDate.plusMonths(1).atStartOfDay(),
+                "Monthly", year + "-" + String.format("%02d", month));
     }
 
     /**
-     * Revenue for all twelve months of a year in a single query.
-     *
-     * <p>The revenue screen draws a twelve-bar chart. It used to build that by calling
-     * {@link #getMonthlyRevenue(int, int)} twelve times, so one page view cost 12 HTTP requests
-     * and 12 database round-trips — enough on its own to push a signed-in owner through the
-     * per-minute request budget. One scan of the year is both cheaper and atomic.
-     *
-     * <p>Months are assigned from each booking's own {@code bookingDate}. The per-month endpoint
-     * uses an inclusive-BETWEEN window, which double-counts a booking landing exactly on midnight
-     * of the first of a month; bucketing by the date itself cannot.
+     * Revenue for all twelve months of a year: one GROUP BY query, one row per month that had
+     * trips. The revenue screen's twelve-bar chart used to cost 12 HTTP requests, then a full
+     * year of entities in memory; now it is a dozen rows at most.
      */
     @Cacheable(value = "monthlyRevenueSeries", key = "#year")
     public Map<String, Object> getMonthlyRevenueSeries(int year) {
         LocalDateTime start = LocalDate.of(year, 1, 1).atStartOfDay();
         LocalDateTime end = LocalDate.of(year + 1, 1, 1).atStartOfDay();
-        List<TravelBooking> bookings = travelBookingRepository.findCompletedBookingsBetween(
-                TravelBooking.BookingStatus.COMPLETED, start, end);
-
-        double[] revenueByMonth = new double[12];
-        double[] distanceByMonth = new double[12];
-        int[] tripsByMonth = new int[12];
-
-        for (TravelBooking booking : bookings) {
-            LocalDateTime bookedAt = booking.getBookingDate();
-            if (bookedAt == null || bookedAt.getYear() != year) {
-                continue;
-            }
-            int index = bookedAt.getMonthValue() - 1;
-            revenueByMonth[index] += booking.getTotalAmount() != null ? booking.getTotalAmount() : 0.0;
-            distanceByMonth[index] += booking.getDistanceKm() != null ? booking.getDistanceKm() : 0.0;
-            tripsByMonth[index] += 1;
+        Map<Integer, MonthlyRevenue> byMonth = new HashMap<>();
+        for (MonthlyRevenue row : travelBookingRepository.monthlyRevenue(
+                TravelBooking.BookingStatus.COMPLETED, start, end)) {
+            byMonth.put(row.month(), row);
         }
 
         List<Map<String, Object>> months = new ArrayList<>(12);
-        double totalRevenue = 0.0;
-        int totalTrips = 0;
-        for (int i = 0; i < 12; i++) {
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        long totalTrips = 0;
+        for (int m = 1; m <= 12; m++) {
+            MonthlyRevenue row = byMonth.getOrDefault(m, new MonthlyRevenue(m, 0, BigDecimal.ZERO, 0.0));
             Map<String, Object> month = new HashMap<>();
-            month.put("month", i + 1);
-            month.put("periodValue", year + "-" + String.format("%02d", i + 1));
-            month.put("totalTrips", tripsByMonth[i]);
-            month.put("totalRevenue", revenueByMonth[i]);
-            month.put("totalDistance", distanceByMonth[i]);
+            month.put("month", m);
+            month.put("periodValue", year + "-" + String.format("%02d", m));
+            month.put("totalTrips", row.trips());
+            month.put("totalRevenue", row.revenue());
+            month.put("totalDistance", row.distanceKm());
             months.add(month);
-            totalRevenue += revenueByMonth[i];
-            totalTrips += tripsByMonth[i];
+            totalRevenue = totalRevenue.add(row.revenue());
+            totalTrips += row.trips();
         }
 
         Map<String, Object> response = new HashMap<>();
@@ -172,11 +164,8 @@ public class OwnerService {
 
     @Cacheable(value = "yearlyRevenue", key = "#year")
     public Map<String, Object> getYearlyRevenue(int year) {
-        LocalDateTime start = LocalDate.of(year, 1, 1).atStartOfDay();
-        LocalDateTime end = LocalDate.of(year + 1, 1, 1).atStartOfDay();
-        List<TravelBooking> bookings = travelBookingRepository.findCompletedBookingsBetween(
-                TravelBooking.BookingStatus.COMPLETED, start, end);
-        return buildRevenueResponse(bookings, "Yearly", String.valueOf(year));
+        return revenueReport(LocalDate.of(year, 1, 1).atStartOfDay(), LocalDate.of(year + 1, 1, 1).atStartOfDay(),
+                "Yearly", String.valueOf(year));
     }
     
     public Map<String, Object> getTripRevenue(UUID tripId) {
@@ -194,24 +183,26 @@ public class OwnerService {
         return response;
     }
     
-    private Map<String, Object> buildRevenueResponse(List<TravelBooking> bookings, String period, String periodValue) {
+    private Map<String, Object> revenueReport(LocalDateTime start, LocalDateTime end, String period, String periodValue) {
+        TravelBooking.BookingStatus completed = TravelBooking.BookingStatus.COMPLETED;
+        RevenueTotals totals = travelBookingRepository.revenueTotals(completed, start, end);
+
         Map<String, Object> response = new HashMap<>();
         response.put("period", period);
         response.put("periodValue", periodValue);
-        response.put("totalTrips", bookings.size());
-        // Null-safe aggregates: legacy bookings may have null distance/amount/days.
-        response.put("totalDistance", bookings.stream().mapToDouble(b -> b.getDistanceKm() != null ? b.getDistanceKm() : 0.0).sum());
-        response.put("totalRevenue", bookings.stream().mapToDouble(b -> b.getTotalAmount() != null ? b.getTotalAmount() : 0.0).sum());
-        response.put("totalTravelDays", bookings.stream().mapToInt(b -> b.getTravelDays() != null ? b.getTravelDays() : 0).sum());
-        response.put("trips", bookings.stream().map(b -> {
+        response.put("totalTrips", totals.trips());
+        response.put("totalDistance", totals.distanceKm());
+        response.put("totalRevenue", totals.revenue());
+        response.put("totalTravelDays", totals.travelDays());
+        response.put("trips", travelBookingRepository.revenueTrips(completed, start, end).stream().map(t -> {
             Map<String, Object> trip = new HashMap<>();
-            trip.put("id", b.getId());
-            trip.put("fromPlace", b.getFromPlace());
-            trip.put("toPlace", b.getToPlace());
-            trip.put("distanceKm", b.getDistanceKm());
-            trip.put("travelDays", b.getTravelDays());
-            trip.put("totalAmount", b.getTotalAmount());
-            trip.put("bookingDate", b.getBookingDate());
+            trip.put("id", t.id());
+            trip.put("fromPlace", t.fromPlace());
+            trip.put("toPlace", t.toPlace());
+            trip.put("distanceKm", t.distanceKm());
+            trip.put("travelDays", t.travelDays());
+            trip.put("totalAmount", t.totalAmount());
+            trip.put("bookingDate", t.bookingDate());
             return trip;
         }).collect(Collectors.toList()));
         return response;

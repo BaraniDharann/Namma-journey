@@ -1,5 +1,6 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
+import { idempotencyHeaders } from './idempotency'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -155,14 +156,14 @@ export const getRoutePreview = (fromLat, fromLon, toLat, toLon) =>
   api.get(`/user/route-preview?fromLat=${fromLat}&fromLon=${fromLon}&toLat=${toLat}&toLon=${toLon}`)
 
 // User APIs
-export const createBooking = (userId, data) => api.post(`/user/${userId}/bookings`, data).then(res => { invalidateCache('bookings'); return res })
+export const createBooking = (userId, data, idempotencyKey) => api.post(`/user/${userId}/bookings`, data, { headers: idempotencyHeaders(idempotencyKey) }).then(res => { invalidateCache('bookings'); return res })
 export const getUserBookings = (userId) => cachedGet(`/user/${userId}/bookings`)
 export const getBookingById = (userId, bookingId) => api.get(`/user/${userId}/bookings/${bookingId}`)
 export const updateBooking = (userId, bookingId, data) => api.put(`/user/${userId}/bookings/${bookingId}`, data).then(res => { invalidateCache('bookings'); return res })
 export const deleteBooking = (userId, bookingId) => api.delete(`/user/${userId}/bookings/${bookingId}`).then(res => { invalidateCache('bookings'); return res })
 export const confirmBooking = (userId, bookingId) => api.post(`/user/${userId}/bookings/${bookingId}/confirm`).then(res => { invalidateCache('bookings'); return res })
 export const submitReview = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/reviews`, data).then(res => { invalidateCache('reviews'); return res })
-export const initiatePayment = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/payment`, data).then(res => { invalidateCache('payments'); return res })
+export const initiatePayment = (userId, bookingId, data, idempotencyKey) => api.post(`/user/${userId}/bookings/${bookingId}/payment`, data, { headers: idempotencyHeaders(idempotencyKey) }).then(res => { invalidateCache('payments'); return res })
 export const getUserPayments = (userId) => cachedGet(`/user/${userId}/payments`)
 /** Uncached and silent: for the background check that celebrates a verified payment. */
 export const pollUserPayments = (userId) => api.get(`/user/${userId}/payments`, { _silent: true })
@@ -235,7 +236,7 @@ export const getPublicPackages = (params = {}) => {
 export const getPublicPackageById = (id) => cachedGet(`/public/packages/${id}`, 60000)
 
 // Travel Package APIs (User)
-export const bookPackage = (userId, data) => api.post(`/user/${userId}/package-bookings`, data).then(res => { invalidateCache('package-bookings'); return res })
+export const bookPackage = (userId, data, idempotencyKey) => api.post(`/user/${userId}/package-bookings`, data, { headers: idempotencyHeaders(idempotencyKey) }).then(res => { invalidateCache('package-bookings'); return res })
 export const getUserPackageBookings = (userId) => cachedGet(`/user/${userId}/package-bookings`)
 export const cancelPackageBooking = (userId, bookingId, reason) => api.post(`/user/${userId}/package-bookings/${bookingId}/cancel`, { reason }).then(res => { invalidateCache('package-bookings'); return res })
 

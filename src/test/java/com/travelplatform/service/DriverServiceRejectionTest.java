@@ -55,7 +55,7 @@ class DriverServiceRejectionTest {
         TripDriverPhotoRepository photoRepository = mock(TripDriverPhotoRepository.class);
 
         service = new DriverService(bookingRepository, driverRepository, notificationService,
-                photoRepository, rejectionRepository);
+                photoRepository, rejectionRepository, mock(FileStorageService.class));
 
         TravelBooking booking = booking();
         when(bookingRepository.findById(BOOKING_ID)).thenReturn(Optional.of(booking));
@@ -78,7 +78,7 @@ class DriverServiceRejectionTest {
         booking.setFromDate(LocalDate.of(2026, 8, 1));
         booking.setToDate(LocalDate.of(2026, 8, 3));
         booking.setEstimatedTimeMinutes(400L);
-        booking.setTotalAmount(4500.0);
+        booking.setTotalAmount(new java.math.BigDecimal("4500.0"));
         return booking;
     }
 

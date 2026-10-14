@@ -32,6 +32,7 @@ services:
       REDIS_PORT: ${REDIS_PORT:-6379}
       APP_CACHE_TYPE: ${APP_CACHE_TYPE:-redis}
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env - Redis now requires a password}
+      METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:?Set METRICS_SCRAPE_TOKEN in .env}
       # Every request reaches the backend from the nginx container, so without this the rate
       # limiter saw one IP for all users: the 10/min login budget was shared by everybody, and
       # one person's typos locked the whole site out of signing in. Trusting the Docker bridge
@@ -96,10 +97,58 @@ services:
     networks:
       - travel-network
 
+  # --- Monitoring -------------------------------------------------------------------------
+  # Prometheus scrapes the backend's metrics and evaluates monitoring/prometheus/alerts.yml;
+  # Grafana shows the "Namma Journey - Overview" dashboard (monitoring/grafana/dashboards).
+  # Both are loopback-only: reach them through an SSH tunnel on a server, never publicly.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    configs:
+      # The same token the backend checks on /actuator/prometheus, handed to Prometheus as a
+      # file so it never appears in prometheus.yml or the process list.
+      - source: metrics_scrape_token
+        target: /etc/prometheus/scrape-token
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - backend
+    networks:
+      - travel-network
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/namma-journey.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - travel-network
+
+configs:
+  metrics_scrape_token:
+    content: ${METRICS_SCRAPE_TOKEN:?Set METRICS_SCRAPE_TOKEN in .env}
+
 volumes:
   postgres-data:
   redis-data:
   backend-uploads:
+  prometheus-data:
+  grafana-data:
 
 networks:
   travel-network:

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getPublicPackageById, bookPackage } from '../utils/api'
+import { actionKey } from '../utils/idempotency'
 import { useCelebrate } from '../components/celebrate/Celebration'
 import Icon from '../components/dash/Icon'
 
@@ -19,6 +20,8 @@ export default function PackageDetail() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const celebrate = useCelebrate()
+  // One key per booking attempt, reused if the request is retried, so it can only book once.
+  const bookingKey = useRef(actionKey())
   const [pkg, setPkg] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showBooking, setShowBooking] = useState(false)
@@ -48,7 +51,9 @@ export default function PackageDetail() {
     setSubmitting(true)
     setError('')
     try {
-      await bookPackage(user.userId, { ...booking, packageId: pkg.id })
+      await bookPackage(user.userId, { ...booking, packageId: pkg.id }, bookingKey.current.get())
+      // Done: the next booking is a new action and needs its own key.
+      bookingKey.current.reset()
       setSuccess(true)
       setShowBooking(false)
       celebrate({

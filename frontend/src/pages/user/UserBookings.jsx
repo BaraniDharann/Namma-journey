@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import Pagination, { usePagination } from '../../components/Pagination'
 import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
 import { getUserBookings, deleteBooking, initiatePayment, submitReview, getTripSummary } from '../../utils/api'
+import { actionKey } from '../../utils/idempotency'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { inr, shortPlace } from '../../dash/metrics'
@@ -230,6 +231,8 @@ function PaymentModal({ booking, onClose, onPay, onPaid }) {
 export default function UserBookings() {
   const { user } = useAuth()
   const celebrate = useCelebrate()
+  // Guards "Pay" against a double tap or a retried request creating two payment attempts.
+  const paymentKey = useRef(actionKey())
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('ALL')
@@ -279,7 +282,10 @@ export default function UserBookings() {
 
   const handlePayment = async (bookingId, data) => {
     try {
-      const res = await initiatePayment(user.userId, bookingId, data)
+      const res = await initiatePayment(user.userId, bookingId, data, paymentKey.current.get())
+      // Reset after every success, not once per booking: a later "refresh QR" tap after the
+      // link expires is a new action and must get a new QR, not a replay of the expired one.
+      paymentKey.current.reset()
       return res.data
     } catch { return null }
   }

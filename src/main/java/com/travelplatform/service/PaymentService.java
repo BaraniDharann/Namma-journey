@@ -19,6 +19,7 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import java.awt.image.BufferedImage;
+import java.math.BigDecimal;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.net.URLEncoder;
@@ -164,13 +165,14 @@ public class PaymentService {
         // VERIFIED for the full fare no matter what the driver typed. A driver could then report
         // collecting 1 rupee on a 2500 rupee trip and the booking would settle as paid in full,
         // with owner revenue reporting the full fare against cash that never arrived. Compare it
-        // to the amount actually due instead. The tolerance absorbs the rounding that comes with
-        // storing money in a double (see SECURITY.md) without admitting a real shortfall.
-        Double received = request != null ? request.getAmountReceived() : null;
+        // to the amount actually due instead. Money is NUMERIC now (V8), so the comparison is exact
+        // to the paisa - no floating-point tolerance to reason about. compareTo, not equals:
+        // 2500 and 2500.00 are the same amount with different scales.
+        BigDecimal received = request != null ? request.getAmountReceived() : null;
         if (received == null) {
             throw new IllegalArgumentException("Amount received is required");
         }
-        if (Math.abs(received - payment.getAmount()) > 0.01d) {
+        if (Money.paise(received).compareTo(payment.getAmount()) != 0) {
             throw new IllegalArgumentException(String.format(
                     Locale.ROOT,
                     "Amount received (%.2f) does not match the amount due (%.2f)",
@@ -337,8 +339,8 @@ public class PaymentService {
         }
     }
 
-    private String generateUpiDeepLink(Double amount, String bookingRef) {
-        if (amount == null || amount <= 0d) {
+    private String generateUpiDeepLink(BigDecimal amount, String bookingRef) {
+        if (amount == null || amount.signum() <= 0) {
             throw new IllegalStateException("Refusing to build a UPI link for a non-positive amount");
         }
         return String.format(

@@ -114,6 +114,31 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost,http://localhost:5173,http://localhost:4173}
 
+  storage:
+    # Where uploads (driver documents, trip photos) live:
+    #   local - this server's disk (default). Fine for exactly one backend instance.
+    #   s3    - S3-compatible object storage shared by every instance: AWS S3, Cloudflare R2
+    #           (S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com, S3_REGION=auto) or MinIO.
+    # Existing local files: copy them into the bucket under the same paths first
+    # (e.g. `aws s3 sync uploads/drivers s3://<bucket>/uploads/drivers`).
+    type: ${STORAGE_TYPE:local}
+    local:
+      trips-dir: ${FILE_TRIPS_DIR:uploads/trips}
+    s3:
+      bucket: ${S3_BUCKET:}
+      region: ${S3_REGION:auto}
+      endpoint: ${S3_ENDPOINT:}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      path-style: ${S3_PATH_STYLE:false}
+      # How long an image link given to a browser stays valid.
+      signed-url-ttl: ${S3_SIGNED_URL_TTL:10m}
+
+  metrics:
+    # Bearer token Prometheus presents to read /actuator/prometheus (ScrapeTokenAuthorizationManager).
+    # Empty = the endpoint refuses everyone.
+    scrape-token: ${METRICS_SCRAPE_TOKEN:}
+
   bootstrap:
     # One-time secret for POST /api/auth/owner/create-admin, which creates the first owner
     # account on a new deployment. That endpoint cannot require authentication (there is no
@@ -212,6 +237,10 @@ logging:
   level:
     com.travelplatform: INFO
     org.springframework.security: WARN
+  pattern:
+    # Every line carries the request id from RequestIdFilter ("-" outside a request, e.g. the
+    # scheduler), so grep <id> returns everything one request did, in order.
+    level: "%5p [%X{requestId:-}]"
 
 # GraphHopper Routing Configuration
 graphhopper:
@@ -269,3 +298,12 @@ management:
   metrics:
     tags:
       application: travel-booking-platform
+    distribution:
+      # Histogram buckets let Prometheus compute p50/p95/p99 across every instance
+      # (histogram_quantile). Averages hide exactly the slow requests users complain about.
+      percentiles-histogram:
+        http.server.requests: true
+      # Bucket edges at the latencies we make promises about: under 300ms feels instant, over 2s
+      # is the alert threshold (monitoring/prometheus/alerts.yml).
+      slo:
+        http.server.requests: 100ms,300ms,500ms,1s,2s,5s

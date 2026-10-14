@@ -20,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -45,11 +46,8 @@ public class OwnerController {
     @PostMapping("/pricing/set")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> setPricePerKm(
-            @RequestParam Double pricePerKm,
+            @RequestParam BigDecimal pricePerKm,
             @RequestParam Long ownerId) {
-        if (pricePerKm == null || pricePerKm <= 0) {
-            throw new IllegalArgumentException("Price per km must be greater than zero");
-        }
         return ResponseEntity.ok(ownerService.setPricePerKm(pricePerKm, ownerId));
     }
     
@@ -65,11 +63,8 @@ public class OwnerController {
     @PostMapping("/pricing/set-hourly")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> setPricePerHour(
-            @RequestParam Double pricePerHour,
+            @RequestParam BigDecimal pricePerHour,
             @RequestParam Long ownerId) {
-        if (pricePerHour == null || pricePerHour <= 0) {
-            throw new IllegalArgumentException("Price per hour must be greater than zero");
-        }
         return ResponseEntity.ok(ownerService.setPricePerHour(pricePerHour, ownerId));
     }
 

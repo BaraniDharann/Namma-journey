@@ -19,7 +19,7 @@ public class TripSummaryResponse {
     private String acType;
     private Double distanceKm;
     private String estimatedTimeFormatted;
-    private Double totalAmount;
+    private java.math.BigDecimal totalAmount;
     private String status;
     private LocalDateTime bookingDate;
     private DriverDetailsResponse driver;

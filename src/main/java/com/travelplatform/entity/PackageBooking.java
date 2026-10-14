@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -43,8 +44,8 @@ public class PackageBooking {
     @Column
     private String specialRequests;
 
-    @Column(nullable = false)
-    private Double totalAmount;
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal totalAmount;
 
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
@@ -75,8 +76,8 @@ public class PackageBooking {
     @Column
     private Integer durationNights;
 
-    @Column
-    private Double pricePerPerson;
+    @Column(precision = 12, scale = 2)
+    private BigDecimal pricePerPerson;
 
     public enum BookingStatus {
         PENDING,

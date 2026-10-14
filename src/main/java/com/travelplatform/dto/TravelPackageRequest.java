@@ -27,7 +27,7 @@ public class TravelPackageRequest {
     private Integer durationNights;
 
     @NotNull @Min(1)
-    private Double pricePerPerson;
+    private java.math.BigDecimal pricePerPerson;
 
     @NotNull @Min(1)
     private Integer maxGroupSize;

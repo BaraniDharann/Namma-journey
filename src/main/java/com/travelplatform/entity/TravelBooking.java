@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -76,8 +77,8 @@ public class TravelBooking {
     @Column
     private Long driverId;
     
-    @Column(nullable = false)
-    private Double totalAmount;
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal totalAmount;
     
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
@@ -90,8 +91,8 @@ public class TravelBooking {
     @Column
     private Integer bookingHours;
 
-    @Column
-    private Double pricePerHourAtBooking;
+    @Column(precision = 12, scale = 2)
+    private BigDecimal pricePerHourAtBooking;
 
     @Version
     @Column

@@ -47,7 +47,7 @@ public class PackageBookingService {
         booking.setNumberOfPersons(request.getNumberOfPersons());
         booking.setTravelDate(request.getTravelDate());
         booking.setSpecialRequests(request.getSpecialRequests());
-        booking.setTotalAmount(pkg.getPricePerPerson() * request.getNumberOfPersons());
+        booking.setTotalAmount(Money.times(pkg.getPricePerPerson(), request.getNumberOfPersons()));
         booking.setStatus(PackageBooking.BookingStatus.PENDING);
 
         // Snapshot package details

@@ -48,7 +48,7 @@ class DriverServiceStatusGuardTest {
         BookingDriverRejectionRepository rejectionRepository = mock(BookingDriverRejectionRepository.class);
 
         service = new DriverService(bookingRepository, driverRepository, notificationService,
-                photoRepository, rejectionRepository);
+                photoRepository, rejectionRepository, mock(FileStorageService.class));
 
         booking = new TravelBooking();
         booking.setId(BOOKING_ID);
@@ -59,7 +59,7 @@ class DriverServiceStatusGuardTest {
         booking.setFromDate(LocalDate.of(2026, 8, 1));
         booking.setToDate(LocalDate.of(2026, 8, 3));
         booking.setEstimatedTimeMinutes(400L);
-        booking.setTotalAmount(4500.0);
+        booking.setTotalAmount(new java.math.BigDecimal("4500.0"));
 
         Driver driver = new Driver();
         driver.setId(DRIVER_ID);
