@@ -6,3 +6,22 @@ dist
 *.log
 graphhopper-cache
 uploads
+
+# Large local-only data. Without these every backend build shipped ~3.9 GB to the Docker daemon
+# (Dockerfile COPYs src/, and the OSM extract sits inside it) and the bundled Maven distribution.
+src/india-latest.osm.pbf
+apache-maven-3.9.6
+maven.zip
+maven-wrapper.jar
+logs
+build
+.idea
+.vscode
+.claude
+.superpowers
+.impeccable
+frontend
+playwright-tests
+loadtest
+monitoring
+docs
