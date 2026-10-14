@@ -29,11 +29,34 @@ public class AuthController {
     
     @Autowired
     private OwnerAuthService ownerAuthService;
+
+    @Autowired
+    private com.travelplatform.security.TokenVersionService tokenVersionService;
     
     /**
      * SEND OTP - Send OTP to email
      * POST /api/auth/otp/send
      */
+    /**
+     * POST /api/auth/logout - ends every session of the calling account, server-side.
+     *
+     * <p>Logging out used to only delete the token from the browser; a copy taken earlier (shared
+     * computer, XSS, a lost phone) kept working for its whole lifetime. Bumping the account's
+     * token_version makes every token issued so far invalid. Always 204, signed in or not.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        org.springframework.security.core.Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getAuthorities() != null) {
+            auth.getAuthorities().stream()
+                    .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                    .filter(a -> a.startsWith("ROLE_") && !"ROLE_ANONYMOUS".equals(a))
+                    .findFirst()
+                    .ifPresent(role -> tokenVersionService.revoke(role, auth.getName()));
+        }
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/otp/send")
     public ResponseEntity<OtpResponse> sendOtp(@Valid @RequestBody OtpSendRequest request) {
         boolean sent = otpService.sendOtp(request.getEmail());

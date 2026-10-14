@@ -80,6 +80,13 @@ class RateLimitingFilterTest {
     }
 
     @Test
+    @DisplayName("user password reset is an auth endpoint: same tight per-IP budget as login")
+    void passwordResetIsAuthScoped() throws Exception {
+        run(req("POST", "/api/user/forgot-password"));
+        assertEquals(new Call("auth:ip:203.0.113.9", 10), calls.get(0));
+    }
+
+    @Test
     @DisplayName("signed-in calls are budgeted per account; payments on their own smaller bucket")
     void signedInIsPerAccount() throws Exception {
         run(signedIn("/api/user/u-42/bookings"));

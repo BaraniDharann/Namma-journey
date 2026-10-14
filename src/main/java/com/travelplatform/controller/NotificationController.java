@@ -41,7 +41,7 @@ public class NotificationController {
     public ResponseEntity<Map<String, String>> markAsRead(@PathVariable UUID notificationId) {
         // Ownership is checked inside the service via the JWT principal so a user can't
         // mark someone else's notification as read.
-        notificationService.markAsRead(notificationId, currentPrincipal());
+        notificationService.markAsRead(notificationId, currentPrincipal(), currentIsOwner());
         return ResponseEntity.ok(Map.of("message", "Notification marked as read"));
     }
 
@@ -81,5 +81,10 @@ public class NotificationController {
     private String currentPrincipal() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null ? auth.getName() : null;
+    }
+
+    private boolean currentIsOwner() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream().anyMatch(a -> "ROLE_OWNER".equals(a.getAuthority()));
     }
 }

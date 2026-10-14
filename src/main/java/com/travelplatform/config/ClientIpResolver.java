@@ -86,6 +86,16 @@ public class ClientIpResolver {
         String forwardedFor = request.getHeader("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.isBlank()) {
             String[] hops = forwardedFor.split(",");
+            if (trustAllPeers) {
+                // "*" cannot tell proxies from clients, so the only hop that can be believed is the
+                // one the edge proxy itself appended: the rightmost. Falling through to the loop
+                // below treated every hop as a proxy and returned the leftmost - the one the
+                // client wrote - so each request could pick its own identity and dodge every limit.
+                String rightmost = hops[hops.length - 1].trim();
+                if (!rightmost.isEmpty()) {
+                    return rightmost;
+                }
+            }
             // Rightmost hop that is not itself a trusted proxy: everything further left was
             // supplied by the client and cannot be believed.
             for (int i = hops.length - 1; i >= 0; i--) {

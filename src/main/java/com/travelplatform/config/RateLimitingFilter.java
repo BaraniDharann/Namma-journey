@@ -108,7 +108,8 @@ public class RateLimitingFilter implements Filter {
         }
 
         String clientIp = clientIpResolver.resolve(request);
-        boolean isAuthEndpoint = path.startsWith("/api/auth");
+        // Password reset by OTP lives outside /api/auth but is just as guessable: same tight budget.
+        boolean isAuthEndpoint = path.startsWith("/api/auth") || path.equals("/api/user/forgot-password");
         boolean isPaymentEndpoint = isPaymentPath(path);
 
         String key;

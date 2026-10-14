@@ -235,15 +235,16 @@ public class NotificationService {
     }
 
     @Transactional
-    public void markAsRead(UUID notificationId, String requesterPrincipal) {
+    public void markAsRead(UUID notificationId, String requesterPrincipal, boolean requesterIsOwner) {
         notificationRepository.findById(notificationId).ifPresent(notification -> {
-            // Owner can mark any notification (including the shared "owner" bucket); other
-            // roles can only mark notifications addressed to them. Without this check any
-            // authenticated user could flip another user's notification to read.
+            // The shared "owner" bucket belongs to the owner alone - any signed-in passenger or
+            // driver used to be able to clear the owner's alerts. Everyone else may only mark
+            // notifications addressed to them.
             String recipient = notification.getRecipientId();
             boolean isOwnerBucket = "owner".equalsIgnoreCase(recipient);
-            boolean isOwnNotification = recipient != null && recipient.equals(requesterPrincipal);
-            if (!isOwnerBucket && !isOwnNotification) {
+            boolean allowed = isOwnerBucket ? requesterIsOwner
+                    : recipient != null && recipient.equals(requesterPrincipal);
+            if (!allowed) {
                 throw new org.springframework.security.access.AccessDeniedException(
                         "Cannot mark another user's notification as read");
             }

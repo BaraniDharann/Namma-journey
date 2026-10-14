@@ -22,6 +22,8 @@ public class JwtUtil {
     // HS256 requires at least 256 bits / 32 bytes of key material.
     private static final int MIN_SECRET_BYTES = 32;
 
+    static final String TOKEN_VERSION_CLAIM = "tv";
+
     @Value("${jwt.secret}")
     private String secret;
 
@@ -46,10 +48,15 @@ public class JwtUtil {
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateToken(String userId, String role) {
+    /**
+     * @param tokenVersion the account's current token_version. JwtAuthenticationFilter refuses the
+     *                     token once the account's version moves on (password reset, logout).
+     */
+    public String generateToken(String userId, String role, long tokenVersion) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", role);
         claims.put("userId", userId);
+        claims.put(TOKEN_VERSION_CLAIM, tokenVersion);
 
         return Jwts.builder()
                 .claims(claims)
@@ -70,6 +77,12 @@ public class JwtUtil {
 
     public String extractUserId(String token) {
         return extractAllClaims(token).getSubject();
+    }
+
+    /** Tokens issued before versioning existed carry no claim; they count as version 0. */
+    public long extractTokenVersion(String token) {
+        Number version = extractAllClaims(token).get(TOKEN_VERSION_CLAIM, Number.class);
+        return version == null ? 0L : version.longValue();
     }
 
     public String extractRole(String token) {

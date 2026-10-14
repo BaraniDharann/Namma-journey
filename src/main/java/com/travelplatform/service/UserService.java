@@ -48,6 +48,11 @@ public class UserService {
     private final NotificationService notificationService;
     private final TripDriverPhotoRepository tripDriverPhotoRepository;
     private final TransactionTemplate transactionTemplate;
+
+    // Field-injected (not in the constructor) so the many tests that build UserService directly
+    // are unaffected; only the password-reset path uses it.
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.travelplatform.security.TokenVersionService tokenVersionService;
     
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -423,13 +428,17 @@ public class UserService {
     
     @Transactional
     public Map<String, String> forgotPassword(ForgotPasswordRequest request) {
-        com.travelplatform.entity.User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + request.getEmail()));
+        // Code first, account second, one message for both failures: "User not found with email"
+        // told anyone which emails have accounts.
         if (!otpService.verifyOtp(request.getEmail(), request.getOtp())) {
             throw new IllegalArgumentException("Invalid or expired OTP");
         }
+        com.travelplatform.entity.User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP"));
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        userRepository.save(user);
+        // Saves the user and ends every existing session - the point of a reset is often that
+        // someone else has a token.
+        tokenVersionService.revokeUser(user);
         return java.util.Map.of("message", "Password reset successfully");
     }
 

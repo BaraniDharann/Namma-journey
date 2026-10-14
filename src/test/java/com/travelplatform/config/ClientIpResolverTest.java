@@ -82,6 +82,16 @@ class ClientIpResolverTest {
     }
 
     @Test
+    @DisplayName("wildcard mode trusts only the hop the edge proxy appended, never what the client prepended")
+    void wildcardTakesTheRightmostHop() {
+        ClientIpResolver resolver = new ClientIpResolver("*");
+
+        // Behind Render's edge the client sends "X-Forwarded-For: 1.1.1.1" and the edge appends
+        // the real address. Taking the leftmost entry let every request pick its own identity.
+        assertEquals("198.51.100.7", resolver.resolve(request("10.0.0.1", "1.1.1.1, 2.2.2.2, 198.51.100.7")));
+    }
+
+    @Test
     @DisplayName("an IPv4 range never matches an IPv6 peer")
     void addressFamiliesDoNotCross() {
         ClientIpResolver resolver = new ClientIpResolver("10.0.0.0/8");

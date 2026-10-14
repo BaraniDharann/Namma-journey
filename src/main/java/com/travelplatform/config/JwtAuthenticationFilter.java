@@ -20,6 +20,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     
     @Autowired
     private JwtUtil jwtUtil;
+
+    @Autowired
+    private com.travelplatform.security.TokenVersionService tokenVersionService;
     
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -31,10 +34,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = authHeader.substring(7);
             
             try {
+                String userId = null;
+                String role = null;
+                boolean current = false;
                 if (jwtUtil.validateToken(token)) {
-                    String userId = jwtUtil.extractUserId(token);
-                    String role = jwtUtil.extractRole(token);
-                    
+                    userId = jwtUtil.extractUserId(token);
+                    role = jwtUtil.extractRole(token);
+                    // A correctly signed token is not enough: the account must still exist and the
+                    // token must not predate a password reset or logout (token_version).
+                    current = tokenVersionService.isCurrent(role, userId, jwtUtil.extractTokenVersion(token));
+                }
+                if (current) {
+
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                             userId, null, Collections.singletonList(new SimpleGrantedAuthority(role))
                     );

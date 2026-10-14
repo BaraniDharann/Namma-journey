@@ -74,4 +74,8 @@ public class Otp {
     
     @Column(nullable = false)
     private boolean verified = false;
+
+    /** Wrong guesses against this code. At OtpService.MAX_ATTEMPTS the code is dead. */
+    @Column(nullable = false)
+    private int attempts = 0;
 }

@@ -9,12 +9,15 @@ import com.travelplatform.exception.ResourceNotFoundException;
 import com.travelplatform.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
 public class UserAuthService {
+
+    static final String LOGIN_FAILED = "Invalid credentials. If you signed up with Google, use Continue with Google.";
     
     @Autowired
     private UserRepository userRepository;
@@ -57,7 +60,7 @@ public class UserAuthService {
 
         user = userRepository.save(user);
 
-        String token = jwtUtil.generateToken(user.getId().toString(), user.getRole());
+        String token = jwtUtil.generateToken(user.getId().toString(), user.getRole(), user.getTokenVersion());
         AuthResponse response = new AuthResponse(token, user.getRole(), user.getId());
         response.setName(user.getName());
         response.setEmail(user.getEmail());
@@ -69,14 +72,13 @@ public class UserAuthService {
         User user;
         
         if (request.getLoginType() == User.LoginType.EMAIL) {
-            user = userRepository.findByEmail(request.getEmail())
-                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
-            
-            if (user.getPassword() == null || user.getPassword().isBlank()) {
-                throw new IllegalArgumentException("This account signs in with Google. Use Continue with Google, then save a password for next time.");
-            }
-            if (request.getPassword() == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-                throw new IllegalArgumentException("Invalid credentials");
+            // One answer for every failure - unknown email, wrong password, Google-only account -
+            // so the login form cannot be used to test which emails have accounts. The Google
+            // hint is part of that single message instead of a tell-tale separate one.
+            user = userRepository.findByEmail(request.getEmail()).orElse(null);
+            String stored = user == null ? null : user.getPassword();
+            if (!CredentialCheck.matches(passwordEncoder, request.getPassword(), stored)) {
+                throw new BadCredentialsException(LOGIN_FAILED);
             }
         } else if (request.getLoginType() == User.LoginType.GOOGLE) {
             // Signature, audience, issuer and expiry are all checked here. Anything short of that
@@ -97,7 +99,7 @@ public class UserAuthService {
             throw new IllegalArgumentException("Invalid login type");
         }
         
-        String token = jwtUtil.generateToken(user.getId().toString(), user.getRole());
+        String token = jwtUtil.generateToken(user.getId().toString(), user.getRole(), user.getTokenVersion());
         AuthResponse response = new AuthResponse(token, user.getRole(), user.getId());
         response.setName(user.getName());
         response.setEmail(user.getEmail());

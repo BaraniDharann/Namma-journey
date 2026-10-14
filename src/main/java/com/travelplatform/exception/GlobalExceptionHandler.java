@@ -35,7 +35,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, String>> handleBadCredentials(BadCredentialsException ex) {
         Map<String, String> error = new HashMap<>();
-        error.put("error", "Invalid credentials");
+        // Every BadCredentialsException message is written to be identical across "unknown account" and
+        // "wrong secret", so it is safe to show and keeps hints like "use Continue with Google".
+        error.put("error", ex.getMessage() == null ? "Invalid credentials" : ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
     }
 

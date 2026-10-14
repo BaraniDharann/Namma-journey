@@ -132,6 +132,13 @@ function debouncedGet(url, delay = 300) {
 }
 
 // Auth APIs
+// Ends every session of this account on the server (token_version bump), not just this tab's.
+// The token is passed in, not read from storage: the request interceptor runs asynchronously,
+// after logout has already removed it, so the call would otherwise go out unauthenticated.
+export const logoutEverywhere = (token) => api.post('/auth/logout', null, {
+  _silent: true,
+  headers: token ? { Authorization: `Bearer ${token}` } : {},
+})
 export const sendOtp = (email) => api.post('/auth/otp/send', { email })
 export const userSignup = (data) => api.post('/auth/user/signup', data)
 export const userLogin = (data) => api.post('/auth/user/login', data)

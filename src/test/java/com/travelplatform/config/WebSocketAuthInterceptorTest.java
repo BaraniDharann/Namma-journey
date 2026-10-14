@@ -50,6 +50,9 @@ class WebSocketAuthInterceptorTest {
         interceptor = new WebSocketAuthInterceptor();
         ReflectionTestUtils.setField(interceptor, "jwtUtil", jwt);
         ReflectionTestUtils.setField(interceptor, "bookingAccessGuard", guard);
+        com.travelplatform.security.TokenVersionService versions = mock(com.travelplatform.security.TokenVersionService.class);
+        when(versions.isCurrent("ROLE_USER", "u-1", 0L)).thenReturn(true);
+        ReflectionTestUtils.setField(interceptor, "tokenVersionService", versions);
     }
 
     private static Message<byte[]> frame(StompCommand command, String destination, Authentication user, String bearer) {

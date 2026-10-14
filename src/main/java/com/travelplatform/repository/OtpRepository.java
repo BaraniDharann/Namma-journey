@@ -11,6 +11,8 @@ public interface OtpRepository extends JpaRepository<Otp, Long> {
     Optional<Otp> findTopByEmailAndVerifiedFalseAndExpiryTimeAfterOrderByCreatedAtDesc(
         String email, LocalDateTime currentTime);
     
+    Optional<Otp> findTopByEmailOrderByCreatedAtDesc(String email);
+
     void deleteByEmailAndVerifiedTrue(String email);
     void deleteByExpiryTimeBefore(LocalDateTime currentTime);
 }

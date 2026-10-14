@@ -39,16 +39,19 @@ public class OwnerAuthService {
 
     @Autowired
     private OtpService otpService;
+
+    @Autowired
+    private com.travelplatform.security.TokenVersionService tokenVersionService;
     
     public AuthResponse login(OwnerLoginRequest request) {
-        Owner owner = ownerRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Owner not found with email: " + request.getEmail()));
-        
-        if (!passwordEncoder.matches(request.getPassword(), owner.getPassword())) {
-            throw new BadCredentialsException("Invalid password");
+        // Same answer for an unknown email and a wrong password, and the same BCrypt cost, so the
+        // owner login cannot be used to discover the owner's email.
+        Owner owner = ownerRepository.findByEmail(request.getEmail()).orElse(null);
+        if (!CredentialCheck.matches(passwordEncoder, request.getPassword(), owner == null ? null : owner.getPassword())) {
+            throw new BadCredentialsException("Invalid credentials");
         }
         
-        String token = jwtUtil.generateToken(owner.getId().toString(), owner.getRole());
+        String token = jwtUtil.generateToken(owner.getId().toString(), owner.getRole(), owner.getTokenVersion());
         AuthResponse response = new AuthResponse(token, owner.getRole(), owner.getId());
         response.setEmail(owner.getEmail());
         response.setName("Owner");
@@ -97,7 +100,7 @@ public class OwnerAuthService {
         admin.setRole("ROLE_OWNER");
 
         Owner savedAdmin = ownerRepository.save(admin);
-        String token = jwtUtil.generateToken(savedAdmin.getId().toString(), savedAdmin.getRole());
+        String token = jwtUtil.generateToken(savedAdmin.getId().toString(), savedAdmin.getRole(), savedAdmin.getTokenVersion());
         AuthResponse response = new AuthResponse(token, savedAdmin.getRole(), savedAdmin.getId());
         response.setEmail(savedAdmin.getEmail());
         response.setName("Owner");
@@ -116,13 +119,14 @@ public class OwnerAuthService {
             throw new IllegalArgumentException("Invalid or expired OTP");
         }
 
+        // A valid code for an email with no owner reads exactly like a bad code.
         Owner owner = ownerRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ResourceNotFoundException("Owner not found with email: " + request.getEmail()));
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP"));
 
         owner.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        ownerRepository.save(owner);
+        tokenVersionService.revokeOwner(owner); // saves; ends every session issued before the reset
         
-        String token = jwtUtil.generateToken(owner.getId().toString(), owner.getRole());
+        String token = jwtUtil.generateToken(owner.getId().toString(), owner.getRole(), owner.getTokenVersion());
         AuthResponse response = new AuthResponse(token, owner.getRole(), owner.getId());
         response.setEmail(owner.getEmail());
         response.setName("Owner");

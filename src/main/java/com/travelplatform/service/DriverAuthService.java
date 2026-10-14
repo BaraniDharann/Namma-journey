@@ -32,6 +32,9 @@ public class DriverAuthService {
     
     @Autowired
     private OtpService otpService;
+
+    @Autowired
+    private com.travelplatform.security.TokenVersionService tokenVersionService;
     
     public AuthResponse signup(DriverSignupRequest request) {
         if (driverRepository.existsByMobile(request.getMobile())) {
@@ -57,7 +60,7 @@ public class DriverAuthService {
         
         driver = driverRepository.save(driver);
         
-        String token = jwtUtil.generateToken(driver.getId().toString(), driver.getRole());
+        String token = jwtUtil.generateToken(driver.getId().toString(), driver.getRole(), driver.getTokenVersion());
         AuthResponse response = new AuthResponse(token, driver.getRole(), driver.getId());
         response.setName(driver.getName());
         response.setMobile(driver.getMobile());
@@ -65,22 +68,20 @@ public class DriverAuthService {
     }
     
     public Map<String, Object> login(DriverLoginRequest request) {
-        Driver driver = driverRepository.findByMobile(request.getMobile())
-                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with mobile: " + request.getMobile()));
-        
-        if (!passwordEncoder.matches(request.getPassword(), driver.getPassword())) {
-            throw new BadCredentialsException("Invalid password");
+        // Same answer, same BCrypt cost, for an unknown mobile and a wrong password.
+        Driver driver = driverRepository.findByMobile(request.getMobile()).orElse(null);
+        if (!CredentialCheck.matches(passwordEncoder, request.getPassword(), driver == null ? null : driver.getPassword())) {
+            throw new BadCredentialsException("Invalid credentials");
         }
         
-        if (driver.getStatus() == Driver.Status.INACTIVE) {
-            throw new IllegalArgumentException("Driver account is inactive");
-        }
+        // No status check here on purpose: Driver.status is the driver's own online/offline switch.
+        // Refusing INACTIVE drivers locked out anyone who had gone offline - they could never log
+        // back in to go online again. Offline drivers are simply never offered trips
+        // (DriverRepository.findAvailableDrivers).
         
         if (driver.isFirstLogin()) {
-            boolean otpSent = otpService.sendOtp(driver.getEmail());
-            if (!otpSent) {
-                throw new RuntimeException("Failed to send OTP");
-            }
+            // Quiet during the resend cooldown: a driver retrying login keeps the code already sent.
+            otpService.sendOtpUnlessRecent(driver.getEmail());
             
             Map<String, Object> response = new HashMap<>();
             response.put("firstLogin", true);
@@ -89,7 +90,7 @@ public class DriverAuthService {
             return response;
         }
         
-        String token = jwtUtil.generateToken(driver.getId().toString(), driver.getRole());
+        String token = jwtUtil.generateToken(driver.getId().toString(), driver.getRole(), driver.getTokenVersion());
         
         Map<String, Object> response = new HashMap<>();
         response.put("token", token);
@@ -112,13 +113,17 @@ public class DriverAuthService {
             throw new BadCredentialsException("Invalid or expired OTP");
         }
         
+        // Only the first-login flow sets a password here. Without this check it was a second,
+        // unguarded password reset: anyone could request a code for a driver's email via the
+        // public /api/auth/otp/send and use it on an established account.
         Driver driver = driverRepository.findByEmail(email)
-            .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
-        
+                .filter(Driver::isFirstLogin)
+                .orElseThrow(() -> new BadCredentialsException("Invalid or expired OTP"));
+
         driver.setPassword(passwordEncoder.encode(newPassword));
         driver.setFirstLogin(false);
         driver.setEmailVerified(true);
-        driverRepository.save(driver);
+        tokenVersionService.revokeDriver(driver); // saves; ends any session issued before the password was set
         
         Map<String, String> response = new HashMap<>();
         response.put("message", "Password set successfully. You can now login with your new password.");
@@ -133,7 +138,7 @@ public class DriverAuthService {
     public Map<String, String> sendPasswordResetOtp(String mobile) {
         driverRepository.findByMobile(mobile).ifPresent(driver -> {
             if (driver.getEmail() != null && !driver.getEmail().isBlank()) {
-                otpService.sendOtp(driver.getEmail());
+                otpService.sendOtpUnlessRecent(driver.getEmail());
             }
         });
         Map<String, String> response = new HashMap<>();
@@ -147,21 +152,21 @@ public class DriverAuthService {
             throw new IllegalArgumentException("Passwords do not match");
         }
 
+        // Unknown mobile, no email on file, or a wrong code all read the same, so this public
+        // endpoint cannot be used to find out which mobiles belong to drivers.
         Driver driver = driverRepository.findByMobile(request.getMobile())
-                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with mobile: " + request.getMobile()));
+                .filter(d -> d.getEmail() != null && !d.getEmail().isBlank())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP"));
 
         // Without the OTP gate, anyone with a driver's mobile number could take over the
         // account. OTP is sent to (and verified against) the driver's registered email.
-        if (driver.getEmail() == null || driver.getEmail().isBlank()) {
-            throw new IllegalArgumentException("Driver has no email on file; please contact the owner");
-        }
         if (!otpService.verifyOtp(driver.getEmail(), request.getOtp())) {
             throw new IllegalArgumentException("Invalid or expired OTP");
         }
 
         driver.setPassword(passwordEncoder.encode(request.getNewPassword()));
         driver.setFirstLogin(false);
-        driverRepository.save(driver);
+        tokenVersionService.revokeDriver(driver); // saves; a reset ends every existing session
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "Password reset successfully");

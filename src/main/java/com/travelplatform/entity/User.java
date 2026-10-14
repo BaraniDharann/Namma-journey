@@ -95,6 +95,10 @@ public class User {
     
     @Column
     private String password;
+
+    /** Bumped on password reset and logout; tokens carrying an older value are refused. */
+    @Column(name = "token_version", nullable = false)
+    private long tokenVersion = 0;
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

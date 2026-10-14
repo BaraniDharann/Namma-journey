@@ -64,6 +64,10 @@ public class Owner {
     
     @Column(nullable = false)
     private String password;
+
+    /** Bumped on password reset and logout; tokens carrying an older value are refused. */
+    @Column(name = "token_version", nullable = false)
+    private long tokenVersion = 0;
     
     @Column(nullable = false)
     private String role = "ROLE_OWNER";
