@@ -58,6 +58,26 @@ public class BookingAccessGuard {
         return false;
     }
 
+    /**
+     * May this driver publish positions for this booking? Only the assigned driver, and only while
+     * the trip is live (CONFIRMED on the way to pickup, or STARTED). Checking just the driverId in
+     * the message body let any driver paint positions onto any passenger's map.
+     */
+    public boolean canReportLocation(Long driverId, String bookingId) {
+        if (driverId == null || bookingId == null) return false;
+        UUID bookingUuid;
+        try {
+            bookingUuid = UUID.fromString(bookingId);
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+        return bookingRepository.findById(bookingUuid)
+                .filter(b -> driverId.equals(b.getDriverId()))
+                .filter(b -> b.getStatus() == TravelBooking.BookingStatus.CONFIRMED
+                        || b.getStatus() == TravelBooking.BookingStatus.STARTED)
+                .isPresent();
+    }
+
     private boolean hasRole(Authentication auth, String role) {
         for (GrantedAuthority a : auth.getAuthorities()) {
             if (role.equals(a.getAuthority())) return true;

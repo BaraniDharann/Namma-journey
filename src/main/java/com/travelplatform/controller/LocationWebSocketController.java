@@ -15,6 +15,9 @@ public class LocationWebSocketController {
     @Autowired
     private LocationTrackingService locationTrackingService;
 
+    @Autowired
+    private com.travelplatform.config.BookingAccessGuard bookingAccessGuard;
+
     /**
      * Storing and broadcasting both live in the service now, so the REST fallback in
      * {@code DriverController#updateLocationRest} produces the same push this frame does.
@@ -29,6 +32,10 @@ public class LocationWebSocketController {
         if (principal == null || dto == null || dto.getDriverId() == null
                 || !principal.getName().equals(dto.getDriverId().toString())) {
             throw new AccessDeniedException("Cannot update location for another driver");
+        }
+        // The driver must also be the one assigned to this booking, on a live trip.
+        if (!bookingAccessGuard.canReportLocation(dto.getDriverId(), dto.getBookingId())) {
+            throw new AccessDeniedException("Not assigned to this trip");
         }
         locationTrackingService.updateLocation(dto);
     }

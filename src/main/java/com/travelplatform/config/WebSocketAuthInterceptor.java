@@ -13,13 +13,32 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
-import java.security.Principal;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+/**
+ * Guards the live-tracking WebSocket, which carries every passenger's real-time position.
+ *
+ * <p>It is an allow-list, because the simple broker is permissive by design: it accepts Ant-style
+ * wildcard subscriptions ("/topic/**" receives every booking's positions) and delivers client SEND
+ * frames addressed to "/topic/..." straight to subscribers, bypassing every @MessageMapping check.
+ * The previous guard only looked at subscriptions starting with "/topic/booking/", so an anonymous
+ * client could watch every trip or paint a fake car onto a passenger's map.
+ *
+ * <ul>
+ *   <li>CONNECT needs a valid JWT; there is no anonymous session.</li>
+ *   <li>SUBSCRIBE must be exactly /topic/booking/{uuid}/location, and BookingAccessGuard must
+ *       allow this caller on that booking.</li>
+ *   <li>SEND is only accepted to /app/** (handled by @MessageMapping, which checks the driver).
+ *       Only the server publishes to /topic.</li>
+ * </ul>
+ */
 @Component
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
-    private static final String BOOKING_TOPIC_PREFIX = "/topic/booking/";
+    private static final Pattern BOOKING_TOPIC = Pattern.compile(
+            "^/topic/booking/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/location$");
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -30,45 +49,55 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-        if (accessor == null) return message;
-
-        // 1. Authenticate the connection and attach the principal for later frames.
-        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-            String authHeader = accessor.getFirstNativeHeader("Authorization");
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                String token = authHeader.substring(7);
-                if (jwtUtil.validateToken(token)) {
-                    String userId = jwtUtil.extractUserId(token);
-                    String role = jwtUtil.extractRole(token);
-                    if (userId != null && role != null) {
-                        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                                userId, null, List.of(new SimpleGrantedAuthority(role)));
-                        accessor.setUser(auth);
-                    }
-                }
-            }
+        if (accessor == null || accessor.getCommand() == null) {
+            return message;
         }
 
-        // 2. Authorize subscriptions to a booking's location topic: only the trip's
-        //    customer, its assigned driver, or an owner may listen in.
-        if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
-            String destination = accessor.getDestination();
-            if (destination != null && destination.startsWith(BOOKING_TOPIC_PREFIX)) {
-                Principal user = accessor.getUser();
-                String bookingId = extractBookingId(destination);
-                if (!(user instanceof Authentication auth) || !bookingAccessGuard.canAccess(auth, bookingId)) {
-                    throw new MessagingException("Not authorized to track this booking");
-                }
+        switch (accessor.getCommand()) {
+            case CONNECT, STOMP -> accessor.setUser(authenticate(accessor));
+            case SUBSCRIBE -> authorizeSubscription(accessor);
+            case SEND -> authorizeSend(accessor);
+            default -> {
+                // UNSUBSCRIBE, DISCONNECT, ACK, NACK, BEGIN, COMMIT, ABORT carry no data to protect.
             }
         }
-
         return message;
     }
 
-    // "/topic/booking/{bookingId}/location" -> "{bookingId}"
-    private String extractBookingId(String destination) {
-        String rest = destination.substring(BOOKING_TOPIC_PREFIX.length());
-        int slash = rest.indexOf('/');
-        return slash >= 0 ? rest.substring(0, slash) : rest;
+    private Authentication authenticate(StompHeaderAccessor accessor) {
+        String header = accessor.getFirstNativeHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            String token = header.substring(7);
+            if (jwtUtil.validateToken(token)) {
+                String userId = jwtUtil.extractUserId(token);
+                String role = jwtUtil.extractRole(token);
+                if (userId != null && role != null) {
+                    return new UsernamePasswordAuthenticationToken(
+                            userId, null, List.of(new SimpleGrantedAuthority(role)));
+                }
+            }
+        }
+        throw new MessagingException("Authentication required for live tracking");
+    }
+
+    private void authorizeSubscription(StompHeaderAccessor accessor) {
+        String destination = accessor.getDestination();
+        Matcher m = destination == null ? null : BOOKING_TOPIC.matcher(destination);
+        if (m == null || !m.matches()) {
+            throw new MessagingException("Subscription not allowed: " + destination);
+        }
+        if (!(accessor.getUser() instanceof Authentication auth) || !bookingAccessGuard.canAccess(auth, m.group(1))) {
+            throw new MessagingException("Not authorized to track this booking");
+        }
+    }
+
+    private void authorizeSend(StompHeaderAccessor accessor) {
+        String destination = accessor.getDestination();
+        if (destination == null || !destination.startsWith("/app/")) {
+            throw new MessagingException("Clients may only send to /app destinations");
+        }
+        if (!(accessor.getUser() instanceof Authentication)) {
+            throw new MessagingException("Authentication required");
+        }
     }
 }

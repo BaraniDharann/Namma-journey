@@ -35,6 +35,9 @@ public class DriverController {
     private LocationTrackingService locationTrackingService;
 
     @Autowired
+    private com.travelplatform.config.BookingAccessGuard bookingAccessGuard;
+
+    @Autowired
     private TelegramLinkService telegramLinkService;
 
     @Autowired
@@ -160,6 +163,9 @@ public class DriverController {
                 .getContext().getAuthentication().getName();
         if (dto == null || dto.getDriverId() == null || !principal.equals(dto.getDriverId().toString())) {
             throw new org.springframework.security.access.AccessDeniedException("Cannot update location for another driver");
+        }
+        if (!bookingAccessGuard.canReportLocation(dto.getDriverId(), dto.getBookingId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Not assigned to this trip");
         }
         return ResponseEntity.ok(locationTrackingService.updateLocation(dto));
     }
