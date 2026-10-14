@@ -56,6 +56,11 @@ public class UserService {
 
     @org.springframework.beans.factory.annotation.Autowired
     private com.travelplatform.repository.PaymentRepository paymentRepository;
+
+    // Validates dates, distance, place names and the open-booking cap before anything is priced.
+    // Required in the app; null only in unit tests that build UserService by hand.
+    @org.springframework.beans.factory.annotation.Autowired
+    private TripRules tripRules;
     
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -99,6 +104,10 @@ public class UserService {
         }
         if (request.getToDate().isBefore(request.getFromDate())) {
             throw new IllegalArgumentException("To date cannot be before from date");
+        }
+        if (tripRules != null) {
+            tripRules.checkOpenBookings(userId);
+            tripRules.check(request);
         }
 
         // Use exact coordinates from frontend for accurate distance calculation
@@ -308,6 +317,9 @@ public class UserService {
         }
         if (paymentRepository.findByBookingId(bookingId).isPresent()) {
             throw new RuntimeException("A payment has been started for this booking, so it can no longer be changed.");
+        }
+        if (tripRules != null) {
+            tripRules.check(request);
         }
 
         if (request.getFromDate() == null || request.getToDate() == null) {

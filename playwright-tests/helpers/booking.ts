@@ -54,6 +54,8 @@ export function bookingPayload(overrides: Record<string, any> = {}) {
     acType: 'AC',
     bookingType: 'DISTANCE_BASED',
     ...overrides,
+    // The server only accepts an hourly booking that starts and ends on the same day.
+    ...(overrides.bookingType === 'HOUR_BASED' && !overrides.toDate ? { toDate: futureDate(start) } : {}),
   };
 }
 

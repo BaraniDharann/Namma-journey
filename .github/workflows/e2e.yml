@@ -53,6 +53,8 @@ jobs:
       JWT_EXPIRATION: '86400000'
       # OTPs are read out of the `otps` table by the suite instead of being emailed.
       OTP_TEST_MODE: 'true'
+      # The suite books many trips as one user; production keeps the default cap of 5 open bookings.
+      BOOKING_MAX_OPEN_PER_USER: '1000'
       # otp.test.mode only covers OTPs. Without this, a run delivers "trip assigned" and
       # driver-credential mail to whatever addresses are sitting in fixture data.
       MAIL_DELIVERY_ENABLED: 'false'

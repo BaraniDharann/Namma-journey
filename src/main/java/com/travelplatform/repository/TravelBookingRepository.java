@@ -56,6 +56,11 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
                                    @Param("start") LocalDateTime start,
                                    @Param("end") LocalDateTime end);
 
+    /** Bookings a traveller still has open - the cap in TripRules stops one account tying up the fleet. */
+    @Query("SELECT COUNT(b) FROM TravelBooking b WHERE b.userId = :userId " +
+           "AND b.status IN ('PENDING', 'CONFIRMED', 'STARTED')")
+    long countOpenBookingsByUserId(@Param("userId") UUID userId);
+
     @Query("SELECT b FROM TravelBooking b WHERE b.driverId = :driverId")
     List<TravelBooking> findByDriverId(@Param("driverId") Long driverId);
 

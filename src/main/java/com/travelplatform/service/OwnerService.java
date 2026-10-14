@@ -46,11 +46,21 @@ public class OwnerService {
         return travelBookingRepository.findAll();
     }
     
-    @CacheEvict(value = "pricing", allEntries = true)
+    // Every price change is a NEW row (history), carrying the other price forward. A per-km change
+    // used to save a row with no hourly price, so the hourly price silently fell back to the default
+    // once its cache expired; both caches are evicted so every instance sees both prices at once.
+    @Caching(evict = {
+            @CacheEvict(value = "pricing", allEntries = true),
+            @CacheEvict(value = "hourlyPricing", allEntries = true)
+    })
     public Map<String, Object> setPricePerKm(BigDecimal requestedPricePerKm, Long ownerId) {
         BigDecimal pricePerKm = Money.positivePrice(requestedPricePerKm, "Price per km");
+        BigDecimal currentHourly = pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
+                .map(PricingConfig::getPricePerHour)
+                .orElse(null);
         PricingConfig config = new PricingConfig();
         config.setPricePerKm(pricePerKm);
+        config.setPricePerHour(currentHourly);
         config.setUpdatedAt(LocalDateTime.now());
         config.setUpdatedBy(ownerId);
         pricingConfigRepository.save(config);
@@ -69,13 +79,19 @@ public class OwnerService {
             .orElse(DEFAULT_PRICE_PER_KM);
     }
 
-    @CacheEvict(value = "hourlyPricing", allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = "pricing", allEntries = true),
+            @CacheEvict(value = "hourlyPricing", allEntries = true)
+    })
     public Map<String, Object> setPricePerHour(BigDecimal requestedPricePerHour, Long ownerId) {
         BigDecimal pricePerHour = Money.positivePrice(requestedPricePerHour, "Price per hour");
-        PricingConfig config = pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
-            .orElse(new PricingConfig());
+        // A new row, never an edit of the latest one: editing in place destroyed pricing history.
+        BigDecimal currentKm = pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
+                .map(PricingConfig::getPricePerKm)
+                .orElse(DEFAULT_PRICE_PER_KM);
+        PricingConfig config = new PricingConfig();
         config.setPricePerHour(pricePerHour);
-        if (config.getPricePerKm() == null) config.setPricePerKm(DEFAULT_PRICE_PER_KM);
+        config.setPricePerKm(currentKm);
         config.setUpdatedAt(LocalDateTime.now());
         config.setUpdatedBy(ownerId);
         pricingConfigRepository.save(config);

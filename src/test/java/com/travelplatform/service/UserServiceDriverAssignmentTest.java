@@ -191,6 +191,19 @@ class UserServiceDriverAssignmentTest {
     }
 
     @Test
+    @DisplayName("every new booking goes through the trip rules (dates, distance, place names, open-booking cap)")
+    void bookingsAreCheckedAgainstTripRules() {
+        TripRules rules = mock(TripRules.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "tripRules", rules);
+        org.mockito.Mockito.doThrow(new IllegalArgumentException("The trip date cannot be in the past"))
+                .when(rules).check(any());
+
+        assertThrows(IllegalArgumentException.class, () -> service.createBooking(USER_ID, request()));
+        verify(rules).checkOpenBookings(USER_ID);
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("the fare is rounded to whole paise when the booking is created")
     void fareIsRoundedToPaise() {
         // OSRM distances carry metres: 461.237 km x 14/km = 6457.318, which is not an amount of
