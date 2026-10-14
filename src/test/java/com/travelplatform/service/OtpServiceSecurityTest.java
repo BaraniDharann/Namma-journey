@@ -111,7 +111,7 @@ class OtpServiceSecurityTest {
         justSent.setCreatedAt(LocalDateTime.now().minusSeconds(5));
         when(repo.findTopByEmailOrderByCreatedAtDesc(EMAIL)).thenReturn(Optional.of(justSent));
 
-        assertThrows(IllegalStateException.class, () -> service.sendOtp(EMAIL));
+        assertThrows(com.travelplatform.exception.TooManyRequestsException.class, () -> service.sendOtp(EMAIL));
     }
 
     @Test

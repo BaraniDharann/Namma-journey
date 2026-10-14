@@ -35,6 +35,10 @@ public class DriverService {
     /** Trip dates are Indian calendar days. Not final so tests can fix "today". */
     private java.time.Clock clock = java.time.Clock.system(java.time.ZoneId.of("Asia/Kolkata"));
 
+    // A driver viewing their own documents gets the same expiring signed links the owner does.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.storage.SignedUploadUrls signedUploadUrls;
+
     @Value("${file.upload-dir:uploads}")
     private String uploadDir;
     
@@ -65,9 +69,9 @@ public class DriverService {
         d.setEmail(driver.getEmail());
         d.setPhoto(driver.getPhoto());
         d.setLicenseNumber(driver.getLicenseNumber());
-        d.setLicensePhoto(driver.getLicensePhoto());
+        d.setLicensePhoto(signedUploadUrls == null ? driver.getLicensePhoto() : signedUploadUrls.signIfSensitive(driver.getLicensePhoto()));
         d.setAadhaarNumber(driver.getAadhaarNumber());
-        d.setAadhaarPhoto(driver.getAadhaarPhoto());
+        d.setAadhaarPhoto(signedUploadUrls == null ? driver.getAadhaarPhoto() : signedUploadUrls.signIfSensitive(driver.getAadhaarPhoto()));
         d.setStatus(driver.getStatus().name());
         d.setRole(driver.getRole());
         d.setEmailVerified(driver.isEmailVerified());
@@ -232,9 +236,12 @@ public class DriverService {
         // instance could never see them. Type checking and naming live in FileStorageService.
         String photoPath = fileStorageService.storeImage(photo, "trips/trip_" + bookingId, "driver_" + driverId);
 
-        // Remove existing photo if re-uploading
+        // Replace an earlier photo: the row AND the file, which used to stay in storage forever.
         tripDriverPhotoRepository.findByBookingIdAndDriverId(bookingId, driverId)
-                .ifPresent(tripDriverPhotoRepository::delete);
+                .ifPresent(old -> {
+                    tripDriverPhotoRepository.delete(old);
+                    fileStorageService.delete(old.getPhotoPath());
+                });
 
         TripDriverPhoto tripPhoto = new TripDriverPhoto();
         tripPhoto.setBookingId(bookingId);

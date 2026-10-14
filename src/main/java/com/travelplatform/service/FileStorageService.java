@@ -58,6 +58,11 @@ public class FileStorageService {
         if (extension == null) {
             throw new IllegalArgumentException("Only JPEG, PNG, WebP or GIF images are allowed");
         }
+        // The Content-Type is the client's claim. The first bytes of the file are not: an HTML or
+        // script file labelled image/png is refused here rather than stored.
+        if (!startsLike(file, contentType)) {
+            throw new IllegalArgumentException("The file is not a valid " + extension.substring(1).toUpperCase(Locale.ROOT) + " image");
+        }
 
         String key = "uploads/" + folder + "/" + namePrefix + "_" + UUID.randomUUID() + extension;
         try (InputStream in = file.getInputStream()) {
@@ -65,7 +70,48 @@ public class FileStorageService {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read the uploaded file", e);
         }
-        log.info("Stored upload {}", key);
+        // Folder and kind only: the full key is the file's address, and logs are not access control.
+        log.info("Stored upload in uploads/{} ({})", folder, namePrefix.replaceAll("_[0-9]+$", ""));
         return "/" + key;
+    }
+
+    /**
+     * Deletes a previously stored upload by its public path. Best-effort: failing to clean up an
+     * old file must not fail the request that replaced it.
+     */
+    public void delete(String publicPath) {
+        if (publicPath == null || !publicPath.startsWith("/")) {
+            return;
+        }
+        try {
+            fileStore.delete(publicPath.substring(1));
+        } catch (RuntimeException e) {
+            log.warn("Could not delete replaced upload: {}", e.toString());
+        }
+    }
+
+    /** Checks the file's signature ("magic bytes") against its declared image type. */
+    private static boolean startsLike(MultipartFile file, String contentType) {
+        byte[] head = new byte[12];
+        int read;
+        try (InputStream in = file.getInputStream()) {
+            read = in.readNBytes(head, 0, head.length);
+        } catch (IOException e) {
+            return false;
+        }
+        return switch (contentType) {
+            case "image/jpeg", "image/jpg" -> read >= 3
+                    && (head[0] & 0xFF) == 0xFF && (head[1] & 0xFF) == 0xD8 && (head[2] & 0xFF) == 0xFF;
+            case "image/png" -> read >= 8
+                    && (head[0] & 0xFF) == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G'
+                    && head[4] == 0x0D && head[5] == 0x0A && head[6] == 0x1A && head[7] == 0x0A;
+            case "image/gif" -> read >= 6
+                    && head[0] == 'G' && head[1] == 'I' && head[2] == 'F' && head[3] == '8'
+                    && (head[4] == '7' || head[4] == '9') && head[5] == 'a';
+            case "image/webp" -> read >= 12
+                    && head[0] == 'R' && head[1] == 'I' && head[2] == 'F' && head[3] == 'F'
+                    && head[8] == 'W' && head[9] == 'E' && head[10] == 'B' && head[11] == 'P';
+            default -> false;
+        };
     }
 }

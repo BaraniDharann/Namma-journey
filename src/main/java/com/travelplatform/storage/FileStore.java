@@ -17,4 +17,7 @@ public interface FileStore {
     void put(String key, InputStream content, long size, String contentType);
 
     Optional<ServedFile> serve(String key);
+
+    /** Removes a stored file; a missing key is not an error. */
+    void delete(String key);
 }

@@ -200,7 +200,8 @@ server:
   # half-written, a payment POST with no response. Paired with the lifecycle timeout below.
   shutdown: graceful
   error:
-    include-message: always
+    # Never: the default /error page would otherwise echo exception messages (SQL, hosts, paths).
+    include-message: never
   compression:
     enabled: true
     mime-types: application/json,application/xml,text/html,text/plain

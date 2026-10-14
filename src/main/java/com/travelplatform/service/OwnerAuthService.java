@@ -75,8 +75,9 @@ public class OwnerAuthService {
     @Transactional
     public AuthResponse createAdmin(AdminCreateRequest request, String providedSecret) {
         if (bootstrapSecret == null || bootstrapSecret.isBlank()) {
-            throw new IllegalStateException(
-                    "Owner bootstrap is disabled. Set app.bootstrap.owner-secret to enable it.");
+            // Public endpoint: when bootstrap is off it simply does not exist, rather than telling
+            // strangers which setting would switch it on.
+            throw new com.travelplatform.exception.ResourceNotFoundException("Not found");
         }
         if (providedSecret == null || !MessageDigest.isEqual(
                 providedSecret.getBytes(StandardCharsets.UTF_8),

@@ -27,16 +27,24 @@ class UploadsControllerTest {
 
     private MockMvc mvc;
 
+    private final com.travelplatform.storage.SignedUploadUrls signer = new com.travelplatform.storage.SignedUploadUrls(
+            "test-signing-secret-0123456789abcdef", "unused", java.time.Duration.ofMinutes(30));
+
     /** Disk-like store: some keys stream, one key redirects like S3 would. */
     private final FileStore store = new FileStore() {
         private final Map<String, ServedFile> files = Map.of(
-                "uploads/drivers/license_a.jpg", new ServedFile.Stream(new ByteArrayResource(new byte[] {7, 7})),
+                "uploads/drivers/photo_a.jpg", new ServedFile.Stream(new ByteArrayResource(new byte[] {7, 7})),
                 "driverphoto/trip_1/p.png", new ServedFile.Stream(new ByteArrayResource(new byte[] {8})),
                 "uploads/trips/trip_2/p.jpg", new ServedFile.Redirect(URI.create("https://r2.example/p.jpg?X-Amz-Expires=600")),
-                "uploads/drivers/page.html", new ServedFile.Stream(new ByteArrayResource(new byte[] {1})));
+                "uploads/drivers/page.html", new ServedFile.Stream(new ByteArrayResource(new byte[] {1})),
+                "uploads/drivers/aadhaar_ab.jpg", new ServedFile.Stream(new ByteArrayResource(new byte[] {9})));
 
         @Override
         public void put(String key, InputStream content, long size, String contentType) {
+        }
+
+        @Override
+        public void delete(String key) {
         }
 
         @Override
@@ -47,13 +55,13 @@ class UploadsControllerTest {
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new UploadsController(store)).build();
+        mvc = MockMvcBuilders.standaloneSetup(new UploadsController(store, signer)).build();
     }
 
     @Test
     @DisplayName("a file on disk is streamed with its image type, a cache header and nosniff")
     void streamsLocalFiles() throws Exception {
-        mvc.perform(get("/uploads/drivers/license_a.jpg"))
+        mvc.perform(get("/uploads/drivers/photo_a.jpg"))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("image/jpeg"))
                 .andExpect(content().bytes(new byte[] {7, 7}))
@@ -75,6 +83,20 @@ class UploadsControllerTest {
         mvc.perform(get("/uploads/trips/trip_2/p.jpg"))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", "https://r2.example/p.jpg?X-Amz-Expires=600"))
+                .andExpect(header().string("Cache-Control", "no-store"));
+    }
+
+    @Test
+    @DisplayName("an Aadhaar or licence scan is not served without a valid signed link")
+    void identityDocumentsNeedASignature() throws Exception {
+        mvc.perform(get("/uploads/drivers/aadhaar_ab.jpg")).andExpect(status().isNotFound());
+        mvc.perform(get("/uploads/drivers/aadhaar_ab.jpg").param("exp", "9999999999").param("sig", "forged"))
+                .andExpect(status().isNotFound());
+
+        String signed = signer.signIfSensitive("/uploads/drivers/aadhaar_ab.jpg");
+        mvc.perform(get(java.net.URI.create(signed)))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(new byte[] {9}))
                 .andExpect(header().string("Cache-Control", "no-store"));
     }
 

@@ -70,6 +70,10 @@ public class SecurityConfig {
                 // Prometheus cannot hold a user JWT; it presents METRICS_SCRAPE_TOKEN instead.
                 // Unset token = nobody, so metrics never become public by omission.
                 .requestMatchers("/actuator/prometheus").access(new ScrapeTokenAuthorizationManager(metricsScrapeToken))
+                // Everything else under /actuator (metrics, caches - which accepts DELETE) is for
+                // the owner. It fell through to anyRequest().authenticated(), so any self-signed-up
+                // passenger could read internal metrics or evict every cache.
+                .requestMatchers("/actuator/**").hasRole("OWNER")
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/places/**").permitAll()
                 .requestMatchers("/api/user/forgot-password").permitAll()

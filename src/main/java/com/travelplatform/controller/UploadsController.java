@@ -2,6 +2,7 @@ package com.travelplatform.controller;
 
 import com.travelplatform.storage.FileStore;
 import com.travelplatform.storage.ServedFile;
+import com.travelplatform.storage.SignedUploadUrls;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
@@ -36,9 +37,11 @@ public class UploadsController {
             "gif", MediaType.IMAGE_GIF);
 
     private final FileStore fileStore;
+    private final SignedUploadUrls signedUrls;
 
-    public UploadsController(FileStore fileStore) {
+    public UploadsController(FileStore fileStore, SignedUploadUrls signedUrls) {
         this.fileStore = fileStore;
+        this.signedUrls = signedUrls;
     }
 
     @GetMapping({"/uploads/**", "/driverphoto/**"})
@@ -48,13 +51,19 @@ public class UploadsController {
         if (type == null) {
             return ResponseEntity.notFound().build();
         }
+        // Identity documents need a valid, unexpired server signature (SignedUploadUrls). 404, not
+        // 403, so the response does not even confirm the file exists.
+        boolean sensitive = SignedUploadUrls.isSensitive(key);
+        if (sensitive && !signedUrls.isValid(key, request.getParameter("exp"), request.getParameter("sig"))) {
+            return ResponseEntity.notFound().build();
+        }
 
         return fileStore.serve(key)
-                .map(served -> respond(served, type))
+                .map(served -> respond(served, type, sensitive))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    private static ResponseEntity<Resource> respond(ServedFile served, MediaType type) {
+    private static ResponseEntity<Resource> respond(ServedFile served, MediaType type, boolean sensitive) {
         if (served instanceof ServedFile.Redirect redirect) {
             // The redirect itself must not be cached: the signed URL behind it expires.
             return ResponseEntity.status(HttpStatus.FOUND)
@@ -65,8 +74,8 @@ public class UploadsController {
         return ResponseEntity.ok()
                 .contentType(type)
                 .header("X-Content-Type-Options", "nosniff")
-                // private: these are personal documents; never let a shared cache keep them.
-                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePrivate())
+                // Identity documents are never cached (not even by the browser); other photos privately.
+                .cacheControl(sensitive ? CacheControl.noStore() : CacheControl.maxAge(7, TimeUnit.DAYS).cachePrivate())
                 .body(((ServedFile.Stream) served).resource());
     }
 

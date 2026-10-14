@@ -56,7 +56,7 @@ public class OtpService {
     public boolean sendOtp(String emailAddress) {
         String email = normalise(emailAddress);
         if (sentRecently(email)) {
-            throw new IllegalStateException("A code was just sent. Please wait 30 seconds before requesting another.");
+            throw new com.travelplatform.exception.TooManyRequestsException("A code was just sent. Please wait 30 seconds before requesting another.");
         }
         return issue(email);
     }

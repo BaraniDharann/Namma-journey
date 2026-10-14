@@ -41,6 +41,10 @@ public class OwnerService {
     // Field-injected so existing constructor-built tests are unaffected; null-guarded where used.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.repository.PaymentRepository paymentRepository;
+
+    // Identity-document links handed to the owner expire and are server-signed (SignedUploadUrls).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.storage.SignedUploadUrls signedUploadUrls;
     
     public List<TravelBooking> getAllBookings() {
         return travelBookingRepository.findAll();
@@ -248,9 +252,9 @@ public class OwnerService {
         d.setEmail(driver.getEmail());
         d.setPhoto(driver.getPhoto());
         d.setLicenseNumber(driver.getLicenseNumber());
-        d.setLicensePhoto(driver.getLicensePhoto());
+        d.setLicensePhoto(signedUploadUrls == null ? driver.getLicensePhoto() : signedUploadUrls.signIfSensitive(driver.getLicensePhoto()));
         d.setAadhaarNumber(driver.getAadhaarNumber());
-        d.setAadhaarPhoto(driver.getAadhaarPhoto());
+        d.setAadhaarPhoto(signedUploadUrls == null ? driver.getAadhaarPhoto() : signedUploadUrls.signIfSensitive(driver.getAadhaarPhoto()));
         d.setStatus(driver.getStatus().name());
         d.setRole(driver.getRole());
         d.setEmailVerified(driver.isEmailVerified());

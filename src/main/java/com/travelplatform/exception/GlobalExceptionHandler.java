@@ -76,7 +76,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException ex) {
         Map<String, String> error = new HashMap<>();
-        error.put("error", ex.getMessage());
+        String message = ex.getMessage();
+        // Enum.valueOf and similar JDK parsers put fully-qualified class names in their messages
+        // ("No enum constant com.travelplatform.entity..."). Validation messages the app writes
+        // never contain a package name, so anything that does is replaced.
+        if (message == null || message.isBlank() || message.contains("com.travelplatform") || message.startsWith("No enum constant")) {
+            log.warn("Invalid request value: {}", message);
+            message = "One of the values sent is not valid.";
+        }
+        error.put("error", message);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
     }
 
@@ -104,13 +112,36 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
+    /**
+     * An unknown URL is a 404. The catch-all Exception handler answered 500, so every scanner
+     * probing random paths looked like a server failure and could trip the error-rate alert.
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<Map<String, String>> handleNoResource(org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Not found");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<Map<String, String>> handleTooManyRequests(TooManyRequestsException ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(error);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
         // Many service methods throw RuntimeException with human-readable messages
         // ("Booking not found", "Unauthorized access", etc). Treat those as 400-class
         // failures rather than 500 so the frontend can surface the real reason.
         String message = ex.getMessage();
-        if (message == null || message.isBlank()) {
+        // Only messages the application wrote itself are shown: services throw a plain
+        // RuntimeException with text meant for people. Any subclass here (Redis, JDBC, I/O, NPE,
+        // IllegalState...) comes from a library or a bug, and its message can carry host names,
+        // SQL, file paths or class names - so the client gets a generic message and the detail
+        // goes to the log, findable by the request id.
+        if (ex.getClass() != RuntimeException.class || message == null || message.isBlank()) {
             log.error("Unhandled runtime exception", ex);
             Map<String, String> error = new HashMap<>();
             error.put("error", "Something went wrong. Please try again.");

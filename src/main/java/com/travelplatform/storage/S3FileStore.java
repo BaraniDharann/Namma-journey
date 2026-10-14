@@ -71,6 +71,13 @@ public class S3FileStore implements FileStore {
         return Optional.of(new ServedFile.Redirect(url));
     }
 
+    @Override
+    public void delete(String key) {
+        if (isValidKey(key)) {
+            s3.deleteObject(b -> b.bucket(props.bucket()).key(key));
+        }
+    }
+
     private static boolean isValidKey(String key) {
         return key != null
                 && !key.contains("..")

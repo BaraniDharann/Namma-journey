@@ -53,4 +53,30 @@ class DriverServiceTripPhotoTest {
         verify(storage).storeImage(photo, "trips/trip_" + bookingId, "driver_7");
         assertEquals(stored, saved.getPhotoPath());
     }
+
+    @Test
+    @DisplayName("re-uploading replaces the old photo file instead of leaving it in storage forever")
+    void reuploadDeletesTheOldFile() {
+        UUID bookingId = UUID.randomUUID();
+        TravelBookingRepository bookings = mock(TravelBookingRepository.class);
+        TripDriverPhotoRepository photos = mock(TripDriverPhotoRepository.class);
+        FileStorageService storage = mock(FileStorageService.class);
+        DriverService service = new DriverService(bookings, mock(DriverRepository.class),
+                mock(NotificationService.class), photos, mock(BookingDriverRejectionRepository.class), storage);
+        TravelBooking booking = new TravelBooking();
+        booking.setId(bookingId);
+        booking.setDriverId(7L);
+        booking.setStatus(TravelBooking.BookingStatus.STARTED);
+        when(bookings.findById(bookingId)).thenReturn(Optional.of(booking));
+        TripDriverPhoto old = new TripDriverPhoto();
+        old.setPhotoPath("/uploads/trips/trip_x/driver_7_old.jpg");
+        when(photos.findByBookingIdAndDriverId(bookingId, 7L)).thenReturn(Optional.of(old));
+        when(photos.save(any(TripDriverPhoto.class))).thenAnswer(i -> i.getArgument(0));
+        MockMultipartFile photo = new MockMultipartFile("photo", "end.jpg", "image/jpeg", new byte[] {1});
+        when(storage.storeImage(any(), any(), any())).thenReturn("/uploads/trips/trip_x/driver_7_new.jpg");
+
+        service.uploadEndTripPhoto(7L, bookingId, photo);
+
+        verify(storage).delete("/uploads/trips/trip_x/driver_7_old.jpg");
+    }
 }

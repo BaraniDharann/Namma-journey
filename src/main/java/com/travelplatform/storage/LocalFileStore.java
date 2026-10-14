@@ -47,6 +47,17 @@ public class LocalFileStore implements FileStore {
                 .map(path -> new ServedFile.Stream(new FileSystemResource(path)));
     }
 
+    @Override
+    public void delete(String key) {
+        resolve(key).ifPresent(path -> {
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException e) {
+                throw new UncheckedIOException("Failed to delete " + key, e);
+            }
+        });
+    }
+
     private Optional<Path> resolve(String key) {
         if (key == null || key.contains("..") || key.contains("\\") || key.contains("%")) {
             return Optional.empty();
