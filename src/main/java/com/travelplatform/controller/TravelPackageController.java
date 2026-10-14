@@ -47,8 +47,12 @@ public class TravelPackageController {
 
     // ==================== USER ENDPOINTS ====================
 
+    // Same guard as UserController: these endpoints used to check only the USER role, so any
+    // passenger could read another's bookings (name, email, phone), cancel them, or book as them.
+    private static final String SAME_USER = "hasRole('USER') and #userId.toString() == authentication.principal";
+
     @PostMapping("/api/user/{userId}/package-bookings")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<PackageBookingResponse> bookPackage(
             @PathVariable UUID userId,
             @Valid @RequestBody PackageBookingRequest request) {
@@ -57,19 +61,19 @@ public class TravelPackageController {
     }
 
     @GetMapping("/api/user/{userId}/package-bookings")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<List<PackageBookingResponse>> getUserPackageBookings(@PathVariable UUID userId) {
         return ResponseEntity.ok(bookingService.getUserBookings(userId));
     }
 
     @PostMapping("/api/user/{userId}/package-bookings/{bookingId}/cancel")
-    @PreAuthorize("hasRole('USER')")
+    @PreAuthorize(SAME_USER)
     public ResponseEntity<PackageBookingResponse> cancelUserPackageBooking(
             @PathVariable UUID userId,
             @PathVariable UUID bookingId,
             @RequestBody(required = false) Map<String, String> body) {
         String reason = body != null ? body.get("reason") : null;
-        return ResponseEntity.ok(bookingService.cancelBooking(bookingId, reason));
+        return ResponseEntity.ok(bookingService.cancelByUser(userId, bookingId, reason));
     }
 
     // ==================== OWNER ENDPOINTS ====================
@@ -133,7 +137,7 @@ public class TravelPackageController {
             @PathVariable UUID bookingId,
             @RequestBody(required = false) Map<String, String> body) {
         String reason = body != null ? body.get("reason") : "Cancelled by owner";
-        return ResponseEntity.ok(bookingService.cancelBooking(bookingId, reason));
+        return ResponseEntity.ok(bookingService.cancelByOwner(bookingId, reason));
     }
 
     @PostMapping("/api/owner/package-bookings/{bookingId}/complete")

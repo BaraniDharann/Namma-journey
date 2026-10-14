@@ -15,6 +15,10 @@ import java.util.UUID;
 @AllArgsConstructor
 public class Payment {
     
+    /** Optimistic lock: a write based on a stale read is refused instead of overwriting (V11). */
+    @Version
+    private Long version;
+
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;

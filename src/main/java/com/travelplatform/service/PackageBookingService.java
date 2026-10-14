@@ -27,6 +27,10 @@ public class PackageBookingService {
 
     @Transactional
     public PackageBookingResponse createBooking(UUID userId, PackageBookingRequest request) {
+        if (request.getTravelDate() == null
+                || request.getTravelDate().isBefore(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")))) {
+            throw new IllegalArgumentException("The travel date cannot be in the past");
+        }
         TravelPackage pkg = packageRepository.findById(request.getPackageId())
                 .orElseThrow(() -> new RuntimeException("Package not found"));
 
@@ -95,6 +99,7 @@ public class PackageBookingService {
     public PackageBookingResponse confirmBooking(UUID bookingId) {
         PackageBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
+        requireStatus(booking, "confirmed", PackageBooking.BookingStatus.PENDING);
         booking.setStatus(PackageBooking.BookingStatus.CONFIRMED);
         booking.setConfirmedAt(LocalDateTime.now());
 
@@ -113,10 +118,29 @@ public class PackageBookingService {
         return toResponse(bookingRepository.save(booking));
     }
 
+    /**
+     * A passenger cancelling their own booking. This used to cancel any booking id with no owner
+     * check at all, so one passenger could cancel another's confirmed trip.
+     */
     @Transactional
-    public PackageBookingResponse cancelBooking(UUID bookingId, String reason) {
+    public PackageBookingResponse cancelByUser(UUID userId, UUID bookingId, String reason) {
         PackageBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
+        if (!booking.getUserId().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Not your booking");
+        }
+        return cancel(booking, reason);
+    }
+
+    @Transactional
+    public PackageBookingResponse cancelByOwner(UUID bookingId, String reason) {
+        PackageBooking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        return cancel(booking, reason);
+    }
+
+    private PackageBookingResponse cancel(PackageBooking booking, String reason) {
+        requireStatus(booking, "cancelled", PackageBooking.BookingStatus.PENDING, PackageBooking.BookingStatus.CONFIRMED);
         booking.setStatus(PackageBooking.BookingStatus.CANCELLED);
         booking.setCancelledAt(LocalDateTime.now());
         booking.setCancellationReason(reason);
@@ -127,8 +151,19 @@ public class PackageBookingService {
     public PackageBookingResponse completeBooking(UUID bookingId) {
         PackageBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
+        requireStatus(booking, "completed", PackageBooking.BookingStatus.CONFIRMED);
         booking.setStatus(PackageBooking.BookingStatus.COMPLETED);
         return toResponse(bookingRepository.save(booking));
+    }
+
+    /** States only move forward: PENDING -> CONFIRMED -> COMPLETED, or to CANCELLED before completion. */
+    private static void requireStatus(PackageBooking booking, String action, PackageBooking.BookingStatus... allowed) {
+        for (PackageBooking.BookingStatus s : allowed) {
+            if (booking.getStatus() == s) {
+                return;
+            }
+        }
+        throw new RuntimeException("A " + booking.getStatus() + " package booking cannot be " + action);
     }
 
     private PackageBookingResponse toResponse(PackageBooking b) {

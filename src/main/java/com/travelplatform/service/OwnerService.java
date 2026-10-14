@@ -151,8 +151,7 @@ public class OwnerService {
         LocalDateTime start = LocalDate.of(year, 1, 1).atStartOfDay();
         LocalDateTime end = LocalDate.of(year + 1, 1, 1).atStartOfDay();
         Map<Integer, MonthlyRevenue> byMonth = new HashMap<>();
-        for (MonthlyRevenue row : travelBookingRepository.monthlyRevenue(
-                TravelBooking.BookingStatus.COMPLETED, start, end)) {
+        for (MonthlyRevenue row : travelBookingRepository.monthlyRevenue(start, end)) {
             byMonth.put(row.month(), row);
         }
 
@@ -204,8 +203,7 @@ public class OwnerService {
     }
     
     private Map<String, Object> revenueReport(LocalDateTime start, LocalDateTime end, String period, String periodValue) {
-        TravelBooking.BookingStatus completed = TravelBooking.BookingStatus.COMPLETED;
-        RevenueTotals totals = travelBookingRepository.revenueTotals(completed, start, end);
+        RevenueTotals totals = travelBookingRepository.revenueTotals(start, end);
 
         Map<String, Object> response = new HashMap<>();
         response.put("period", period);
@@ -214,7 +212,7 @@ public class OwnerService {
         response.put("totalDistance", totals.distanceKm());
         response.put("totalRevenue", totals.revenue());
         response.put("totalTravelDays", totals.travelDays());
-        response.put("trips", travelBookingRepository.revenueTrips(completed, start, end).stream().map(t -> {
+        response.put("trips", travelBookingRepository.revenueTrips(start, end).stream().map(t -> {
             Map<String, Object> trip = new HashMap<>();
             trip.put("id", t.id());
             trip.put("fromPlace", t.fromPlace());

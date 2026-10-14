@@ -21,40 +21,37 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
 
     Page<TravelBooking> findByUserId(UUID userId, Pageable pageable);
 
-    @Query("SELECT b FROM TravelBooking b WHERE b.status = :status AND b.bookingDate BETWEEN :start AND :end")
-    List<TravelBooking> findCompletedBookingsBetween(
-            @Param("status") TravelBooking.BookingStatus status,
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end);
-
-    /**
-     * Totals for one period, summed by Postgres. Half-open window [start, end): a booking at
-     * exactly midnight on the 1st belongs to the new month only - the BETWEEN above counts it in
-     * both. Rides on idx_travel_bookings_status_date (V6).
+    /*
+     * Revenue = money actually received: VERIFIED payments, on the day they were verified, at the
+     * amount collected. These used to add up booked fares of COMPLETED bookings by booking date -
+     * the wrong month, and the (then editable) booking total instead of what was paid.
+     * Half-open windows [start, end): a payment at exactly midnight on the 1st counts once.
      */
-    @Query("SELECT new com.travelplatform.dto.RevenueTotals(COUNT(b), SUM(b.totalAmount), SUM(b.distanceKm), SUM(b.travelDays)) " +
-           "FROM TravelBooking b WHERE b.status = :status AND b.bookingDate >= :start AND b.bookingDate < :end")
-    RevenueTotals revenueTotals(@Param("status") TravelBooking.BookingStatus status,
-                                @Param("start") LocalDateTime start,
-                                @Param("end") LocalDateTime end);
 
-    /** One row per month that has revenue, in month order. Months with none are simply absent. */
-    @Query("SELECT new com.travelplatform.dto.MonthlyRevenue(CAST(EXTRACT(MONTH FROM b.bookingDate) AS Integer), " +
-           "COUNT(b), SUM(b.totalAmount), SUM(b.distanceKm)) " +
-           "FROM TravelBooking b WHERE b.status = :status AND b.bookingDate >= :start AND b.bookingDate < :end " +
-           "GROUP BY EXTRACT(MONTH FROM b.bookingDate) ORDER BY EXTRACT(MONTH FROM b.bookingDate)")
-    List<MonthlyRevenue> monthlyRevenue(@Param("status") TravelBooking.BookingStatus status,
-                                        @Param("start") LocalDateTime start,
-                                        @Param("end") LocalDateTime end);
+    /** Totals for one period, summed by Postgres over NUMERIC money. */
+    @Query("SELECT new com.travelplatform.dto.RevenueTotals(COUNT(p), SUM(p.amount), SUM(b.distanceKm), SUM(b.travelDays)) " +
+           "FROM Payment p, TravelBooking b WHERE p.bookingId = b.id " +
+           "AND p.status = com.travelplatform.entity.Payment.PaymentStatus.VERIFIED " +
+           "AND p.verifiedDate >= :start AND p.verifiedDate < :end")
+    RevenueTotals revenueTotals(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    /** The per-trip lines of a revenue report: only the columns it shows, oldest first. */
+    /** One row per month that received money, in month order. Months with none are absent. */
+    @Query("SELECT new com.travelplatform.dto.MonthlyRevenue(CAST(EXTRACT(MONTH FROM p.verifiedDate) AS Integer), " +
+           "COUNT(p), SUM(p.amount), SUM(b.distanceKm)) " +
+           "FROM Payment p, TravelBooking b WHERE p.bookingId = b.id " +
+           "AND p.status = com.travelplatform.entity.Payment.PaymentStatus.VERIFIED " +
+           "AND p.verifiedDate >= :start AND p.verifiedDate < :end " +
+           "GROUP BY EXTRACT(MONTH FROM p.verifiedDate) ORDER BY EXTRACT(MONTH FROM p.verifiedDate)")
+    List<MonthlyRevenue> monthlyRevenue(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /** The per-trip lines of a revenue report, at the amount paid, in order of payment. */
     @Query("SELECT new com.travelplatform.dto.RevenueTrip(b.id, b.fromPlace, b.toPlace, b.distanceKm, b.travelDays, " +
-           "b.totalAmount, b.bookingDate) " +
-           "FROM TravelBooking b WHERE b.status = :status AND b.bookingDate >= :start AND b.bookingDate < :end " +
-           "ORDER BY b.bookingDate")
-    List<RevenueTrip> revenueTrips(@Param("status") TravelBooking.BookingStatus status,
-                                   @Param("start") LocalDateTime start,
-                                   @Param("end") LocalDateTime end);
+           "p.amount, b.bookingDate) " +
+           "FROM Payment p, TravelBooking b WHERE p.bookingId = b.id " +
+           "AND p.status = com.travelplatform.entity.Payment.PaymentStatus.VERIFIED " +
+           "AND p.verifiedDate >= :start AND p.verifiedDate < :end " +
+           "ORDER BY p.verifiedDate")
+    List<RevenueTrip> revenueTrips(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     /** Bookings a traveller still has open - the cap in TripRules stops one account tying up the fleet. */
     @Query("SELECT COUNT(b) FROM TravelBooking b WHERE b.userId = :userId " +

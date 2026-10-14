@@ -2,6 +2,8 @@ package com.travelplatform.repository;
 
 import com.travelplatform.dto.MonthlyRevenue;
 import com.travelplatform.dto.RevenueTotals;
+import com.travelplatform.dto.RevenueTrip;
+import com.travelplatform.entity.Payment;
 import com.travelplatform.entity.TravelBooking;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,12 +26,13 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Revenue used to load every completed booking as a full entity and add the fares up as doubles
- * in Java - memory proportional to a year's trips, and floating-point dust in the totals. It is
- * now summed by Postgres over NUMERIC columns: exact to the paisa, one row back.
+ * Revenue is money actually received: VERIFIED payments, counted on the day they were verified,
+ * at the amount collected. It used to add up booked fares of COMPLETED bookings by the day they
+ * were booked - counting a fare in the wrong month, and at whatever the (then editable) booking
+ * total said rather than what was paid.
  *
- * <p>Runs Flyway against real Postgres and lets Hibernate validate every entity against the
- * migrated schema, so a money column whose type does not match its entity fails here.
+ * <p>Summed by Postgres over NUMERIC money, against real Flyway migrations, with Hibernate
+ * validating every entity against the migrated schema.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -48,77 +51,94 @@ class RevenueQueriesTest {
     }
 
     @Autowired
-    private TravelBookingRepository repository;
+    private TravelBookingRepository bookings;
+    @Autowired
+    private PaymentRepository payments;
 
     @BeforeEach
     void clean() {
-        repository.deleteAll();
+        payments.deleteAll();
+        bookings.deleteAll();
     }
 
-    private void booking(String amount, double km, int days, LocalDateTime bookedAt, TravelBooking.BookingStatus status) {
+    /** A completed booking whose payment has the given status, amount and verification time. */
+    private void paidTrip(String amount, double km, int days, Payment.PaymentStatus status, LocalDateTime verifiedAt) {
         TravelBooking b = new TravelBooking();
         b.setUserId(UUID.randomUUID());
         b.setUserName("Test");
         b.setUserPhone("9876543210");
         b.setFromPlace("Chennai");
         b.setToPlace("Madurai");
-        b.setFromDate(LocalDate.of(2026, 3, 1));
-        b.setToDate(LocalDate.of(2026, 3, 1));
+        b.setFromDate(LocalDate.of(2026, 2, 1));
+        b.setToDate(LocalDate.of(2026, 2, 1));
         b.setTravelDays(days);
         b.setTravelMembers(2);
         b.setAcType("AC");
         b.setDistanceKm(km);
         b.setEstimatedTimeMinutes(60L);
-        b.setTotalAmount(new BigDecimal(amount));
+        b.setTotalAmount(new BigDecimal("99999.00")); // deliberately NOT what was paid
         b.setBookingType(TravelBooking.BookingType.DISTANCE_BASED);
-        b.setBookingDate(bookedAt);
-        b.setStatus(status);
-        repository.save(b);
+        b.setBookingDate(LocalDateTime.of(2026, 1, 20, 9, 0)); // booked in January
+        b.setStatus(TravelBooking.BookingStatus.COMPLETED);
+        b = bookings.save(b);
+
+        Payment p = new Payment();
+        p.setBookingId(b.getId());
+        p.setUserId(b.getUserId());
+        p.setAmount(new BigDecimal(amount));
+        p.setPaymentMethod(Payment.PaymentMethod.CASH);
+        p.setStatus(status);
+        p.setCreatedAt(LocalDateTime.of(2026, 1, 20, 9, 0));
+        p.setVerifiedDate(verifiedAt);
+        payments.save(p);
     }
 
-    private static final TravelBooking.BookingStatus DONE = TravelBooking.BookingStatus.COMPLETED;
+    private static LocalDateTime march(int day) {
+        return LocalDateTime.of(2026, 3, day, 10, 0);
+    }
 
     @Test
-    @DisplayName("totals are exact to the paisa - 0.10 + 0.20 is 0.30, not 0.30000000000000004")
-    void totalsAreExact() {
-        booking("0.10", 1.5, 1, LocalDateTime.of(2026, 3, 5, 10, 0), DONE);
-        booking("0.20", 2.5, 2, LocalDateTime.of(2026, 3, 6, 10, 0), DONE);
-        booking("6457.32", 461.237, 1, LocalDateTime.of(2026, 3, 7, 10, 0), DONE);
-        booking("999.00", 10, 1, LocalDateTime.of(2026, 3, 8, 10, 0), TravelBooking.BookingStatus.CANCELLED);
+    @DisplayName("only verified payments count, at the amount paid, in the month they were paid")
+    void revenueIsMoneyReceived() {
+        paidTrip("0.10", 1.5, 1, Payment.PaymentStatus.VERIFIED, march(5));
+        paidTrip("0.20", 2.5, 2, Payment.PaymentStatus.VERIFIED, march(6));
+        paidTrip("6457.32", 461.237, 1, Payment.PaymentStatus.VERIFIED, march(7));
+        paidTrip("999.00", 10, 1, Payment.PaymentStatus.PENDING, null);       // not paid yet
+        paidTrip("500.00", 10, 1, Payment.PaymentStatus.VERIFIED, LocalDateTime.of(2026, 4, 2, 9, 0)); // April
 
-        RevenueTotals totals = repository.revenueTotals(DONE,
+        RevenueTotals totals = bookings.revenueTotals(
                 LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0));
 
         assertEquals(3, totals.trips());
-        assertEquals(new BigDecimal("6457.62"), totals.revenue());
+        assertEquals(new BigDecimal("6457.62"), totals.revenue(), "0.10 + 0.20 + 6457.32, exactly");
         assertEquals(465.237, totals.distanceKm(), 1e-9);
         assertEquals(4, totals.travelDays());
-    }
 
-    @Test
-    @DisplayName("a booking at exactly midnight on the 1st belongs to the new month only")
-    void periodEndIsExclusive() {
-        booking("100.00", 1, 1, LocalDateTime.of(2026, 4, 1, 0, 0), DONE);
-
-        RevenueTotals march = repository.revenueTotals(DONE,
+        List<RevenueTrip> trips = bookings.revenueTrips(
                 LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0));
-        RevenueTotals april = repository.revenueTotals(DONE,
-                LocalDateTime.of(2026, 4, 1, 0, 0), LocalDateTime.of(2026, 5, 1, 0, 0));
-
-        assertEquals(0, march.trips());
-        assertEquals(BigDecimal.ZERO, march.revenue());
-        assertEquals(1, april.trips());
+        assertEquals(3, trips.size());
+        assertEquals(new BigDecimal("0.10"), trips.get(0).totalAmount(), "the amount paid, not the booking total");
     }
 
     @Test
-    @DisplayName("the twelve-bar chart is one GROUP BY, not a year of rows")
-    void monthlySeriesIsGroupedInSql() {
-        booking("100.00", 10, 1, LocalDateTime.of(2026, 1, 15, 9, 0), DONE);
-        booking("250.50", 20, 1, LocalDateTime.of(2026, 1, 20, 9, 0), DONE);
-        booking("75.25", 5, 1, LocalDateTime.of(2026, 12, 31, 23, 59), DONE);
-        booking("10.00", 1, 1, LocalDateTime.of(2027, 1, 1, 0, 0), DONE);
+    @DisplayName("a payment verified at exactly midnight on the 1st belongs to the new month only")
+    void periodEndIsExclusive() {
+        paidTrip("100.00", 1, 1, Payment.PaymentStatus.VERIFIED, LocalDateTime.of(2026, 4, 1, 0, 0));
 
-        List<MonthlyRevenue> months = repository.monthlyRevenue(DONE,
+        assertEquals(0, bookings.revenueTotals(LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0)).trips());
+        assertEquals(BigDecimal.ZERO, bookings.revenueTotals(LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0)).revenue());
+        assertEquals(1, bookings.revenueTotals(LocalDateTime.of(2026, 4, 1, 0, 0), LocalDateTime.of(2026, 5, 1, 0, 0)).trips());
+    }
+
+    @Test
+    @DisplayName("the twelve-bar chart is one GROUP BY on the month of payment")
+    void monthlySeriesByPaymentMonth() {
+        paidTrip("100.00", 10, 1, Payment.PaymentStatus.VERIFIED, LocalDateTime.of(2026, 1, 15, 9, 0));
+        paidTrip("250.50", 20, 1, Payment.PaymentStatus.VERIFIED, LocalDateTime.of(2026, 1, 20, 9, 0));
+        paidTrip("75.25", 5, 1, Payment.PaymentStatus.VERIFIED, LocalDateTime.of(2026, 12, 31, 23, 59));
+        paidTrip("10.00", 1, 1, Payment.PaymentStatus.VERIFIED, LocalDateTime.of(2027, 1, 1, 0, 0));
+
+        List<MonthlyRevenue> months = bookings.monthlyRevenue(
                 LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2027, 1, 1, 0, 0));
 
         assertEquals(2, months.size());

@@ -69,6 +69,7 @@ public class PaymentService {
             if (p.getStatus() == Payment.PaymentStatus.VERIFIED) {
                 throw new RuntimeException("Payment already completed");
             }
+            rememberUpiReference(p, request);
             // A passenger who first picked cash and then chose UPI (or the reverse) gets what they
             // chose. The old row kept its first method: a CASH payment was handed a UPI QR, the
             // owner's UPI verify then refused it, and only the driver could settle it, as "cash".
@@ -128,6 +129,7 @@ public class PaymentService {
         payment.setStatus(Payment.PaymentStatus.PENDING);
         payment.setDriverId(booking.getDriverId());
         payment.setCreatedAt(LocalDateTime.now());
+        rememberUpiReference(payment, request);
 
         if (method == Payment.PaymentMethod.UPI) {
             payment.setUpiLinkExpiresAt(LocalDateTime.now().plusMinutes(UPI_LINK_EXPIRY_MINUTES));
@@ -383,6 +385,22 @@ public class PaymentService {
      * body of {@code {"paymentMethod":"BITCOIN"}} raised IllegalArgumentException and a missing
      * field raised NullPointerException, both from inside the transaction.
      */
+    /**
+     * Keeps the UPI reference (UTR) a passenger supplies, so the owner has something to match
+     * against the bank statement when verifying. It arrived on the request and was thrown away.
+     * Trimmed and length-capped; only letters and digits, as UPI references are.
+     */
+    private static void rememberUpiReference(Payment payment, PaymentRequest request) {
+        String ref = request == null ? null : request.getUpiTransactionId();
+        if (ref == null) {
+            return;
+        }
+        ref = ref.trim();
+        if (!ref.isEmpty() && ref.length() <= 64 && ref.matches("[A-Za-z0-9]+")) {
+            payment.setUpiTransactionId(ref);
+        }
+    }
+
     private Payment.PaymentMethod parseMethod(PaymentRequest request) {
         String raw = request != null ? request.getPaymentMethod() : null;
         if (raw == null || raw.isBlank()) {

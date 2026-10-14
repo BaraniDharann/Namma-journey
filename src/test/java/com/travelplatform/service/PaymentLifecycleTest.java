@@ -170,6 +170,20 @@ class PaymentLifecycleTest {
     }
 
     @Test
+    @DisplayName("a UPI reference the passenger supplies is kept, so the owner can match it when verifying")
+    void upiReferenceIsStored() {
+        booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
+        Payment p = payment(Payment.PaymentMethod.UPI, Payment.PaymentStatus.PENDING);
+        PaymentRequest req = new PaymentRequest();
+        req.setPaymentMethod("UPI");
+        req.setUpiTransactionId(" 412345678901 ");
+
+        service.initiatePayment(booking.getUserId(), BOOKING, req);
+
+        assertEquals("412345678901", p.getUpiTransactionId());
+    }
+
+    @Test
     @DisplayName("choosing UPI after picking cash switches the pending payment to UPI")
     void methodChangeIsHonoured() {
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
