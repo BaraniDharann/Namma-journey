@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import Icon from './dash/Icon'
 import useDriverLocationSender from '../hooks/useDriverLocationSender'
 import useLiveDriverLocation from '../hooks/useLiveDriverLocation'
 import { OSRM_BASE_URL, TILE_URL, TILE_ATTRIBUTION } from '../config/mapServices'
@@ -344,7 +345,7 @@ export default function LiveTrackingMap({
         </MapContainer>
         {/* Recenter button */}
         {driverPos && (
-          <button onClick={() => {
+          <button type="button" aria-label="Re-center on driver" onClick={() => {
             setFollowDriver(true)
             if (map) map.panTo(driverPos, { animate: true, duration: 0.5 })
           }} style={{
@@ -354,7 +355,7 @@ export default function LiveTrackingMap({
             cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'all 0.2s',
           }} title="Re-center on driver">
-            📍
+            <Icon name="pin" size={18} />
           </button>
         )}
       </div>
