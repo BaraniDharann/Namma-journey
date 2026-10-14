@@ -113,7 +113,7 @@ class PaymentServiceSecurityTest {
     @DisplayName("a driver cannot report a shortfall and have the fare settle in full")
     void cashPaymentRejectsShortfall() {
         when(bookingRepository.findById(BOOKING_ID))
-                .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.CONFIRMED)));
+                .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.STARTED)));
         when(paymentRepository.findByBookingId(BOOKING_ID))
                 .thenReturn(Optional.of(payment(Payment.PaymentMethod.CASH, Payment.PaymentStatus.PENDING)));
 
@@ -131,7 +131,7 @@ class PaymentServiceSecurityTest {
     @DisplayName("even one paisa short is a shortfall: money is compared exactly, not within a tolerance")
     void cashPaymentRejectsOnePaisaShort() {
         when(bookingRepository.findById(BOOKING_ID))
-                .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.CONFIRMED)));
+                .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.STARTED)));
         when(paymentRepository.findByBookingId(BOOKING_ID))
                 .thenReturn(Optional.of(payment(Payment.PaymentMethod.CASH, Payment.PaymentStatus.PENDING)));
 
@@ -147,7 +147,7 @@ class PaymentServiceSecurityTest {
     @DisplayName("a cash fare matching the amount due settles and records the driver")
     void cashPaymentSettlesWhenAmountMatches() {
         when(bookingRepository.findById(BOOKING_ID))
-                .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.CONFIRMED)));
+                .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.STARTED)));
         when(paymentRepository.findByBookingId(BOOKING_ID))
                 .thenReturn(Optional.of(payment(Payment.PaymentMethod.CASH, Payment.PaymentStatus.PENDING)));
 

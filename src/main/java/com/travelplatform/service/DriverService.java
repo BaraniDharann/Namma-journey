@@ -32,6 +32,9 @@ public class DriverService {
     private final BookingDriverRejectionRepository rejectionRepository;
     private final FileStorageService fileStorageService;
 
+    /** Trip dates are Indian calendar days. Not final so tests can fix "today". */
+    private java.time.Clock clock = java.time.Clock.system(java.time.ZoneId.of("Asia/Kolkata"));
+
     @Value("${file.upload-dir:uploads}")
     private String uploadDir;
     
@@ -195,6 +198,11 @@ public class DriverService {
         if (booking.getStatus() != TravelBooking.BookingStatus.CONFIRMED) {
             throw new RuntimeException("Only confirmed bookings can be started");
         }
+        // A December trip could be started in October: tracking switched on, the passenger told
+        // the car was on its way, and the trip blocked from being cancelled.
+        if (booking.getFromDate() != null && java.time.LocalDate.now(clock).isBefore(booking.getFromDate())) {
+            throw new RuntimeException("This trip starts on " + booking.getFromDate() + " and cannot be started before then");
+        }
 
         booking.setStatus(TravelBooking.BookingStatus.STARTED);
         TravelBooking updated = bookingRepository.save(booking);
@@ -210,9 +218,9 @@ public class DriverService {
             throw new RuntimeException("This booking is not assigned to you");
         }
 
-        if (booking.getStatus() != TravelBooking.BookingStatus.STARTED
-                && booking.getStatus() != TravelBooking.BookingStatus.CONFIRMED) {
-            throw new RuntimeException("Photo can only be uploaded for active trips");
+        // The end-of-trip photo proves a ride happened, so the ride must have started.
+        if (booking.getStatus() != TravelBooking.BookingStatus.STARTED) {
+            throw new RuntimeException("The end-of-trip photo can only be uploaded once the trip has started");
         }
 
         if (photo == null || photo.isEmpty()) {

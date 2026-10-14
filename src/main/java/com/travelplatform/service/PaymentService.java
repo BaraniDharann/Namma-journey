@@ -69,6 +69,27 @@ public class PaymentService {
             if (p.getStatus() == Payment.PaymentStatus.VERIFIED) {
                 throw new RuntimeException("Payment already completed");
             }
+            // A passenger who first picked cash and then chose UPI (or the reverse) gets what they
+            // chose. The old row kept its first method: a CASH payment was handed a UPI QR, the
+            // owner's UPI verify then refused it, and only the driver could settle it, as "cash".
+            if (request != null && request.getPaymentMethod() != null && !request.getPaymentMethod().isBlank()) {
+                Payment.PaymentMethod requested = parseMethod(request);
+                if (requested != p.getPaymentMethod()) {
+                    p.setPaymentMethod(requested);
+                    if (requested == Payment.PaymentMethod.CASH) {
+                        p.setUpiLinkExpiresAt(null);
+                        PaymentResponse response = mapToResponse(paymentRepository.save(p));
+                        response.setMessage("Pay cash to driver. Driver will mark payment received.");
+                        return response;
+                    }
+                    p.setUpiLinkExpiresAt(null); // forces a fresh link below
+                }
+            }
+            if (p.getPaymentMethod() == Payment.PaymentMethod.CASH) {
+                PaymentResponse response = mapToResponse(p);
+                response.setMessage("Pay cash to driver. Driver will mark payment received.");
+                return response;
+            }
             // If UPI link is still active (not expired), return it
             if (p.getPaymentMethod() == Payment.PaymentMethod.UPI
                     && p.getUpiLinkExpiresAt() != null
@@ -153,8 +174,11 @@ public class PaymentService {
             throw new RuntimeException("Payment already completed for this booking");
         }
 
-        if (booking.getStatus() == TravelBooking.BookingStatus.COMPLETED) {
-            throw new RuntimeException("Trip already completed");
+        // Cash changes hands at the end of a ride, so the ride must have started. Accepting any
+        // non-completed state let a confirmed trip that never happened be settled and booked
+        // into revenue.
+        if (booking.getStatus() != TravelBooking.BookingStatus.STARTED) {
+            throw new RuntimeException("Cash can only be collected on a trip that has started");
         }
 
         if (payment.getPaymentMethod() != Payment.PaymentMethod.CASH) {
@@ -228,16 +252,30 @@ public class PaymentService {
                     "Only UPI payments are verified here; cash is settled by the assigned driver");
         }
         
+        TravelBooking booking = bookingRepository.findById(payment.getBookingId())
+                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        // Only a live booking's payment can be accepted: a cancelled one has to be refunded, not
+        // booked as revenue.
+        if (booking.getStatus() != TravelBooking.BookingStatus.CONFIRMED
+                && booking.getStatus() != TravelBooking.BookingStatus.STARTED) {
+            throw new RuntimeException("This booking is " + booking.getStatus() + "; its payment cannot be verified");
+        }
+
         payment.setStatus(Payment.PaymentStatus.VERIFIED);
         payment.setVerifiedDate(LocalDateTime.now());
         payment.setVerifiedBy("owner:" + verifiedBy);
         Payment verified = paymentRepository.save(payment);
-        
-        TravelBooking booking = bookingRepository.findById(payment.getBookingId())
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
-        booking.setStatus(TravelBooking.BookingStatus.COMPLETED);
-        bookingRepository.save(booking);
-        locationTrackingService.removeLocation(payment.getBookingId().toString());
+
+        // Paying settles the money, not the trip. A started trip being paid for is over; a
+        // prepayment on a CONFIRMED booking leaves the ride still to happen - it completes when the
+        // driver ends it (generateTripEndQr). This used to mark prepaid trips COMPLETED before the
+        // car had even arrived.
+        boolean tripOver = booking.getStatus() == TravelBooking.BookingStatus.STARTED;
+        if (tripOver) {
+            booking.setStatus(TravelBooking.BookingStatus.COMPLETED);
+            bookingRepository.save(booking);
+            locationTrackingService.removeLocation(payment.getBookingId().toString());
+        }
 
         notificationService.notifyPaymentReceived(booking);
 
@@ -247,7 +285,7 @@ public class PaymentService {
         response.setAmount(verified.getAmount());
         response.setPaymentMethod(verified.getPaymentMethod().name());
         response.setStatus(verified.getStatus().name());
-        response.setMessage("Payment verified. Trip completed. RCM calculation will be processed.");
+        response.setMessage(tripOver ? "Payment verified. Trip completed." : "Prepayment verified. The trip completes when the driver ends it.");
         
         return response;
     }
@@ -267,15 +305,33 @@ public class PaymentService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "dailyRevenue",   allEntries = true),
+            @CacheEvict(value = "monthlyRevenue", allEntries = true),
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true),
+            @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
+    })
     public PaymentResponse generateTripEndQr(Long driverId, UUID bookingId) {
         TravelBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
         if (booking.getDriverId() == null || !booking.getDriverId().equals(driverId)) {
             throw new RuntimeException("Unauthorized: Booking not assigned to you");
         }
+        // A trip that never started cannot end. This used to raise a payment and tell the
+        // passenger "trip ended - payment due" for bookings the driver had not even accepted.
+        if (booking.getStatus() != TravelBooking.BookingStatus.STARTED) {
+            throw new RuntimeException("Start the trip before ending it");
+        }
         java.util.Optional<Payment> existing = paymentRepository.findByBookingId(bookingId);
         if (existing.isPresent() && existing.get().getStatus() == Payment.PaymentStatus.VERIFIED) {
-            throw new RuntimeException("Payment already completed");
+            // Prepaid: the money is already in, so ending the ride is what completes it. This
+            // used to throw "Payment already completed", leaving prepaid trips stuck in STARTED.
+            booking.setStatus(TravelBooking.BookingStatus.COMPLETED);
+            bookingRepository.save(booking);
+            locationTrackingService.removeLocation(bookingId.toString());
+            PaymentResponse response = mapToResponse(existing.get());
+            response.setMessage("Already paid. Trip completed.");
+            return response;
         }
         Payment payment = existing.orElseGet(() -> {
             Payment p = new Payment();

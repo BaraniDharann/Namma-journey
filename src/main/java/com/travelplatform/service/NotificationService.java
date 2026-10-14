@@ -192,6 +192,32 @@ public class NotificationService {
         log.info("Trip ended notifications sent for booking: {}", booking.getId());
     }
 
+    /** The passenger cancelled: the owner and the assigned driver (if any) need to know. */
+    public void notifyBookingCancelled(TravelBooking booking) {
+        String route = booking.getFromPlace() + " to " + booking.getToPlace();
+        Notification owner = new Notification();
+        owner.setRecipientId("owner");
+        owner.setRecipientRole("ROLE_OWNER");
+        owner.setType("BOOKING_CANCELLED");
+        owner.setTitle("Booking Cancelled");
+        owner.setMessage(booking.getUserName() + " cancelled the trip from " + route + " on " + booking.getFromDate() + ".");
+        owner.setBookingId(booking.getId().toString());
+        owner.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(owner);
+
+        if (booking.getDriverId() != null) {
+            Notification driver = new Notification();
+            driver.setRecipientId(booking.getDriverId().toString());
+            driver.setRecipientRole("ROLE_DRIVER");
+            driver.setType("BOOKING_CANCELLED");
+            driver.setTitle("Trip Cancelled");
+            driver.setMessage("The passenger cancelled the trip from " + route + " on " + booking.getFromDate() + ".");
+            driver.setBookingId(booking.getId().toString());
+            driver.setCreatedAt(LocalDateTime.now());
+            notificationRepository.save(driver);
+        }
+    }
+
     public void notifyPaymentReceived(TravelBooking booking) {
         Notification notification = new Notification();
         notification.setRecipientId("owner");

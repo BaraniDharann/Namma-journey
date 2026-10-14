@@ -115,15 +115,6 @@ public class UserController {
         return ResponseEntity.ok(summary);
     }
 
-    @PostMapping("/{userId}/bookings/{bookingId}/confirm")
-    @PreAuthorize(SAME_USER)
-    public ResponseEntity<TravelBookingResponse> confirmBooking(
-            @PathVariable UUID userId,
-            @PathVariable UUID bookingId) {
-        TravelBookingResponse response = userService.confirmBooking(userId, bookingId);
-        return ResponseEntity.ok(response);
-    }
-
     @PutMapping("/{userId}/profile")
     @PreAuthorize(SAME_USER)
     public ResponseEntity<java.util.Map<String, Object>> updateProfile(

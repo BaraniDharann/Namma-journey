@@ -53,6 +53,9 @@ public class UserService {
     // are unaffected; only the password-reset path uses it.
     @org.springframework.beans.factory.annotation.Autowired
     private com.travelplatform.security.TokenVersionService tokenVersionService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.travelplatform.repository.PaymentRepository paymentRepository;
     
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -296,6 +299,17 @@ public class UserService {
             throw new RuntimeException("Unauthorized access to booking");
         }
 
+        // Editing recomputes the fare, so it is only safe before anyone has committed to it: a
+        // driver accepting, or a payment being raised. It used to accept edits in any state - a
+        // passenger could set up a cash payment for a 10 km trip, edit it to 500 km, and the
+        // driver would be told ₹100 settles it while revenue reported ₹5000.
+        if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
+            throw new RuntimeException("Only a pending booking can be changed. Cancel it and book again instead.");
+        }
+        if (paymentRepository.findByBookingId(bookingId).isPresent()) {
+            throw new RuntimeException("A payment has been started for this booking, so it can no longer be changed.");
+        }
+
         if (request.getFromDate() == null || request.getToDate() == null) {
             throw new IllegalArgumentException("From date and to date are required");
         }
@@ -363,8 +377,26 @@ public class UserService {
         if (!booking.getUserId().equals(userId)) {
             throw new RuntimeException("Unauthorized access to booking");
         }
-        
-        bookingRepository.delete(booking);
+
+        // A passenger "delete" is a cancellation. It used to hard-delete the row in any state: a
+        // driver mid-trip lost the booking before collecting cash, completed fares vanished from
+        // revenue, and payments, reviews and photos were left pointing at nothing.
+        if (booking.getStatus() != TravelBooking.BookingStatus.PENDING
+                && booking.getStatus() != TravelBooking.BookingStatus.CONFIRMED) {
+            throw new RuntimeException("Only a booking that has not started can be cancelled");
+        }
+        java.util.Optional<com.travelplatform.entity.Payment> payment = paymentRepository.findByBookingId(bookingId);
+        if (payment.filter(p -> p.getStatus() == com.travelplatform.entity.Payment.PaymentStatus.VERIFIED).isPresent()) {
+            throw new RuntimeException("This booking is already paid for. Please contact us to cancel it and arrange a refund.");
+        }
+        payment.ifPresent(p -> {
+            p.setStatus(com.travelplatform.entity.Payment.PaymentStatus.FAILED);
+            paymentRepository.save(p);
+        });
+
+        booking.setStatus(TravelBooking.BookingStatus.CANCELLED);
+        bookingRepository.save(booking);
+        notificationService.notifyBookingCancelled(booking);
     }
     
     /** One booking: looks up its own photo and driver. Lists use the batched getAllBookings path. */
@@ -484,23 +516,5 @@ public class UserService {
             user.setPhone(phone);
         }
         return userRepository.save(user);
-    }
-
-    @Transactional
-    public TravelBookingResponse confirmBooking(UUID userId, UUID bookingId) {
-        TravelBooking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
-        
-        if (!booking.getUserId().equals(userId)) {
-            throw new RuntimeException("Unauthorized access to booking");
-        }
-        
-        if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
-            throw new RuntimeException("Only pending bookings can be confirmed");
-        }
-        
-        booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
-        TravelBooking confirmedBooking = bookingRepository.save(booking);
-        return mapToResponse(confirmedBooking);
     }
 }

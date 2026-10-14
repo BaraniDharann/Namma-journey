@@ -37,6 +37,10 @@ public class OwnerService {
     private final DriverRepository driverRepository;
     private final TripDriverPhotoRepository tripDriverPhotoRepository;
     private final NotificationService notificationService;
+
+    // Field-injected so existing constructor-built tests are unaffected; null-guarded where used.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.PaymentRepository paymentRepository;
     
     public List<TravelBooking> getAllBookings() {
         return travelBookingRepository.findAll();
@@ -253,9 +257,11 @@ public class OwnerService {
         TravelBooking booking = travelBookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
 
-        if (booking.getStatus() == TravelBooking.BookingStatus.COMPLETED
-                || booking.getStatus() == TravelBooking.BookingStatus.CANCELLED) {
-            throw new RuntimeException("Cannot assign driver to a " + booking.getStatus() + " booking");
+        // Only before the trip starts. Reassigning a STARTED trip threw it back to CONFIRMED with a
+        // new driver while the old one was still driving the passenger.
+        if (booking.getStatus() != TravelBooking.BookingStatus.PENDING
+                && booking.getStatus() != TravelBooking.BookingStatus.CONFIRMED) {
+            throw new RuntimeException("Cannot assign a driver to a " + booking.getStatus() + " booking");
         }
 
         Driver driver = driverRepository.findById(driverId)
@@ -277,6 +283,17 @@ public class OwnerService {
         booking.setDriverId(driverId);
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         TravelBooking updatedBooking = travelBookingRepository.save(booking);
+
+        // An unpaid payment follows the trip to its new driver, so the payment record and the
+        // booking never name different drivers.
+        if (paymentRepository != null) {
+            paymentRepository.findByBookingId(bookingId)
+                    .filter(p -> p.getStatus() != com.travelplatform.entity.Payment.PaymentStatus.VERIFIED)
+                    .ifPresent(p -> {
+                        p.setDriverId(driverId);
+                        paymentRepository.save(p);
+                    });
+        }
 
         // A driver given a trip by hand must hear about it the same way an auto-assigned one does
         // (in-app alert, email, Telegram card). Re-saving the same driver is not news.

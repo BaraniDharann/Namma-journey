@@ -319,18 +319,12 @@ export default function DriverBookings() {
                         </button>
                       </>
                     )}
+                    {/* A confirmed trip has to be started before it can be ended or paid in cash -
+                        the server refuses both otherwise (PaymentService). */}
                     {b.status === 'CONFIRMED' && (
-                      <>
-                        <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => handleStartTrip(b)} disabled={busy(b, 'START')}>
-                          {busy(b, 'START') ? '...' : <><Icon name="nav" size={15} />Start trip</>}
-                        </button>
-                        <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => handleEndTrip(b.bookingId)} disabled={busy(b, 'END')}>
-                          {busy(b, 'END') ? '...' : <><Icon name="camera" size={15} />End trip</>}
-                        </button>
-                        <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => handleCash(b.bookingId, b.totalAmount)} disabled={busy(b, 'CASH')}>
-                          {busy(b, 'CASH') ? '...' : <><Icon name="wallet" size={15} />Cash received</>}
-                        </button>
-                      </>
+                      <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => handleStartTrip(b)} disabled={busy(b, 'START')}>
+                        {busy(b, 'START') ? '...' : <><Icon name="nav" size={15} />Start trip</>}
+                      </button>
                     )}
                     {b.status === 'STARTED' && (
                       <>
