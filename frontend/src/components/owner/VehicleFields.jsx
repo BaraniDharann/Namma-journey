@@ -16,9 +16,9 @@ const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180
 
 /**
  * A driver's vehicle and the work they take (City rides, Trips), for the owner's create and edit
- * forms. Controlled: `value` is the vehicle, `onChange` receives the fields that changed.
+ * forms. `hideTrips` drops the Trips switch, for drivers signing up who can't take trips. Controlled: `value` is the vehicle, `onChange` receives the fields that changed.
  */
-export default function VehicleFields({ value, onChange, idPrefix = 'veh' }) {
+export default function VehicleFields({ value, onChange, idPrefix = 'veh', hideTrips = false }) {
   const car = value.vehicleType === 'CAR'
   const pick = (on) => ({
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 14, cursor: 'pointer',
@@ -76,7 +76,7 @@ export default function VehicleFields({ value, onChange, idPrefix = 'veh' }) {
           <button type="button" className="pc-switch" role="switch" aria-checked={!!value.servesCity} onClick={() => onChange({ servesCity: !value.servesCity })}>
             <span className="pc-switch-track" />City rides
           </button>
-          {car ? (
+          {hideTrips ? null : car ? (
             <button type="button" className="pc-switch" role="switch" aria-checked={!!value.servesTrip} onClick={() => onChange({ servesTrip: !value.servesTrip })}>
               <span className="pc-switch-track" />Trips
             </button>

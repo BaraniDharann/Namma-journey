@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { driverLogin, driverForgotPassword, driverVerifyOtp, driverRequestResetOtp } from '../utils/api'
 import { offerToSaveLogin } from '../utils/rememberLogin'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
 import Icon from '../components/dash/Icon'
+import EmailCodeScreen from '../components/auth/EmailCodeScreen'
 
 const OTP_VALIDITY_SECONDS = 5 * 60
 
@@ -27,6 +28,7 @@ export default function DriverLoginPage() {
   const [otpExpiresAt, setOtpExpiresAt] = useState(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
   const [resendLoading, setResendLoading] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState('') // independent driver who hasn't confirmed their email
   const { login } = useAuth()
   const navigate = useNavigate()
 
@@ -49,6 +51,11 @@ export default function DriverLoginPage() {
     setError('')
     try {
       const res = await driverLogin(form)
+      if (res.data.emailUnverified) {
+        // The server has just emailed a fresh code; finish sign-up on the same screen as the sign-up page.
+        setUnverifiedEmail(res.data.email)
+        return
+      }
       if (res.data.firstLogin) {
         setOtpEmail(res.data.email)
         setShowOtp(true)
@@ -143,6 +150,13 @@ export default function DriverLoginPage() {
     }
   }
 
+  if (unverifiedEmail) {
+    return (
+      <EmailCodeScreen email={unverifiedEmail} onResend={() => driverLogin(form)} onBack={() => setUnverifiedEmail('')}
+        onVerified={(data) => { void offerToSaveLogin(form.mobile, form.password, data?.name); login(data); navigate('/driver/dashboard') }} />
+    )
+  }
+
   if (showOtp) {
     return (
       <AuthShell role="driver" title="Verify and set password" sub={<>OTP sent to <strong>{otpEmail}</strong>. Enter it with your new password.</>}>
@@ -211,7 +225,8 @@ export default function DriverLoginPage() {
   }
 
   return (
-    <AuthShell role="driver" title="Driver login" sub="Sign in with the mobile number your owner registered.">
+    <AuthShell role="driver" title="Driver login" sub="Sign in with your mobile number and password."
+      footer={<p className="au-sub" style={{ marginTop: 16 }}>New driver? <Link to="/driver/signup">Sign up</Link></p>}>
       <Alert>{error}</Alert>
       <form onSubmit={handleSubmit} className="au-form">
         <Field label="Mobile number" icon="phone">

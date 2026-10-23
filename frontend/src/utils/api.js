@@ -148,6 +148,9 @@ export const saveUserPassword = (userId, password, token) =>
   api.put(`/user/${userId}/password`, { password }, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined)
 export const googleLogin = (token) => api.post('/auth/user/login', { loginType: 'GOOGLE', token })
 export const driverLogin = (data) => api.post('/auth/driver/login', data)
+// Self-signup uploads four photos, so give it the same generous timeout as owner-created drivers.
+export const driverSignup = (formData) => api.post('/auth/driver/signup', formData, { timeout: 60000 })
+export const driverVerifySignupEmail = (email, otp) => api.post('/auth/driver/signup/verify-email', { email, otp })
 export const ownerLogin = (data) => api.post('/auth/owner/login', data)
 export const driverVerifyOtp = (data) => api.post('/auth/driver/verify-otp', data)
 export const driverForgotPassword = (data) => api.post('/auth/driver/forgot-password', data)
@@ -195,6 +198,9 @@ export const markCashReceived = (driverId, bookingId, data) => api.post(`/driver
 // Telegram trip alerts are mandatory for drivers: { required, linked } decides whether the app
 // shows only the connect screen. The link is the driver's own one-time t.me connect link.
 export const getDriverTelegramStatus = (driverId) => api.get(`/driver/${driverId}/telegram`, { _silent: true })
+// Where a driver's application stands. Silent: the gate shows its own retry screen on failure.
+export const getDriverVerification = (driverId) => api.get(`/driver/${driverId}/verification`, { _silent: true })
+export const resubmitDriverDocuments = (driverId, formData) => api.put(`/driver/${driverId}/documents`, formData, { timeout: 60000, _silent: true })
 export const createOwnTelegramLink = (driverId) => api.post(`/driver/${driverId}/telegram-link`)
 export const startTrip = (driverId, bookingId) => api.post(`/driver/${driverId}/bookings/${bookingId}/start-trip`).then(res => { invalidateCache('bookings'); return res })
 export const uploadEndTripPhoto = (driverId, bookingId, photoFile) => {

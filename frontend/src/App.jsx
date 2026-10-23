@@ -10,6 +10,7 @@ const LandingPage     = lazy(() => import('./pages/LandingPage'))
 const LoginPage       = lazy(() => import('./pages/LoginPage'))
 const SignupPage      = lazy(() => import('./pages/SignupPage'))
 const DriverLoginPage = lazy(() => import('./pages/DriverLoginPage'))
+const DriverSignupPage = lazy(() => import('./pages/DriverSignupPage'))
 const OwnerLoginPage  = lazy(() => import('./pages/OwnerLoginPage'))
 
 const UserDashboard  = lazy(() => import('./pages/user/UserDashboard'))
@@ -89,6 +90,7 @@ function AppRoutes() {
         <Route path="/login"        element={user ? <Navigate to={getDashboard(user.role)} /> : <LoginPage />} />
         <Route path="/signup"       element={user ? <Navigate to="/user/dashboard" /> : <SignupPage />} />
         <Route path="/driver/login" element={user ? <Navigate to="/driver/dashboard" /> : <DriverLoginPage />} />
+        <Route path="/driver/signup" element={user ? <Navigate to="/driver/dashboard" /> : <DriverSignupPage />} />
         <Route path="/owner/login"  element={user ? <Navigate to="/owner/dashboard" /> : <OwnerLoginPage />} />
 
         <Route path="/user/dashboard"    element={<ProtectedRoute role="ROLE_USER"><UserDashboard /></ProtectedRoute>} />

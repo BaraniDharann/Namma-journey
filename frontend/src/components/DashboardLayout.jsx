@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { getNotifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } from '../utils/api'
 import Icon, { navIcon, navTint } from './dash/Icon'
 import { TipLayer } from './dash/ui'
+import ApplicationGate from './driver/ApplicationGate'
 import TelegramGate from './driver/TelegramGate'
 import DriverDispatch from './driver/DriverDispatch'
 
@@ -203,7 +204,11 @@ export default function DashboardLayout({ children, navItems, role }) {
 
         <main className="pc-main dashboard-content">
           {role === 'ROLE_DRIVER'
-            ? <TelegramGate driverId={user?.userId}><DriverDispatch driverId={user?.userId}>{children}</DriverDispatch></TelegramGate>
+            ? (
+              <ApplicationGate driverId={user?.userId}>
+                <TelegramGate driverId={user?.userId}><DriverDispatch driverId={user?.userId}>{children}</DriverDispatch></TelegramGate>
+              </ApplicationGate>
+            )
             : children}
         </main>
       </div>
