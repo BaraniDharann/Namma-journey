@@ -27,6 +27,7 @@ class DriverVerificationServiceTest {
     private OwnerService ownerService;
     private AfterCommitDispatcher dispatcher;
     private DriverVerificationService service;
+    private DriverService driverService;
 
     private final MultipartFile img = new MockMultipartFile("f", "a.jpg", "image/jpeg", new byte[]{1, 2, 3});
 
@@ -55,6 +56,8 @@ class DriverVerificationServiceTest {
         ReflectionTestUtils.setField(service, "notificationService", notifications);
         ReflectionTestUtils.setField(service, "ownerService", ownerService);
         ReflectionTestUtils.setField(service, "dispatcher", dispatcher);
+        driverService = mock(DriverService.class);
+        ReflectionTestUtils.setField(service, "driverService", driverService);
     }
 
     private Driver driver(long id, Driver.Verification v) {
@@ -248,5 +251,15 @@ class DriverVerificationServiceTest {
             s.setRollbackOnly();
         });
         verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void approveAndRejectDropTheCachedApproval() {
+        driver(1, Driver.Verification.UNDER_REVIEW);
+        driver(2, Driver.Verification.UNDER_REVIEW);
+        service.approve(1L, 9L);
+        verify(driverService).evictApproval(1L);
+        service.reject(2L, "Licence is blurry", 9L);
+        verify(driverService).evictApproval(2L);
     }
 }

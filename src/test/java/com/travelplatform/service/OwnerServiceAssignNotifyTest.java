@@ -97,4 +97,28 @@ class OwnerServiceAssignNotifyTest {
         service.assignDriver(BOOKING_ID, 88L);
         verify(notificationService, never()).notifyDriverAssigned(any(), any());
     }
+
+    @Test
+    @DisplayName("an application still under review cannot be assigned work")
+    void cannotAssignUnapprovedDriver() {
+        Driver d = driver(93L);
+        d.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
+        IllegalArgumentException ex = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.assignDriver(BOOKING_ID, 93L));
+        org.junit.jupiter.api.Assertions.assertEquals("Driver 93 has not been approved yet.", ex.getMessage());
+        verify(notificationService, never()).notifyDriverAssigned(any(), any());
+    }
+
+    @Test
+    @DisplayName("a Trip never goes to an independent driver")
+    void tripCannotGoToIndependentDriver() {
+        booking.setServiceMode(TravelBooking.ServiceMode.TRIP);
+        Driver d = driver(94L);
+        d.setFleet(Driver.Fleet.INDEPENDENT);
+        IllegalArgumentException ex = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.assignDriver(BOOKING_ID, 94L));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "Trips go to your own fleet; Driver 94 is an independent driver.", ex.getMessage());
+        verify(notificationService, never()).notifyDriverAssigned(any(), any());
+    }
 }
