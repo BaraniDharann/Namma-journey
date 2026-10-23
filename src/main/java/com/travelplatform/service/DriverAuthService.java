@@ -1,11 +1,9 @@
 package com.travelplatform.service;
 
 import com.travelplatform.config.JwtUtil;
-import com.travelplatform.dto.AuthResponse;
 import com.travelplatform.dto.DriverChangePasswordRequest;
 import com.travelplatform.dto.DriverLoginRequest;
 import com.travelplatform.dto.DriverResetPasswordRequest;
-import com.travelplatform.dto.DriverSignupRequest;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.exception.ResourceNotFoundException;
 import com.travelplatform.repository.DriverRepository;
@@ -36,37 +34,6 @@ public class DriverAuthService {
     @Autowired
     private com.travelplatform.security.TokenVersionService tokenVersionService;
     
-    public AuthResponse signup(DriverSignupRequest request) {
-        if (driverRepository.existsByMobile(request.getMobile())) {
-            throw new IllegalArgumentException("Mobile number already registered");
-        }
-        
-        if (driverRepository.existsByLicenseNumber(request.getLicenseNumber())) {
-            throw new IllegalArgumentException("License number already registered");
-        }
-        
-        if (driverRepository.existsByAadhaarNumber(request.getAadhaarNumber())) {
-            throw new IllegalArgumentException("Aadhaar number already registered");
-        }
-        
-        Driver driver = new Driver();
-        driver.setName(request.getName());
-        driver.setMobile(request.getMobile());
-        driver.setPassword(passwordEncoder.encode(request.getPassword()));
-        driver.setLicenseNumber(request.getLicenseNumber());
-        driver.setAadhaarNumber(request.getAadhaarNumber());
-        driver.setRole("ROLE_DRIVER");
-        driver.setStatus(Driver.Status.ACTIVE);
-        
-        driver = driverRepository.save(driver);
-        
-        String token = jwtUtil.generateToken(driver.getId().toString(), driver.getRole(), driver.getTokenVersion());
-        AuthResponse response = new AuthResponse(token, driver.getRole(), driver.getId());
-        response.setName(driver.getName());
-        response.setMobile(driver.getMobile());
-        return response;
-    }
-    
     public Map<String, Object> login(DriverLoginRequest request) {
         // Same answer, same BCrypt cost, for an unknown mobile and a wrong password.
         Driver driver = driverRepository.findByMobile(request.getMobile()).orElse(null);
@@ -79,6 +46,18 @@ public class DriverAuthService {
         // back in to go online again. Offline drivers are simply never offered trips
         // (DriverRepository.findAvailableDrivers).
         
+        if (driver.getFleet() == Driver.Fleet.INDEPENDENT && !driver.isEmailVerified()) {
+            // A self-signed-up driver who never entered the emailed code: send a fresh one
+            // (quiet during the cooldown) instead of a token, so they can finish verifying.
+            otpService.sendOtpUnlessRecent(driver.getEmail());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("emailUnverified", true);
+            response.put("email", driver.getEmail());
+            response.put("message", "Please confirm your email. We've sent you a code.");
+            return response;
+        }
+
         if (driver.isFirstLogin()) {
             // Quiet during the resend cooldown: a driver retrying login keeps the code already sent.
             otpService.sendOtpUnlessRecent(driver.getEmail());

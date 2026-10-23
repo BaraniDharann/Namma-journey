@@ -31,6 +31,9 @@ public class AuthController {
     private OwnerAuthService ownerAuthService;
 
     @Autowired
+    private com.travelplatform.service.DriverSignupService driverSignupService;
+
+    @Autowired
     private com.travelplatform.security.RevokedTokenStore revokedTokens;
 
     @Autowired
@@ -169,5 +172,29 @@ public class AuthController {
             throw new IllegalArgumentException("Mobile is required");
         }
         return ResponseEntity.ok(driverAuthService.sendPasswordResetOtp(mobile));
+    }
+
+    /**
+     * DRIVER SELF SIGN-UP - details and four document images; the owner reviews afterwards.
+     * POST /api/auth/driver/signup
+     */
+    @PostMapping(value = "/driver/signup", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> driverSignup(
+            @ModelAttribute DriverSelfSignupForm form,
+            @RequestPart(value = "photo", required = false) org.springframework.web.multipart.MultipartFile photo,
+            @RequestPart(value = "licensePhoto", required = false) org.springframework.web.multipart.MultipartFile licensePhoto,
+            @RequestPart(value = "aadhaarPhoto", required = false) org.springframework.web.multipart.MultipartFile aadhaarPhoto,
+            @RequestPart(value = "rcPhoto", required = false) org.springframework.web.multipart.MultipartFile rcPhoto) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(driverSignupService.signup(form, photo, licensePhoto, aadhaarPhoto, rcPhoto));
+    }
+
+    /**
+     * DRIVER SIGN-UP EMAIL CHECK - confirms the emailed code and signs the driver in.
+     * POST /api/auth/driver/signup/verify-email
+     */
+    @PostMapping("/driver/signup/verify-email")
+    public ResponseEntity<Map<String, Object>> driverSignupVerifyEmail(@RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(driverSignupService.verifyEmail(body.get("email"), body.get("otp")));
     }
 }

@@ -43,6 +43,20 @@ public class NotificationService {
         log.info("Notification sent to owner for new booking: {}", booking.getId());
     }
 
+    /** Tells the owner a driver applied (or re-uploaded after a rejection) and is waiting for review. */
+    public void notifyDriverApplication(Driver d, boolean resubmitted) {
+        Notification notification = new Notification();
+        notification.setRecipientId("owner");
+        notification.setRecipientRole("ROLE_OWNER");
+        notification.setType("DRIVER_APPLICATION");
+        notification.setTitle(resubmitted ? "Driver documents re-submitted" : "New driver application");
+        notification.setMessage(d.getName() + " (" + d.getMobile() + ") "
+                + (resubmitted ? "re-submitted documents" : "applied to drive")
+                + " and is waiting for your review.");
+        notification.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(notification);
+    }
+
     public void notifyDriverAssigned(TravelBooking booking, Driver driver) {
         Notification notification = new Notification();
         notification.setRecipientId(driver.getId().toString());
