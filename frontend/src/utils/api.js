@@ -184,6 +184,9 @@ export const updateDriverModes = (driverId, modes) => api.put(`/driver/${driverI
 // City mode: fares for bike, auto and car over one route, and the owner's fare settings.
 export const getCityFareEstimate = ({ fromLat, fromLon, toLat, toLon }) => api.get('/user/city-fares/estimate', { params: { fromLat, fromLon, toLat, toLon }, _silent: true })
 export const getCityFares = () => api.get('/owner/city-fares')
+export const getCities = () => api.get('/owner/cities')
+export const createCity = (city) => api.post('/owner/cities', city)
+export const updateCity = (id, city) => api.put(`/owner/cities/${id}`, city)
 export const setCityFare = (vehicleType, fare) => api.put(`/owner/city-fares/${vehicleType}`, fare)
 export const updateDriverVehicle = (driverId, vehicle) => api.put(`/owner/drivers/${driverId}/vehicle`, vehicle).then(res => { invalidateCache('drivers'); return res })
 export const driverBookingAction = (driverId, bookingId, action) => api.post(`/driver/${driverId}/bookings/${bookingId}/action`, { action }).then(res => { invalidateCache('bookings'); return res })

@@ -37,6 +37,7 @@ public class OwnerController {
     private final PaymentService paymentService;
     private final TelegramLinkService telegramLinkService;
     private final com.travelplatform.service.CityFareService cityFareService;
+    private final com.travelplatform.service.CityService cityService;
 
     @GetMapping("/city-fares")
     @PreAuthorize("hasRole('OWNER')")
@@ -60,6 +61,28 @@ public class OwnerController {
                 com.travelplatform.entity.VehicleType.parse(vehicleType),
                 body.get("baseFare"), body.get("perKm"), body.get("perMinute"), body.get("minimumFare"),
                 ownerId));
+    }
+
+    @GetMapping("/cities")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<com.travelplatform.entity.City>> getCities() {
+        return ResponseEntity.ok(cityService.all());
+    }
+
+    @PostMapping("/cities")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.entity.City> createCity(@RequestBody com.travelplatform.entity.City city) {
+        // This endpoint only creates: never trust an id or timestamp from the body.
+        city.setId(null);
+        city.setCreatedAt(null);
+        return ResponseEntity.ok(cityService.save(city));
+    }
+
+    @PutMapping("/cities/{id}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.entity.City> updateCity(
+            @PathVariable Long id, @RequestBody com.travelplatform.entity.City city) {
+        return ResponseEntity.ok(cityService.update(id, city));
     }
 
     /** Vehicle details and City/Trip switches for one driver. */

@@ -2,6 +2,7 @@ package com.travelplatform.service;
 
 import com.travelplatform.dto.RouteInfo;
 import com.travelplatform.dto.TravelBookingRequest;
+import com.travelplatform.entity.City;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.entity.TravelBooking;
 import com.travelplatform.entity.User;
@@ -49,6 +50,7 @@ class UserServiceCityTripTest {
     private RoutingService routingService;
     private DispatchService dispatchService;
     private CityFareService cityFareService;
+    private CityService cityService;
     private UserService service;
 
     @BeforeEach
@@ -71,6 +73,12 @@ class UserServiceCityTripTest {
         when(cityFareService.fare(any(), anyDouble(), anyLong())).thenReturn(new BigDecimal("87.50"));
         ReflectionTestUtils.setField(service, "dispatchService", dispatchService);
         ReflectionTestUtils.setField(service, "cityFareService", cityFareService);
+        // Every pickup is inside the test city unless a test says otherwise; Trips never ask.
+        cityService = mock(CityService.class);
+        City testCity = new City();
+        testCity.setId(1L);
+        when(cityService.cityFor(anyDouble(), anyDouble())).thenReturn(Optional.of(testCity));
+        ReflectionTestUtils.setField(service, "cityService", cityService);
 
         User user = new User();
         user.setId(USER_ID);
@@ -146,6 +154,25 @@ class UserServiceCityTripTest {
         verify(cityFareService).fare(VehicleType.BIKE, 12.0, 35L);
         verify(dispatchService).dispatchAfterCommit(b.getId());
         verify(driverRepository, never()).findAvailableDrivers(any(), any());
+    }
+
+    @Test
+    @DisplayName("a City ride records the city its pickup is in")
+    void cityRideRecordsItsCity() {
+        service.createBooking(USER_ID, city("auto", 2));
+
+        assertEquals(1L, saved().getCityId());
+    }
+
+    @Test
+    @DisplayName("a City ride from outside every city is refused and pointed at Trips")
+    void cityRideOutsideEveryCityIsRefused() {
+        when(cityService.cityFor(anyDouble(), anyDouble())).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.createBooking(USER_ID, city("CAR", 2)));
+        assertTrue(ex.getMessage().contains("Trip"));
+        verify(bookingRepository, never()).saveAndFlush(any());
     }
 
     @Test

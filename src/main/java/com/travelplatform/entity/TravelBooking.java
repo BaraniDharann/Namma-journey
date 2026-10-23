@@ -129,6 +129,10 @@ public class TravelBooking {
     @Column(name = "vehicle_type", nullable = false, length = 8)
     private VehicleType vehicleType = VehicleType.CAR;
 
+    /** The city a City ride was booked in. Always null for a Trip. */
+    @Column(name = "city_id")
+    private Long cityId;
+
     public enum ServiceMode {
         CITY, TRIP
     }

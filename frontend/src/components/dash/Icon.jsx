@@ -59,6 +59,7 @@ const NAV = [
   [/\/packages$/, 'package'],
   [/\/bookings$/, 'calendar'],
   [/\/drivers$/, 'car'],
+  [/\/cities$/, 'map'],
   [/\/payments$/, 'wallet'],
   [/\/reviews$/, 'star'],
   [/\/revenue$/, 'chart'],

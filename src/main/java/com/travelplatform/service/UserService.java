@@ -69,6 +69,8 @@ public class UserService {
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private CityFareService cityFareService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CityService cityService;
     
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -109,8 +111,9 @@ public class UserService {
 
         // A City ride is for right now and distance-priced, whatever the form still held.
         boolean city = "CITY".equalsIgnoreCase(request.getServiceMode());
+        Long cityId = null;
         if (city) {
-            if (dispatchService == null || cityFareService == null) {
+            if (dispatchService == null || cityFareService == null || cityService == null) {
                 throw new IllegalStateException("City rides are not available");
             }
             VehicleType vehicle = VehicleType.parse(request.getVehicleType());
@@ -121,6 +124,12 @@ public class UserService {
                 throw new IllegalArgumentException("A " + vehicle.name().toLowerCase(java.util.Locale.ROOT)
                         + " ride carries at most " + vehicle.maxPassengers() + " passenger"
                         + (vehicle.maxPassengers() == 1 ? "" : "s") + ". Choose a bigger vehicle.");
+            }
+            // A City ride runs only inside a city the owner serves; anywhere else is a Trip.
+            cityId = request.getFromLat() == null || request.getFromLon() == null ? null
+                    : cityService.cityFor(request.getFromLat(), request.getFromLon()).map(com.travelplatform.entity.City::getId).orElse(null);
+            if (cityId == null) {
+                throw new IllegalArgumentException("City rides aren't available at this pickup yet. Book it as a Trip instead.");
             }
             java.time.LocalDate today = dispatchService.now().toLocalDate();
             request.setFromDate(today);
@@ -164,11 +173,11 @@ public class UserService {
                         cityFareService.maxKm(), routeInfo.getDistanceKm()));
             }
             // Saved with nobody; DispatchService offers it to the nearest online driver once it commits.
-            return saveWithDriver(userId, request, routeInfo, lostDrivers, false);
+            return saveWithDriver(userId, request, routeInfo, lostDrivers, false, cityId);
         }
         for (int attempt = 0; attempt < MAX_DRIVER_ATTEMPTS; attempt++) {
             try {
-                return saveWithDriver(userId, request, routeInfo, lostDrivers, true);
+                return saveWithDriver(userId, request, routeInfo, lostDrivers, true, cityId);
             } catch (DriverTakenException taken) {
                 lostDrivers.add(taken.driverId);
                 // How often two bookings collide on one driver: a rising rate means the fleet is
@@ -176,7 +185,7 @@ public class UserService {
                 Metrics.counter("namma.bookings.driver_race_lost").increment();
             }
         }
-        return saveWithDriver(userId, request, routeInfo, lostDrivers, false);
+        return saveWithDriver(userId, request, routeInfo, lostDrivers, false, cityId);
     }
 
     /**
@@ -184,7 +193,7 @@ public class UserService {
      * short transaction, so a refused insert takes its notifications down with it.
      */
     private TravelBookingResponse saveWithDriver(UUID userId, TravelBookingRequest request, RouteInfo routeInfo,
-                                                 List<Long> lostDrivers, boolean assign) {
+                                                 List<Long> lostDrivers, boolean assign, Long cityId) {
         return transactionTemplate.execute(tx -> {
             Driver driver = null;
             if (assign) {
@@ -203,7 +212,7 @@ public class UserService {
                 // saveAndFlush, not save: the INSERT has to reach Postgres here, inside the try,
                 // or the constraint would only fire at commit where it can no longer be caught
                 // per attempt.
-                savedBooking = bookingRepository.saveAndFlush(buildBooking(userId, request, routeInfo, driver));
+                savedBooking = bookingRepository.saveAndFlush(buildBooking(userId, request, routeInfo, driver, cityId));
             } catch (DataIntegrityViolationException ex) {
                 if (driver != null && isDriverOverlap(ex)) {
                     throw new DriverTakenException(driver.getId());
@@ -231,7 +240,7 @@ public class UserService {
         });
     }
 
-    private TravelBooking buildBooking(UUID userId, TravelBookingRequest request, RouteInfo routeInfo, Driver driver) {
+    private TravelBooking buildBooking(UUID userId, TravelBookingRequest request, RouteInfo routeInfo, Driver driver, Long cityId) {
         int travelDays = (int) ChronoUnit.DAYS.between(request.getFromDate(), request.getToDate()) + 1;
 
         // Determine booking type and calculate amount
@@ -259,6 +268,7 @@ public class UserService {
         TravelBooking booking = new TravelBooking();
         booking.setServiceMode(city ? TravelBooking.ServiceMode.CITY : TravelBooking.ServiceMode.TRIP);
         booking.setVehicleType(vehicle);
+        booking.setCityId(cityId);
         booking.setUserId(userId);
         booking.setUserName(request.getUserName());
         booking.setUserPhone(request.getUserPhone());
