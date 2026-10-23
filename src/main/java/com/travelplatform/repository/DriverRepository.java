@@ -42,7 +42,10 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     // awaiting payment no longer occupies them, matching no_driver_overlap since V13.
 
     /** Trips are driven by cars whose driver takes trips (V14). The AC match is applied by the caller. */
-    String TRIP_CAR = "d.vehicleType = com.travelplatform.entity.VehicleType.CAR AND d.servesTrip = true";
+    String TRIP_CAR = "d.vehicleType = com.travelplatform.entity.VehicleType.CAR AND d.servesTrip = true"
+            // Trips stay with the owner's own approved fleet; self-signed-up drivers take City rides only.
+            + " AND d.verificationStatus = com.travelplatform.entity.Driver.Verification.APPROVED"
+            + " AND d.fleet = com.travelplatform.entity.Driver.Fleet.OWNER_FLEET";
 
     @Query("SELECT d FROM Driver d WHERE d.status = 'ACTIVE' AND " + TRIP_CAR + " AND d.id NOT IN " +
            "(SELECT tb.driverId FROM TravelBooking tb WHERE tb.driverId IS NOT NULL " +
@@ -82,6 +85,7 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
      * never juggles two offers.
      */
     @Query("SELECT d.id FROM Driver d WHERE d.id IN :driverIds AND d.status = 'ACTIVE' " +
+           "AND d.verificationStatus = com.travelplatform.entity.Driver.Verification.APPROVED " +
            "AND d.servesCity = true AND d.vehicleType = :vehicleType AND d.vehicleSeats >= :seats " +
            "AND d.id NOT IN " +
            "(SELECT tb.driverId FROM TravelBooking tb WHERE tb.driverId IS NOT NULL " +

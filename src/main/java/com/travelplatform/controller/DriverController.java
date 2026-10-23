@@ -192,6 +192,7 @@ public class DriverController {
             throw new org.springframework.security.access.AccessDeniedException("Not assigned to this trip");
         }
         // A driver on a trip is online too; their live position is also where Ride Now finds them.
+        driverService.requireApproved(dto.getDriverId());
         driverPresenceService.report(dto.getDriverId(), dto.getLatitude(), dto.getLongitude());
         return ResponseEntity.ok(locationTrackingService.updateLocation(dto));
     }
@@ -209,6 +210,7 @@ public class DriverController {
         if (lat == null || lon == null) {
             throw new IllegalArgumentException("latitude and longitude are required");
         }
+        driverService.requireApproved(driverId);
         driverPresenceService.report(driverId, lat, lon);
         return ResponseEntity.noContent().build();
     }

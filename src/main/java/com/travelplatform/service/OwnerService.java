@@ -290,6 +290,12 @@ public class OwnerService {
         if (driver.getStatus() != Driver.Status.ACTIVE) {
             throw new RuntimeException("Driver is not active and cannot be assigned");
         }
+        if (!driver.isApproved()) {
+            throw new IllegalArgumentException(driver.getName() + " has not been approved yet.");
+        }
+        if (booking.getServiceMode() == TravelBooking.ServiceMode.TRIP && driver.getFleet() != Driver.Fleet.OWNER_FLEET) {
+            throw new IllegalArgumentException("Trips go to your own fleet; " + driver.getName() + " is an independent driver.");
+        }
         // The owner may override a driver's City/Trip switches, but not their vehicle: a bike ride
         // is not driven by car, and a Trip is never given to a bike or auto.
         if (booking.getVehicleType() != null && driver.getVehicleType() != booking.getVehicleType()) {

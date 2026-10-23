@@ -54,6 +54,34 @@ public class DriverService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DriverPresenceService presenceService;
     
+    /**
+     * Only APPROVED is remembered, for a minute, so location reports (every few seconds) do not hit
+     * the database. Approve and reject evict the entry so a decision shows at once.
+     */
+    private final com.github.benmanes.caffeine.cache.Cache<Long, Boolean> approvalCache =
+            com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
+                    .expireAfterWrite(java.time.Duration.ofSeconds(60)).maximumSize(10_000).build();
+
+    public void requireApproved(Long driverId) {
+        if (driverId == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Your account is still being verified.");
+        }
+        if (Boolean.TRUE.equals(approvalCache.getIfPresent(driverId))) {
+            return;
+        }
+        boolean approved = driverRepository.findById(driverId).map(Driver::isApproved).orElse(false);
+        if (!approved) {
+            throw new org.springframework.security.access.AccessDeniedException("Your account is still being verified.");
+        }
+        approvalCache.put(driverId, Boolean.TRUE);
+    }
+
+    public void evictApproval(Long driverId) {
+        if (driverId != null) {
+            approvalCache.invalidate(driverId);
+        }
+    }
+
     @Transactional
     public void updateAvailability(Long driverId, String status) {
         if (status == null || status.isBlank()) {
@@ -67,6 +95,10 @@ public class DriverService {
         }
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
+        // Offline is always allowed, so a driver can step away even while under review or rejected.
+        if (parsed == Driver.Status.ACTIVE && !driver.isApproved()) {
+            throw new IllegalArgumentException("Your account is still being verified.");
+        }
         driver.setStatus(parsed);
         driverRepository.save(driver);
         // Offline means no Ride Now offers, at once - not when the last position report lapses.

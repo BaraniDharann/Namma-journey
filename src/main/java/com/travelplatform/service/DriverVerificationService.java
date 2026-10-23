@@ -42,6 +42,9 @@ public class DriverVerificationService {
     private OwnerService ownerService;
     @Autowired
     private AfterCommitDispatcher dispatcher;
+    // Optional so hand-built tests need not supply it; drops the 60 s approval memo on a decision.
+    @Autowired(required = false)
+    private DriverService driverService;
 
     /** Only INDEPENDENT drivers ever go through review; owner-created ones are approved from the start. */
     @Transactional(readOnly = true)
@@ -59,6 +62,7 @@ public class DriverVerificationService {
         Driver d = load(driverId);
         requireUnderReview(d);
         decide(d, Driver.Verification.APPROVED, null, ownerId);
+        evictApproval(driverId);
         dispatcher.dispatch("notice", () -> notifySafely(() -> notificationService.notifyDriverApproved(d), driverId));
         return ownerService.mapToDriverDetails(d);
     }
@@ -76,6 +80,7 @@ public class DriverVerificationService {
         Driver d = load(driverId);
         requireUnderReview(d);
         decide(d, Driver.Verification.REJECTED, trimmed, ownerId);
+        evictApproval(driverId);
         dispatcher.dispatch("notice", () -> notifySafely(() -> notificationService.notifyDriverRejected(d), driverId));
         return ownerService.mapToDriverDetails(d);
     }
@@ -94,6 +99,13 @@ public class DriverVerificationService {
         d.setRejectionReason(reason);
         d.setReviewedAt(now);
         d.setReviewedBy(ownerId);
+    }
+
+    // Immediate, not after commit: a stale "approved" can only outlive the decision by a few ms.
+    private void evictApproval(Long driverId) {
+        if (driverService != null) {
+            driverService.evictApproval(driverId);
+        }
     }
 
     private static OptimisticLockingFailureException stale() {
