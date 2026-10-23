@@ -25,6 +25,7 @@ class DriverVerificationServiceTest {
     private FileStorageService files;
     private NotificationService notifications;
     private OwnerService ownerService;
+    private AfterCommitDispatcher dispatcher;
     private DriverVerificationService service;
 
     private final MultipartFile img = new MockMultipartFile("f", "a.jpg", "image/jpeg", new byte[]{1, 2, 3});
@@ -44,11 +45,16 @@ class DriverVerificationServiceTest {
             return r;
         });
 
+        // Direct executor: work handed to the dispatcher runs at commit, or at once when there is no transaction.
+        dispatcher = new AfterCommitDispatcher(Runnable::run);
+        when(drivers.decide(any(), any(), any(), any(), any(), any())).thenReturn(1);
+        when(drivers.resubmitDocuments(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(1);
         service = new DriverVerificationService();
         ReflectionTestUtils.setField(service, "driverRepository", drivers);
         ReflectionTestUtils.setField(service, "fileStorageService", files);
         ReflectionTestUtils.setField(service, "notificationService", notifications);
         ReflectionTestUtils.setField(service, "ownerService", ownerService);
+        ReflectionTestUtils.setField(service, "dispatcher", dispatcher);
     }
 
     private Driver driver(long id, Driver.Verification v) {
@@ -72,7 +78,7 @@ class DriverVerificationServiceTest {
         driver(2, Driver.Verification.REJECTED);
         assertThrows(IllegalArgumentException.class, () -> service.approve(1L, 9L));
         assertThrows(IllegalArgumentException.class, () -> service.approve(2L, 9L));
-        verify(drivers, never()).save(any());
+        verify(drivers, never()).decide(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -137,7 +143,7 @@ class DriverVerificationServiceTest {
     @Test
     void failedSaveDeletesNewFilesAndKeepsOld() {
         driver(1, Driver.Verification.REJECTED);
-        when(drivers.save(any(Driver.class))).thenThrow(new RuntimeException("db down"));
+        when(drivers.resubmitDocuments(any(), any(), any(), any(), any(), any(), any(), any())).thenThrow(new RuntimeException("db down"));
         assertThrows(RuntimeException.class, () -> service.resubmit(1L, null, null, null, img));
         verify(files).delete("uploads/drivers/new_rc.jpg");
         verify(files, never()).delete("uploads/drivers/rc_old.jpg");
@@ -173,5 +179,74 @@ class DriverVerificationServiceTest {
         assertEquals("REJECTED", s.get("status"));
         assertEquals("Blurry licence", s.get("rejectionReason"));
         assertEquals(List.of("photo", "rcPhoto"), s.get("missingDocuments"));
+    }
+
+    @Test
+    void staleApproveIsRefusedAndNotNotified() {
+        driver(1, Driver.Verification.UNDER_REVIEW);
+        when(drivers.decide(any(), any(), any(), any(), any(), any())).thenReturn(0);
+        assertThrows(org.springframework.dao.OptimisticLockingFailureException.class, () -> service.approve(1L, 9L));
+        verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void staleRejectIsRefusedAndNotNotified() {
+        driver(1, Driver.Verification.UNDER_REVIEW);
+        when(drivers.decide(any(), any(), any(), any(), any(), any())).thenReturn(0);
+        assertThrows(org.springframework.dao.OptimisticLockingFailureException.class,
+                () -> service.reject(1L, "Licence is blurry", 9L));
+        verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void staleResubmitIsRefusedAndNewFilesDeleted() {
+        driver(1, Driver.Verification.REJECTED);
+        when(drivers.resubmitDocuments(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(0);
+        assertThrows(org.springframework.dao.OptimisticLockingFailureException.class,
+                () -> service.resubmit(1L, null, null, null, img));
+        verify(files).delete("uploads/drivers/new_rc.jpg");
+        verify(files, never()).delete("uploads/drivers/rc_old.jpg");
+        verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void noticesAndOldFileDeletionWaitForCommit() {
+        driver(1, Driver.Verification.REJECTED);
+        org.springframework.transaction.support.TransactionTemplate tx =
+                new org.springframework.transaction.support.TransactionTemplate(new NoOpTransactionManager());
+        tx.executeWithoutResult(s -> {
+            service.resubmit(1L, null, null, null, img);
+            verifyNoInteractions(notifications);
+            verify(files, never()).delete(anyString());
+        });
+        verify(files).delete("uploads/drivers/rc_old.jpg");
+        verify(notifications).notifyDriverApplication(any(Driver.class), eq(true));
+    }
+
+    @Test
+    void rollbackSkipsNoticesAndDeletesNewFiles() {
+        driver(1, Driver.Verification.REJECTED);
+        org.springframework.transaction.support.TransactionTemplate tx =
+                new org.springframework.transaction.support.TransactionTemplate(new NoOpTransactionManager());
+        tx.executeWithoutResult(s -> {
+            service.resubmit(1L, null, null, null, img);
+            s.setRollbackOnly();
+        });
+        verify(files).delete("uploads/drivers/new_rc.jpg");
+        verify(files, never()).delete("uploads/drivers/rc_old.jpg");
+        verifyNoInteractions(notifications);
+    }
+
+    @Test
+    void approveNoticeWaitsForCommit() {
+        driver(1, Driver.Verification.UNDER_REVIEW);
+        org.springframework.transaction.support.TransactionTemplate tx =
+                new org.springframework.transaction.support.TransactionTemplate(new NoOpTransactionManager());
+        tx.executeWithoutResult(s -> {
+            service.approve(1L, 9L);
+            verifyNoInteractions(notifications);
+            s.setRollbackOnly();
+        });
+        verifyNoInteractions(notifications);
     }
 }

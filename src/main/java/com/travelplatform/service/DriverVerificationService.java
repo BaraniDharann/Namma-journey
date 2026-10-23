@@ -9,7 +9,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,7 +25,7 @@ import java.util.Map;
 /**
  * The owner's review of self-signed-up drivers, and the driver's way back in after a rejection.
  * Driver has no @Version column, so every move checks the current state inside the transaction
- * instead (state-machine guard); two truly simultaneous requests are not serialised.
+ * instead, and each move is a conditional UPDATE on the expected status, so a stale decision is refused (409).
  */
 @Service
 public class DriverVerificationService {
@@ -37,6 +40,8 @@ public class DriverVerificationService {
     private NotificationService notificationService;
     @Autowired
     private OwnerService ownerService;
+    @Autowired
+    private AfterCommitDispatcher dispatcher;
 
     /** Only INDEPENDENT drivers ever go through review; owner-created ones are approved from the start. */
     @Transactional(readOnly = true)
@@ -45,7 +50,6 @@ public class DriverVerificationService {
         return driverRepository.findByFleetAndVerificationStatusOrderBySubmittedAtAsc(Driver.Fleet.INDEPENDENT, wanted)
                 .stream().map(ownerService::mapToDriverDetails).toList();
     }
-
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "allDrivers", allEntries = true),
@@ -54,12 +58,9 @@ public class DriverVerificationService {
     public DriverDetailsResponse approve(Long driverId, Long ownerId) {
         Driver d = load(driverId);
         requireUnderReview(d);
-        d.setVerificationStatus(Driver.Verification.APPROVED);
-        d.setRejectionReason(null);
-        stamp(d, ownerId);
-        Driver saved = driverRepository.save(d);
-        notifySafely(() -> notificationService.notifyDriverApproved(saved), driverId);
-        return ownerService.mapToDriverDetails(saved);
+        decide(d, Driver.Verification.APPROVED, null, ownerId);
+        dispatcher.dispatch("notice", () -> notifySafely(() -> notificationService.notifyDriverApproved(d), driverId));
+        return ownerService.mapToDriverDetails(d);
     }
 
     @Transactional
@@ -74,12 +75,30 @@ public class DriverVerificationService {
         }
         Driver d = load(driverId);
         requireUnderReview(d);
-        d.setVerificationStatus(Driver.Verification.REJECTED);
-        d.setRejectionReason(trimmed);
-        stamp(d, ownerId);
-        Driver saved = driverRepository.save(d);
-        notifySafely(() -> notificationService.notifyDriverRejected(saved), driverId);
-        return ownerService.mapToDriverDetails(saved);
+        decide(d, Driver.Verification.REJECTED, trimmed, ownerId);
+        dispatcher.dispatch("notice", () -> notifySafely(() -> notificationService.notifyDriverRejected(d), driverId));
+        return ownerService.mapToDriverDetails(d);
+    }
+
+    /**
+     * The WHERE on the expected status makes the move atomic: a second owner (or a double click)
+     * that read the same UNDER_REVIEW row updates nothing and is refused.
+     */
+    private void decide(Driver d, Driver.Verification to, String reason, Long ownerId) {
+        LocalDateTime now = LocalDateTime.now();
+        int rows = driverRepository.decide(d.getId(), Driver.Verification.UNDER_REVIEW, to, reason, now, ownerId);
+        if (rows == 0) {
+            throw stale();
+        }
+        d.setVerificationStatus(to);
+        d.setRejectionReason(reason);
+        d.setReviewedAt(now);
+        d.setReviewedBy(ownerId);
+    }
+
+    private static OptimisticLockingFailureException stale() {
+        return new OptimisticLockingFailureException(
+                "This application was already decided or changed by someone else. Refresh and check again.");
     }
 
     /** Any subset of the four documents; the rest keep what is already on file. */
@@ -98,39 +117,63 @@ public class DriverVerificationService {
             throw new IllegalArgumentException("Upload at least one document");
         }
 
-        // Same order as sign-up: files first, then the row. New files are removed if anything fails,
-        // and the replaced ones are removed only once the save has gone through.
+        // Same order as sign-up: files first, then the row. New files are removed if anything fails
+        // or the transaction rolls back; the replaced ones are removed only after the commit.
         List<String> stored = new ArrayList<>();
         List<String> replaced = new ArrayList<>();
-        Driver saved;
+        String newPhoto = d.getPhoto(), newLicense = d.getLicensePhoto(),
+                newAadhaar = d.getAadhaarPhoto(), newRc = d.getRcPhoto();
+        LocalDateTime now = LocalDateTime.now();
         try {
             if (!missing(photo)) {
-                replaced.add(d.getPhoto());
-                d.setPhoto(store(photo, "photo", stored));
+                replaced.add(newPhoto);
+                newPhoto = store(photo, "photo", stored);
             }
             if (!missing(license)) {
-                replaced.add(d.getLicensePhoto());
-                d.setLicensePhoto(store(license, "license", stored));
+                replaced.add(newLicense);
+                newLicense = store(license, "license", stored);
             }
             if (!missing(aadhaar)) {
-                replaced.add(d.getAadhaarPhoto());
-                d.setAadhaarPhoto(store(aadhaar, "aadhaar", stored));
+                replaced.add(newAadhaar);
+                newAadhaar = store(aadhaar, "aadhaar", stored);
             }
             if (!missing(rc)) {
-                replaced.add(d.getRcPhoto());
-                d.setRcPhoto(store(rc, "rc", stored));
+                replaced.add(newRc);
+                newRc = store(rc, "rc", stored);
             }
-            d.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
-            d.setRejectionReason(null);
-            d.setSubmittedAt(LocalDateTime.now());
-            saved = driverRepository.save(d);
+            if (driverRepository.resubmitDocuments(driverId, Driver.Verification.UNDER_REVIEW, Driver.Verification.REJECTED, now, newPhoto, newLicense, newAadhaar, newRc) == 0) {
+                throw stale();
+            }
         } catch (RuntimeException e) {
             deleteAll(stored);
             throw e;
         }
-        deleteAll(replaced);
-        notifySafely(() -> notificationService.notifyDriverApplication(saved, true), driverId);
-        return ownerService.mapToDriverDetails(saved);
+        deleteIfRolledBack(stored);
+        d.setPhoto(newPhoto);
+        d.setLicensePhoto(newLicense);
+        d.setAadhaarPhoto(newAadhaar);
+        d.setRcPhoto(newRc);
+        d.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
+        d.setRejectionReason(null);
+        d.setSubmittedAt(now);
+        dispatcher.dispatch("cleanup", () -> deleteAll(replaced));
+        dispatcher.dispatch("notice", () -> notifySafely(() -> notificationService.notifyDriverApplication(d, true), driverId));
+        return ownerService.mapToDriverDetails(d);
+    }
+
+    /** A commit that fails after the update leaves the new files orphaned; remove them then too. */
+    private void deleteIfRolledBack(List<String> stored) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    deleteAll(stored);
+                }
+            }
+        });
     }
 
     @Transactional(readOnly = true)

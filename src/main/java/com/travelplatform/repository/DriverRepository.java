@@ -23,6 +23,21 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     boolean existsByVehicleNumberIgnoreCase(String vehicleNumber);
     List<Driver> findByFleetAndVerificationStatusOrderBySubmittedAtAsc(Driver.Fleet fleet, Driver.Verification verificationStatus);
 
+    // Conditional moves: the WHERE on the expected status is what refuses a stale decision (no @Version on Driver).
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Driver d SET d.verificationStatus = :to, d.rejectionReason = :reason, d.reviewedAt = :at, d.reviewedBy = :by "
+            + "WHERE d.id = :id AND d.verificationStatus = :expected")
+    int decide(@Param("id") Long id, @Param("expected") Driver.Verification expected, @Param("to") Driver.Verification to,
+               @Param("reason") String reason, @Param("at") java.time.LocalDateTime at, @Param("by") Long by);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Driver d SET d.verificationStatus = :under, "
+            + "d.rejectionReason = null, d.submittedAt = :at, d.photo = :photo, d.licensePhoto = :license, "
+            + "d.aadhaarPhoto = :aadhaar, d.rcPhoto = :rc "
+            + "WHERE d.id = :id AND d.verificationStatus = :rejected")
+    int resubmitDocuments(@Param("id") Long id, @Param("under") Driver.Verification under, @Param("rejected") Driver.Verification rejected, @Param("at") java.time.LocalDateTime at, @Param("photo") String photo,
+                          @Param("license") String license, @Param("aadhaar") String aadhaar, @Param("rc") String rc);
+
     // "Busy" everywhere below means an active trip the driver has not ended yet: an ended trip
     // awaiting payment no longer occupies them, matching no_driver_overlap since V13.
 
