@@ -221,4 +221,30 @@ class DriverSignupServiceTest {
         verify(otp).sendOtpUnlessRecent("ravi@x.com");
         verify(jwt, never()).generateToken(anyString(), anyString(), anyLong());
     }
+
+    @Test
+    void thirdFileRejectedDeletesEarlierFilesAndSavesNothing() {
+        when(files.storeFile(any(), eq("aadhaar"))).thenThrow(new IllegalArgumentException("Only images are allowed"));
+
+        assertThrows(IllegalArgumentException.class, () -> signup(form()));
+
+        verify(files).delete("uploads/drivers/photo_x.jpg");
+        verify(files).delete("uploads/drivers/license_x.jpg");
+        verify(files, times(2)).delete(anyString());
+        verify(drivers, never()).save(any());
+    }
+
+    @Test
+    void saveFailureDeletesAllFourFilesAndPropagates() {
+        when(drivers.save(any(Driver.class))).thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"));
+        doThrow(new RuntimeException("disk")).when(files).delete("uploads/drivers/photo_x.jpg");
+
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () -> signup(form()));
+
+        verify(files).delete("uploads/drivers/photo_x.jpg");
+        verify(files).delete("uploads/drivers/license_x.jpg");
+        verify(files).delete("uploads/drivers/aadhaar_x.jpg");
+        verify(files).delete("uploads/drivers/rc_x.jpg");
+        verify(otp, never()).sendOtp(anyString());
+    }
 }

@@ -14,7 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /** A city driver signing themselves up: documents in, owner review next, email code to confirm the contact. */
@@ -79,25 +81,40 @@ public class DriverSignupService {
         }
 
         // Files before the DB write, as in AdminDriverService: a disk failure must not leave a half-made driver.
-        driver.setPhoto(fileStorageService.storeFile(photo, "photo"));
-        driver.setLicensePhoto(fileStorageService.storeFile(license, "license"));
-        driver.setAadhaarPhoto(fileStorageService.storeFile(aadhaar, "aadhaar"));
-        driver.setRcPhoto(fileStorageService.storeFile(rc, "rc"));
+        // These are identity documents on a public endpoint, so whatever was stored is removed again
+        // if a later file is refused or the save fails (e.g. a race on a unique index).
+        List<String> stored = new ArrayList<>();
+        Driver saved;
+        try {
+            driver.setPhoto(store(photo, "photo", stored));
+            driver.setLicensePhoto(store(license, "license", stored));
+            driver.setAadhaarPhoto(store(aadhaar, "aadhaar", stored));
+            driver.setRcPhoto(store(rc, "rc", stored));
 
-        driver.setName(f.getName().trim());
-        driver.setMobile(f.getMobile());
-        driver.setEmail(email);
-        driver.setPassword(passwordEncoder.encode(f.getPassword()));
-        driver.setLicenseNumber(f.getLicenseNumber());
-        driver.setAadhaarNumber(f.getAadhaarNumber());
-        driver.setRole("ROLE_DRIVER");
-        driver.setStatus(Driver.Status.INACTIVE);
-        driver.setFirstLogin(false);
-        driver.setEmailVerified(false);
-        driver.setServesTrip(false);
-        driver.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
-        driver.setSubmittedAt(LocalDateTime.now());
-        Driver saved = driverRepository.save(driver);
+            driver.setName(f.getName().trim());
+            driver.setMobile(f.getMobile());
+            driver.setEmail(email);
+            driver.setPassword(passwordEncoder.encode(f.getPassword()));
+            driver.setLicenseNumber(f.getLicenseNumber());
+            driver.setAadhaarNumber(f.getAadhaarNumber());
+            driver.setRole("ROLE_DRIVER");
+            driver.setStatus(Driver.Status.INACTIVE);
+            driver.setFirstLogin(false);
+            driver.setEmailVerified(false);
+            driver.setServesTrip(false);
+            driver.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
+            driver.setSubmittedAt(LocalDateTime.now());
+            saved = driverRepository.save(driver);
+        } catch (RuntimeException e) {
+            for (String path : stored) {
+                try {
+                    fileStorageService.delete(path);
+                } catch (RuntimeException ignored) {
+                    // Cleanup is best-effort and must not hide the original failure.
+                }
+            }
+            throw e;
+        }
 
         // The save above has committed (repository calls are their own transaction), so the code goes out now.
         dispatcher.dispatch("email", () -> otpService.sendOtp(email));
@@ -135,6 +152,12 @@ public class DriverSignupService {
         response.put("firstLogin", false);
         response.put("message", "Authentication successful");
         return response;
+    }
+
+    private String store(MultipartFile file, String kind, List<String> stored) {
+        String path = fileStorageService.storeFile(file, kind);
+        stored.add(path);
+        return path;
     }
 
     private static boolean blank(String s) {
