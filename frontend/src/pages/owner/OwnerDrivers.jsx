@@ -111,7 +111,12 @@ function VehiclePanel({ driver, onSaved }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  const independent = driver.fleet === 'INDEPENDENT'
+
   const save = async () => {
+    if (independent && !String(draft.vehicleNumber || '').trim()) {
+      setError('An independent driver needs a number plate'); return
+    }
     setSaving(true); setError('')
     try {
       const res = await updateDriverVehicle(driver.driverId, draft)
@@ -134,7 +139,7 @@ function VehiclePanel({ driver, onSaved }) {
       </div>
       {editing ? (
         <div style={{ marginTop: 12 }}>
-          <VehicleFields idPrefix={`veh-${driver.driverId}`} value={draft} onChange={(patch) => setDraft((p) => ({ ...p, ...patch }))} />
+          <VehicleFields idPrefix={`veh-${driver.driverId}`} hideTrips={independent} value={draft} onChange={(patch) => setDraft((p) => ({ ...p, ...patch }))} />
           {error && <div className="pc-error" role="alert" style={{ marginTop: 10, fontSize: 12 }}><Icon name="alert" size={16} /><span>{error}</span></div>}
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
@@ -307,6 +312,11 @@ function DriverList() {
                 <span className="pc-pill">{d.fleet === 'INDEPENDENT' ? 'Independent' : 'Trip fleet'}</span>
                 <StatusPill status={d.status} label={d.status} />
                 {d.emailVerified && <span className="pc-pill pc-pill-ok">Email</span>}
+                {d.verificationStatus && d.verificationStatus !== 'APPROVED' && (
+                  <span className={`pc-pill ${d.verificationStatus === 'REJECTED' ? 'pc-pill-stop' : ''}`}>
+                    {d.verificationStatus === 'REJECTED' ? 'Rejected' : 'Under review'}
+                  </span>
+                )}
                 <button type="button" onClick={() => openDetail(d.driverId)} disabled={detailLoading} className="pc-btn pc-btn-ghost pc-btn-sm"><Icon name="eye" size={14} />View Details</button>
                 <button type="button" onClick={() => askDelete(d)} title="Delete driver" className="pc-btn pc-btn-ghost pc-btn-sm" style={dangerBtn}><Icon name="trash" size={14} />Delete</button>
               </div>

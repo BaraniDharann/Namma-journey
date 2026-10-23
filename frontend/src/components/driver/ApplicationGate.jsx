@@ -107,7 +107,7 @@ export default function ApplicationGate({ driverId, children }) {
       <span className="pc-tg-badge"><Icon name="alert" size={28} /></span>
       <h1 id="pc-app-title" className="pc-tg-title">Your application needs changes</h1>
       <p className="pc-tg-lead">{verification.rejectionReason || 'The owner could not approve your documents.'}</p>
-      {missing.length > 0 && <p className="pc-tg-lead">Still needed: {missing.join(', ')}.</p>}
+      {missing.length > 0 && <p className="pc-tg-lead">Still needed: {missing.map((k) => DOCUMENTS.find((d) => d.key === k)?.label || k).join(', ')}.</p>}
       <form onSubmit={resubmit}>
         <p className="pc-tg-lead">Upload the documents that need replacing, then resubmit.</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, margin: '12px 0 16px' }}>
