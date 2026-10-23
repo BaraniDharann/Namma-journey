@@ -86,6 +86,31 @@ public class Driver {
     @Column(name = "telegram_link_token_expires_at")
     private LocalDateTime telegramLinkTokenExpiresAt;
 
+    /** The one vehicle this driver drives. Bikes and autos are City only (drivers_trip_needs_car). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vehicle_type", nullable = false, length = 8)
+    private VehicleType vehicleType = VehicleType.CAR;
+
+    @Column(name = "vehicle_number", length = 20)
+    private String vehicleNumber;
+
+    @Column(name = "vehicle_model", length = 60)
+    private String vehicleModel;
+
+    @Column(name = "vehicle_ac", nullable = false)
+    private boolean vehicleAc = true;
+
+    @Column(name = "vehicle_seats", nullable = false)
+    private int vehicleSeats = 4;
+
+    /** Takes City rides (offered by nearness, right now). */
+    @Column(name = "serves_city", nullable = false)
+    private boolean servesCity = true;
+
+    /** Takes Trips (assigned by date). Cars only. */
+    @Column(name = "serves_trip", nullable = false)
+    private boolean servesTrip = true;
+
     public Long getId() {
         return id;
     }

@@ -42,7 +42,11 @@ public class AdminDriverService {
     })
     public DriverCreationResponse createDriver(
             String name, String mobile, String email, String licenseNumber, String aadhaarNumber,
-            MultipartFile photo, MultipartFile licensePhoto, MultipartFile aadhaarPhoto) {
+            MultipartFile photo, MultipartFile licensePhoto, MultipartFile aadhaarPhoto,
+            com.travelplatform.dto.VehicleRequest vehicle) {
+
+        // Checked before any file is written: a bad number plate should not leave orphaned uploads.
+        DriverVehicles.apply(new Driver(), vehicle);
 
         // Cheap uniqueness checks first so we don't waste disk on a request that will fail.
         if (driverRepository.existsByMobile(mobile)) {
@@ -67,7 +71,7 @@ public class AdminDriverService {
         String generatedPassword = generatePassword();
         Driver driver = persistDriver(
                 name, mobile, email, licenseNumber, aadhaarNumber,
-                photoUrl, licensePhotoUrl, aadhaarPhotoUrl, generatedPassword);
+                photoUrl, licensePhotoUrl, aadhaarPhotoUrl, generatedPassword, vehicle);
 
         // Email is @Async on EmailService, but dispatching it AFTER the DB commit means
         // a slow SMTP handshake never lengthens the API response.
@@ -113,7 +117,8 @@ public class AdminDriverService {
     // Spring Data JPA's repository.save() is already transactional; a single insert needs no outer @Transactional.
     private Driver persistDriver(String name, String mobile, String email, String licenseNumber,
                                    String aadhaarNumber, String photoUrl, String licensePhotoUrl,
-                                   String aadhaarPhotoUrl, String generatedPassword) {
+                                   String aadhaarPhotoUrl, String generatedPassword,
+                                   com.travelplatform.dto.VehicleRequest vehicle) {
         Driver driver = new Driver();
         driver.setName(name);
         driver.setMobile(mobile);
@@ -128,6 +133,19 @@ public class AdminDriverService {
         driver.setStatus(Driver.Status.ACTIVE);
         driver.setFirstLogin(true);
         driver.setEmailVerified(false);
+        DriverVehicles.apply(driver, vehicle);
+        return driverRepository.save(driver);
+    }
+
+    /** The owner sets a driver's vehicle and City/Trip switches - e.g. for drivers added before V14. */
+    @Caching(evict = {
+            @CacheEvict(value = "allDrivers", allEntries = true),
+            @CacheEvict(value = "driverById", key = "#driverId")
+    })
+    public Driver updateVehicle(Long driverId, com.travelplatform.dto.VehicleRequest vehicle) {
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
+        DriverVehicles.apply(driver, vehicle);
         return driverRepository.save(driver);
     }
 

@@ -261,7 +261,7 @@ public class OwnerService {
         d.setFirstLogin(driver.isFirstLogin());
         d.setTelegramLinked(driver.getTelegramChatId() != null);
         d.setCreatedAt(driver.getCreatedAt());
-        return d;
+        return d.withVehicle(driver);
     }
 
     @Transactional
@@ -287,6 +287,13 @@ public class OwnerService {
 
         if (driver.getStatus() != Driver.Status.ACTIVE) {
             throw new RuntimeException("Driver is not active and cannot be assigned");
+        }
+        // The owner may override a driver's City/Trip switches, but not their vehicle: a bike ride
+        // is not driven by car, and a Trip is never given to a bike or auto.
+        if (booking.getVehicleType() != null && driver.getVehicleType() != booking.getVehicleType()) {
+            throw new IllegalArgumentException("This " + (booking.getServiceMode() == TravelBooking.ServiceMode.TRIP
+                    ? "trip needs a car" : "ride needs a " + vehicleName(booking.getVehicleType()))
+                    + ", and " + driver.getName() + " drives a " + vehicleName(driver.getVehicleType()) + ".");
         }
 
         long overlapping = driverRepository.countOverlappingActiveBookings(
@@ -324,6 +331,10 @@ public class OwnerService {
         return mapToResponse(updatedBooking, driver);
     }
     
+    private static String vehicleName(com.travelplatform.entity.VehicleType type) {
+        return type == null ? "vehicle" : type.name().toLowerCase(java.util.Locale.ROOT);
+    }
+
     private TravelBookingResponse mapToResponse(TravelBooking booking, Driver driver) {
         TravelBookingResponse response = new TravelBookingResponse();
         response.setBookingId(booking.getId());
@@ -351,7 +362,7 @@ public class OwnerService {
             driverDetails.setMobile(driver.getMobile());
             driverDetails.setPhoto(driver.getPhoto());
             driverDetails.setLicenseNumber(driver.getLicenseNumber());
-            response.setDriver(driverDetails);
+            response.setDriver(driverDetails.withVehicle(driver));
         }
         
         return response.withDispatch(booking);

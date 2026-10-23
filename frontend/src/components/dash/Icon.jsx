@@ -6,9 +6,10 @@ import {
   Eye, DownloadSimple, Funnel, MapTrifold, Power, EnvelopeSimple, Camera, Link as LinkIcon,
   PaperPlaneTilt, ArrowsClockwise, Sparkle, HandsPraying, CreditCard, QrCode, ChartPie,
   ChartLine, ChartLineUp, SteeringWheel, Lock, Eye as EyeOpen, EyeSlash, GoogleLogo, IdentificationCard,
-  Crown, Suitcase, Gauge, Sun, Moon, TelegramLogo,
+  Crown, Suitcase, Gauge, Sun, Moon, TelegramLogo, Moped,
 } from '@phosphor-icons/react'
 import ErtigaIcon from '../brand/ErtigaIcon'
+import AutoRickshawIcon from '../brand/AutoRickshawIcon'
 
 /**
  * The app's one icon set, backed by Phosphor so every glyph is drawn to the same grid and stroke.
@@ -27,7 +28,7 @@ const SET = {
   pie: ChartPie, bar: ChartBar, line: ChartLine, area: ChartLineUp,
   wheel: SteeringWheel, lock: Lock, 'eye-open': EyeOpen, 'eye-off': EyeSlash, google: GoogleLogo,
   id: IdentificationCard, crown: Crown, suitcase: Suitcase, gauge: Gauge, sun: Sun, moon: Moon,
-  telegram: TelegramLogo,
+  telegram: TelegramLogo, bike: Moped, auto: AutoRickshawIcon,
 }
 
 export default function Icon({ name, size = 18, className = '', style, title, weight }) {

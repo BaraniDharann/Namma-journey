@@ -26,6 +26,7 @@ public class UserController {
     private final PaymentService paymentService;
     private final TripSummaryService tripSummaryService;
     private final RoutingService routingService;
+    private final com.travelplatform.service.CityFareService cityFareService;
 
     // SpEL guard reused on every per-user endpoint: the authenticated principal (JWT subject)
     // must match the {userId} path variable, otherwise a logged-in user could read or mutate
@@ -148,6 +149,17 @@ public class UserController {
             @RequestParam double toLon) {
         RouteInfo routeInfo = routingService.calculateRoute(fromLat, fromLon, toLat, toLon);
         return ResponseEntity.ok(routeInfo);
+    }
+
+    /** Distance, time and the fare in a bike, an auto and a car - shown before a City ride is booked. */
+    @GetMapping("/city-fares/estimate")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<java.util.Map<String, Object>> estimateCityFares(
+            @RequestParam double fromLat,
+            @RequestParam double fromLon,
+            @RequestParam double toLat,
+            @RequestParam double toLon) {
+        return ResponseEntity.ok(cityFareService.estimate(fromLat, fromLon, toLat, toLon));
     }
 
     @PostMapping("/forgot-password")

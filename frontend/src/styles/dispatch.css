@@ -34,6 +34,14 @@
 .rn-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; padding: 16px 20px 20px; }
 .rn-actions .pc-btn { min-height: 50px; font-size: 15px; justify-content: center; }
 
+/* Driver dashboard: the vehicle, and the City rides / Trips switches. */
+.pc-modebar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: -4px 0 18px; padding: 12px 16px;
+  border-radius: var(--pc-r-sm); background: var(--pc-panel); box-shadow: var(--pc-shadow); }
+.pc-modebar-vehicle { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-right: auto;
+  font: 700 13px var(--pc-fb); color: var(--pc-muted); }
+.pc-modebar-vehicle b { font-size: 14.5px; color: var(--pc-ink); }
+.pc-modebar-vehicle .pc-ic { color: var(--pc-brand-deep); }
+
 /* Driver-wide location notice, under the page header. */
 .rn-notice { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; padding: 12px 14px;
   border-radius: var(--pc-r-sm); background: var(--pc-warn-soft); color: var(--pc-warn); font: 700 13px/1.45 var(--pc-fb); }

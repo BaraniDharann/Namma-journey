@@ -36,6 +36,41 @@ public class OwnerController {
     private final ReviewService reviewService;
     private final PaymentService paymentService;
     private final TelegramLinkService telegramLinkService;
+    private final com.travelplatform.service.CityFareService cityFareService;
+
+    @GetMapping("/city-fares")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<com.travelplatform.entity.CityFare>> getCityFares() {
+        return ResponseEntity.ok(cityFareService.all());
+    }
+
+    @PutMapping("/city-fares/{vehicleType}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.entity.CityFare> setCityFare(
+            @PathVariable String vehicleType,
+            @RequestBody Map<String, BigDecimal> body,
+            org.springframework.security.core.Authentication authentication) {
+        Long ownerId = null;
+        try {
+            ownerId = Long.valueOf(authentication.getName());
+        } catch (NumberFormatException ignored) {
+            // the audit column is best-effort
+        }
+        return ResponseEntity.ok(cityFareService.update(
+                com.travelplatform.entity.VehicleType.parse(vehicleType),
+                body.get("baseFare"), body.get("perKm"), body.get("perMinute"), body.get("minimumFare"),
+                ownerId));
+    }
+
+    /** Vehicle details and City/Trip switches for one driver. */
+    @PutMapping("/drivers/{driverId}/vehicle")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<DriverDetailsResponse> updateDriverVehicle(
+            @PathVariable Long driverId,
+            @RequestBody com.travelplatform.dto.VehicleRequest vehicle) {
+        adminDriverService.updateVehicle(driverId, vehicle);
+        return ResponseEntity.ok(ownerService.getDriverById(driverId));
+    }
     
     @GetMapping("/bookings")
     @PreAuthorize("hasRole('OWNER')")
@@ -121,10 +156,19 @@ public class OwnerController {
             @RequestParam String aadhaarNumber,
             @RequestParam(required = false) MultipartFile photo,
             @RequestParam(required = false) MultipartFile licensePhoto,
-            @RequestParam(required = false) MultipartFile aadhaarPhoto) {
+            @RequestParam(required = false) MultipartFile aadhaarPhoto,
+            @RequestParam(required = false) String vehicleType,
+            @RequestParam(required = false) String vehicleNumber,
+            @RequestParam(required = false) String vehicleModel,
+            @RequestParam(required = false) Boolean vehicleAc,
+            @RequestParam(required = false) Integer vehicleSeats,
+            @RequestParam(required = false) Boolean servesCity,
+            @RequestParam(required = false) Boolean servesTrip) {
         DriverCreationResponse response = adminDriverService.createDriver(
             name, mobile, email, licenseNumber, aadhaarNumber,
-            photo, licensePhoto, aadhaarPhoto);
+            photo, licensePhoto, aadhaarPhoto,
+            new com.travelplatform.dto.VehicleRequest(vehicleType, vehicleNumber, vehicleModel,
+                    vehicleAc, vehicleSeats, servesCity, servesTrip));
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
     

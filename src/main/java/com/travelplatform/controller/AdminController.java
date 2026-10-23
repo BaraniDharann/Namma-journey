@@ -37,11 +37,37 @@ public class AdminController {
             @RequestPart("aadhaarNumber") String aadhaarNumber,
             @RequestPart(value = "photo", required = false) MultipartFile photo,
             @RequestPart(value = "licensePhoto", required = false) MultipartFile licensePhoto,
-            @RequestPart(value = "aadhaarPhoto", required = false) MultipartFile aadhaarPhoto) {
-        
+            @RequestPart(value = "aadhaarPhoto", required = false) MultipartFile aadhaarPhoto,
+            @RequestPart(value = "vehicleType", required = false) String vehicleType,
+            @RequestPart(value = "vehicleNumber", required = false) String vehicleNumber,
+            @RequestPart(value = "vehicleModel", required = false) String vehicleModel,
+            @RequestPart(value = "vehicleAc", required = false) String vehicleAc,
+            @RequestPart(value = "vehicleSeats", required = false) String vehicleSeats,
+            @RequestPart(value = "servesCity", required = false) String servesCity,
+            @RequestPart(value = "servesTrip", required = false) String servesTrip) {
+
+        // Multipart text parts arrive as strings; blank means "use the default".
+        com.travelplatform.dto.VehicleRequest vehicle = new com.travelplatform.dto.VehicleRequest(
+                vehicleType, vehicleNumber, vehicleModel, flag(vehicleAc), seats(vehicleSeats),
+                flag(servesCity), flag(servesTrip));
         DriverCreationResponse response = adminDriverService.createDriver(
-            name, mobile, email, licenseNumber, aadhaarNumber, photo, licensePhoto, aadhaarPhoto);
+            name, mobile, email, licenseNumber, aadhaarNumber, photo, licensePhoto, aadhaarPhoto, vehicle);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    private static Boolean flag(String raw) {
+        return raw == null || raw.isBlank() ? null : Boolean.valueOf(raw.trim());
+    }
+
+    private static Integer seats(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(raw.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Seats must be a number");
+        }
     }
     
 //    /**

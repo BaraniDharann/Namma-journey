@@ -9,6 +9,7 @@ import { actionKey } from '../../utils/idempotency'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { inr, shortPlace } from '../../dash/metrics'
+import { modeLabel } from '../../dash/vehicles'
 import { useCelebrate, rememberPayment } from '../../components/celebrate/Celebration'
 
 const navItems = [
@@ -343,7 +344,7 @@ export default function UserBookings() {
           </Panel>
         ) : (
           paginatedItems.map(b => (
-            <Panel key={b.bookingId} span={6} title={`${b.fromDate} – ${b.toDate}`} meta={<StatusPill status={b.status} />}>
+            <Panel key={b.bookingId} span={6} title={b.serviceMode === 'CITY' ? `${modeLabel(b)} · ${b.fromDate}` : `Trip · ${b.fromDate} – ${b.toDate}`} meta={<StatusPill status={b.status} />}>
               <div>
                 <div className="pc-route">
                   <i /><div style={{ overflowWrap: 'anywhere' }}>{b.fromPlace}<small>Pickup</small></div>

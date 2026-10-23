@@ -280,7 +280,9 @@ public class DispatchService {
             }
             Set<Long> free = new HashSet<>(driverRepository.findDispatchableAmong(
                     near.stream().map(DriverPresenceService.Nearby::driverId).toList(),
-                    booking.getFromDate()));
+                    booking.getFromDate(),
+                    booking.getVehicleType(),
+                    booking.getTravelMembers() == null ? 1 : booking.getTravelMembers()));
             for (DriverPresenceService.Nearby n : near) {
                 if (free.contains(n.driverId())) {
                     return Optional.of(n);

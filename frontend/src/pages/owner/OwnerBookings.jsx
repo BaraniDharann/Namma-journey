@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import Pagination, { usePagination } from '../../components/Pagination'
 import { getOwnerBookings, assignDriver, getDriverTripPhoto } from '../../utils/api'
+import { modeLabel, vehicleIcon, vehicleLabel } from '../../dash/vehicles'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
@@ -46,7 +47,7 @@ function AssignModal({ booking, onClose, onAssign }) {
   return (
     <div className="modal-overlay">
       <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="assign-driver-title" style={{ overflow: 'hidden', padding: 0 }}>
-        <ModalHead id="assign-driver-title" title="Assign Driver" sub={`${booking.fromPlace} → ${booking.toPlace}`} />
+        <ModalHead id="assign-driver-title" title="Assign Driver" sub={`${modeLabel(booking)} · needs a ${vehicleLabel(booking.vehicleType).toLowerCase()} · ${booking.fromPlace} → ${booking.toPlace}`} />
         <div style={{ padding: 24 }}>
           <div style={{ marginBottom: 20 }}>
             <label htmlFor="assign-driver-id" style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }}>Driver ID</label>
@@ -112,6 +113,7 @@ export default function OwnerBookings() {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('ALL')
+  const [mode, setMode] = useState('ALL')
   const [assignBooking, setAssignBooking] = useState(null)
   const [search, setSearch] = useState('')
   const [photoBookingId, setPhotoBookingId] = useState(null)
@@ -128,6 +130,7 @@ export default function OwnerBookings() {
 
   const filtered = bookings
     .filter(b => filter === 'ALL' || b.status === filter)
+    .filter(b => mode === 'ALL' || (b.serviceMode || 'TRIP') === mode)
     .filter(b => !search || b.userName?.toLowerCase().includes(search.toLowerCase()) || b.fromPlace?.toLowerCase().includes(search.toLowerCase()) || b.toPlace?.toLowerCase().includes(search.toLowerCase()))
 
   const { currentPage, totalPages, paginatedItems, setCurrentPage } = usePagination(filtered, 10)
@@ -160,6 +163,18 @@ export default function OwnerBookings() {
             <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
               <span aria-hidden="true" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--pc-muted)', display: 'flex' }}><Icon name="search" size={16} /></span>
               <input className="input-field" aria-label="Search bookings" style={{ width: '100%', paddingLeft: 38 }} placeholder="Search by customer, route..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <div className="pc-chips" role="group" aria-label="Filter by City or Trip">
+              {[['ALL', 'All'], ['CITY', 'City'], ['TRIP', 'Trips']].map(([m, text]) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={mode === m}
+                  onClick={() => { setMode(m); setCurrentPage(1) }}
+                  className="pc-chip"
+                  style={{ border: 'none', cursor: 'pointer', ...(mode === m ? { background: 'var(--pc-brand-deep)', color: '#fff' } : {}) }}
+                >{text}</button>
+              ))}
             </div>
             <div className="pc-chips" role="group" aria-label="Filter by status">
               {FILTERS.map(f => (
@@ -194,7 +209,9 @@ export default function OwnerBookings() {
                         <td><div className="pc-row-title">{b.userName}</div><div style={muted}>{b.userPhone}</div></td>
                         <td><div style={{ fontSize: 13, color: 'var(--pc-ink)' }}>{b.fromPlace}</div><div style={muted}>→ {b.toPlace}</div></td>
                         <td style={{ whiteSpace: 'nowrap' }}>{b.fromDate}</td>
-                        <td>{b.bookingType === 'HOUR_BASED'
+                        <td>{b.serviceMode === 'CITY'
+                          ? <span className="pc-chip" style={{ whiteSpace: 'nowrap' }}><Icon name={vehicleIcon(b.vehicleType)} size={13} />City · {vehicleLabel(b.vehicleType)}</span>
+                          : b.bookingType === 'HOUR_BASED'
                           ? <span className="pc-chip" style={{ whiteSpace: 'nowrap' }}><Icon name="clock" size={13} />{b.bookingHours}h</span>
                           : <span className="pc-chip" style={{ whiteSpace: 'nowrap' }}><Icon name="route" size={13} />KM</span>}</td>
                         <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--pc-ink)', whiteSpace: 'nowrap' }}>{inr(b.totalAmount)}</td>

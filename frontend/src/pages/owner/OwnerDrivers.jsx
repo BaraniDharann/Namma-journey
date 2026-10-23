@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import Pagination, { usePagination } from '../../components/Pagination'
-import { createDriver, getOwnerDrivers, getOwnerDriverById, deleteOwnerDriver, createDriverTelegramLink } from '../../utils/api'
+import { createDriver, getOwnerDrivers, getOwnerDriverById, deleteOwnerDriver, createDriverTelegramLink, updateDriverVehicle } from '../../utils/api'
+import VehicleFields, { DEFAULT_VEHICLE } from '../../components/owner/VehicleFields'
+import { vehicleIcon, vehicleLabel } from '../../dash/vehicles'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { useCelebrate } from '../../components/celebrate/Celebration'
@@ -98,7 +100,63 @@ function TelegramLinkPanel({ driver }) {
   )
 }
 
-function DriverDetailModal({ driver, onClose }) {
+// The vehicle decides which rides reach a driver: bikes and autos get City rides, only cars get
+// Trips. Drivers added before vehicles existed are recorded as cars, so this is where to correct it.
+function VehiclePanel({ driver, onSaved }) {
+  const pickVehicle = (d) => Object.fromEntries(Object.keys(DEFAULT_VEHICLE).map((k) => [k, d[k] ?? DEFAULT_VEHICLE[k]]))
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(() => pickVehicle(driver))
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const save = async () => {
+    setSaving(true); setError('')
+    try {
+      const res = await updateDriverVehicle(driver.driverId, draft)
+      onSaved(res.data)
+      setEditing(false)
+    } catch (e) {
+      setError(e.response?.data?.message || e.response?.data?.error || 'Could not save the vehicle')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div style={{ ...wellStyle, marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <span style={capsStyle}>Vehicle</span>
+        {!editing && (
+          <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => { setDraft(pickVehicle(driver)); setEditing(true) }}>
+            <Icon name="edit" size={14} />Edit
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div style={{ marginTop: 12 }}>
+          <VehicleFields idPrefix={`veh-${driver.driverId}`} value={draft} onChange={(patch) => setDraft((p) => ({ ...p, ...patch }))} />
+          {error && <div className="pc-error" role="alert" style={{ marginTop: 10, fontSize: 12 }}><Icon name="alert" size={16} /><span>{error}</span></div>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
+            <button type="button" className="pc-btn pc-btn-sm" disabled={saving} onClick={save}><Icon name="check" size={14} />{saving ? 'Saving…' : 'Save vehicle'}</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink)' }}>
+          <Icon name={vehicleIcon(driver.vehicleType)} size={20} />
+          {vehicleLabel(driver.vehicleType)}
+          {driver.vehicleModel && <span style={{ color: 'var(--pc-ink-2)' }}>{driver.vehicleModel}</span>}
+          <span style={{ color: 'var(--pc-ink-2)' }}>{driver.vehicleNumber || 'No number plate yet'}</span>
+          {driver.vehicleType === 'CAR' && <span style={{ color: 'var(--pc-ink-2)' }}>{driver.vehicleSeats} seats · {driver.vehicleAc ? 'AC' : 'Non-AC'}</span>}
+          <span style={{ display: 'flex', gap: 6 }}>
+            {driver.servesCity && <span className="pc-pill pc-pill-go">City</span>}
+            {driver.servesTrip && <span className="pc-pill pc-pill-ok">Trips</span>}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DriverDetailModal({ driver, onClose, onUpdated }) {
   const imgUrl = (path) => {
     if (!path) return null
     if (path.startsWith('http')) return path
@@ -136,6 +194,7 @@ function DriverDetailModal({ driver, onClose }) {
               </div>
             ))}
           </div>
+          <VehiclePanel driver={driver} onSaved={onUpdated} />
           <TelegramLinkPanel driver={driver} />
           <div className="driver-image-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
             {[['photo', 'user', 'Driver Photo'], ['licensePhoto', 'card', 'License'], ['aadhaarPhoto', 'shield', 'Aadhaar']].map(([key, icon, label]) => (
@@ -219,7 +278,13 @@ function DriverList() {
 
   return (
     <>
-      {selected && <DriverDetailModal driver={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <DriverDetailModal
+          driver={selected}
+          onClose={() => setSelected(null)}
+          onUpdated={(d) => { setSelected(d); setDrivers((prev) => prev.map((x) => (x.driverId === d.driverId ? { ...x, ...d } : x))) }}
+        />
+      )}
       {confirmTarget && <DeleteConfirmModal driver={confirmTarget} deleting={deleting} error={deleteError} onConfirm={handleDelete} onClose={() => !deleting && setConfirmTarget(null)} />}
       <Panel span={12} title="Drivers" meta={`${drivers.length} total`}>
         <div className="pc-rows">
@@ -233,6 +298,10 @@ function DriverList() {
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span className="pc-pill" title={d.vehicleNumber || 'No number plate yet'} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Icon name={vehicleIcon(d.vehicleType)} size={14} />{vehicleLabel(d.vehicleType)}
+                  {d.servesCity && d.servesTrip ? ' · City + Trips' : d.servesTrip ? ' · Trips' : d.servesCity ? ' · City' : ' · Off'}
+                </span>
                 <StatusPill status={d.status} label={d.status} />
                 {d.emailVerified && <span className="pc-pill pc-pill-ok">Email</span>}
                 <button type="button" onClick={() => openDetail(d.driverId)} disabled={detailLoading} className="pc-btn pc-btn-ghost pc-btn-sm"><Icon name="eye" size={14} />View Details</button>
@@ -263,7 +332,7 @@ function UploadTile({ label, icon, file, onChange }) {
 export default function OwnerDrivers() {
   const celebrate = useCelebrate()
   const [tab, setTab] = useState('list')
-  const [form, setForm] = useState({ name: '', mobile: '', email: '', licenseNumber: '', aadhaarNumber: '' })
+  const [form, setForm] = useState({ name: '', mobile: '', email: '', licenseNumber: '', aadhaarNumber: '', ...DEFAULT_VEHICLE })
   const [files, setFiles] = useState({ photo: null, licensePhoto: null, aadhaarPhoto: null })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -276,11 +345,11 @@ export default function OwnerDrivers() {
     setLoading(true); setError('')
     try {
       const fd = new FormData()
-      Object.entries(form).forEach(([k, v]) => fd.append(k, v))
+      Object.entries(form).forEach(([k, v]) => fd.append(k, String(v ?? '')))
       Object.entries(files).forEach(([k, v]) => { if (v) fd.append(k, v) })
       const res = await createDriver(fd)
       setSuccess(res.data)
-      setForm({ name: '', mobile: '', email: '', licenseNumber: '', aadhaarNumber: '' })
+      setForm({ name: '', mobile: '', email: '', licenseNumber: '', aadhaarNumber: '', ...DEFAULT_VEHICLE })
       setFiles({ photo: null, licensePhoto: null, aadhaarPhoto: null })
       setTab('list')
       celebrate({ title: 'Driver added', message: `${res.data?.name || form.name} is now on your team.` })
@@ -341,6 +410,9 @@ export default function OwnerDrivers() {
                   <div><label htmlFor="drv-licence" style={labelStyle}>License Number *</label><input id="drv-licence" className="input-field" placeholder="DL1420110012345" value={form.licenseNumber} onChange={e => set('licenseNumber', e.target.value)} required /></div>
                   <div><label htmlFor="drv-aadhaar" style={labelStyle}>Aadhaar Number *</label><input id="drv-aadhaar" className="input-field" placeholder="123456789012" maxLength={12} value={form.aadhaarNumber} onChange={e => set('aadhaarNumber', e.target.value)} required /></div>
                 </div>
+              </Panel>
+              <Panel span={12} title="Vehicle">
+                <VehicleFields idPrefix="drv-veh" value={form} onChange={(patch) => setForm(p => ({ ...p, ...patch }))} />
               </Panel>
               <Panel span={12} title="Photo Uploads" meta="optional">
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12 }}>

@@ -180,6 +180,12 @@ export const getDriverBookings = (driverId) => cachedGet(`/driver/${driverId}/bo
 // Ride Now: uncached, because an offer lives for seconds, and silent, because it runs in the background.
 export const getDriverBookingsFresh = (driverId) => api.get(`/driver/${driverId}/bookings`, { _silent: true })
 export const reportDriverPresence = (driverId, latitude, longitude) => api.put(`/driver/${driverId}/presence`, { latitude, longitude }, { _silent: true })
+export const updateDriverModes = (driverId, modes) => api.put(`/driver/${driverId}/modes`, modes).then(res => { invalidateCache('driver'); return res })
+// City mode: fares for bike, auto and car over one route, and the owner's fare settings.
+export const getCityFareEstimate = ({ fromLat, fromLon, toLat, toLon }) => api.get('/user/city-fares/estimate', { params: { fromLat, fromLon, toLat, toLon }, _silent: true })
+export const getCityFares = () => api.get('/owner/city-fares')
+export const setCityFare = (vehicleType, fare) => api.put(`/owner/city-fares/${vehicleType}`, fare)
+export const updateDriverVehicle = (driverId, vehicle) => api.put(`/owner/drivers/${driverId}/vehicle`, vehicle).then(res => { invalidateCache('drivers'); return res })
 export const driverBookingAction = (driverId, bookingId, action) => api.post(`/driver/${driverId}/bookings/${bookingId}/action`, { action }).then(res => { invalidateCache('bookings'); return res })
 export const endTrip = (driverId, bookingId) => api.post(`/driver/${driverId}/bookings/${bookingId}/end-trip`).then(res => { invalidateCache('bookings'); invalidateCache('payments'); return res })
 export const markCashReceived = (driverId, bookingId, data) => api.post(`/driver/${driverId}/bookings/${bookingId}/cash-payment`, data).then(res => { invalidateCache('bookings'); invalidateCache('payments'); return res })

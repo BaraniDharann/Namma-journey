@@ -120,6 +120,19 @@ public class TravelBooking {
     @Column(name = "trip_ended_at")
     private LocalDateTime tripEndedAt;
 
+    /** City ride (now, nearest driver) or Trip (dates, by car). City rides are always RIDE_NOW. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "service_mode", nullable = false, length = 8)
+    private ServiceMode serviceMode = ServiceMode.TRIP;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vehicle_type", nullable = false, length = 8)
+    private VehicleType vehicleType = VehicleType.CAR;
+
+    public enum ServiceMode {
+        CITY, TRIP
+    }
+
     public enum BookingStatus {
         PENDING, CONFIRMED, STARTED, COMPLETED, CANCELLED
     }

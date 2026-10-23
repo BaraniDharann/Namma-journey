@@ -5,6 +5,7 @@ import com.travelplatform.entity.BookingDriverRejection;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.entity.TravelBooking;
 import com.travelplatform.entity.TravelBooking.DispatchState;
+import com.travelplatform.entity.VehicleType;
 import com.travelplatform.repository.BookingDriverRejectionRepository;
 import com.travelplatform.repository.DriverRepository;
 import com.travelplatform.repository.TravelBookingRepository;
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -62,6 +64,8 @@ class DispatchServiceTest {
     private final List<BookingDriverRejection> rejections = new ArrayList<>();
     private final Set<Long> busyDrivers = new HashSet<>();
     private final Set<Long> overlapOnFlush = new HashSet<>();
+    private final Map<Long, VehicleType> vehicles = new HashMap<>();
+    private final Map<Long, Integer> seatsOf = new HashMap<>();
 
     private TravelBookingRepository bookingRepository;
     private NotificationService notificationService;
@@ -95,10 +99,18 @@ class DispatchServiceTest {
             d.setName("Driver " + d.getId());
             return Optional.of(d);
         });
-        when(driverRepository.findDispatchableAmong(anyCollection(), any(LocalDate.class))).thenAnswer(i -> {
-            Collection<Long> ids = i.getArgument(0);
-            return ids.stream().filter(id -> !busyDrivers.contains(id)).toList();
-        });
+        // Mirrors the query: free today, the right vehicle, enough seats. Unlisted drivers are 4-seat cars.
+        when(driverRepository.findDispatchableAmong(anyCollection(), any(LocalDate.class), any(VehicleType.class), anyInt()))
+                .thenAnswer(i -> {
+                    Collection<Long> ids = i.getArgument(0);
+                    VehicleType wanted = i.getArgument(2);
+                    int seats = i.getArgument(3);
+                    return ids.stream()
+                            .filter(id -> !busyDrivers.contains(id))
+                            .filter(id -> vehicles.getOrDefault(id, VehicleType.CAR) == wanted)
+                            .filter(id -> seatsOf.getOrDefault(id, 4) >= seats)
+                            .toList();
+                });
 
         when(rejectionRepository.findDriverIdsByBookingId(any()))
                 .thenAnswer(i -> rejections.stream().filter(r -> r.getBookingId().equals(i.getArgument(0)))
@@ -136,6 +148,9 @@ class DispatchServiceTest {
         booking.setDispatchMode(TravelBooking.DispatchMode.RIDE_NOW);
         booking.setDispatchState(DispatchState.SEARCHING);
         booking.setDispatchStartedAt(T0);
+        booking.setServiceMode(TravelBooking.ServiceMode.CITY);
+        booking.setVehicleType(VehicleType.CAR);
+        booking.setTravelMembers(1);
         bookingId = booking.getId();
         table.put(bookingId, booking);
     }
@@ -261,6 +276,40 @@ class DispatchServiceTest {
     }
 
     @Test
+    @DisplayName("a bike ride goes to the nearest bike, never to a closer car or auto")
+    void bikeRideOnlyReachesBikes() {
+        TravelBooking b = booking();
+        b.setVehicleType(VehicleType.BIKE);
+        store(b);
+        vehicles.put(1L, VehicleType.CAR);
+        vehicles.put(2L, VehicleType.AUTO);
+        vehicles.put(3L, VehicleType.BIKE);
+        driverAt(1L, 0.2);
+        driverAt(2L, 0.3);
+        driverAt(3L, 0.9);
+
+        dispatch.dispatch(bookingId);
+
+        assertEquals(3L, booking().getDriverId());
+    }
+
+    @Test
+    @DisplayName("a car ride for six skips the nearer four-seater")
+    void carRideNeedsEnoughSeats() {
+        TravelBooking b = booking();
+        b.setTravelMembers(6);
+        store(b);
+        seatsOf.put(1L, 4);
+        seatsOf.put(2L, 7);
+        driverAt(1L, 0.2);
+        driverAt(2L, 0.7);
+
+        dispatch.dispatch(bookingId);
+
+        assertEquals(2L, booking().getDriverId());
+    }
+
+    @Test
     @DisplayName("after the search time with nobody near, the owner takes over")
     void givesUpAfterSearchTimeout() {
         dispatch.dispatch(bookingId);
@@ -356,6 +405,9 @@ class DispatchServiceTest {
         c.setOfferExpiresAt(b.getOfferExpiresAt());
         c.setOfferDistanceKm(b.getOfferDistanceKm());
         c.setVersion(b.getVersion());
+        c.setServiceMode(b.getServiceMode());
+        c.setVehicleType(b.getVehicleType());
+        c.setTravelMembers(b.getTravelMembers());
         return c;
     }
 }

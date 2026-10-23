@@ -192,6 +192,17 @@ public class DriverController {
         return ResponseEntity.noContent().build();
     }
 
+    /** The driver's own City rides / Trips switches. */
+    @PutMapping("/{driverId}/modes")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<DriverDetailsResponse> updateModes(
+            @PathVariable Long driverId,
+            @RequestBody(required = false) Map<String, Boolean> body) {
+        return ResponseEntity.ok(driverService.updateModes(driverId,
+                body != null ? body.get("servesCity") : null,
+                body != null ? body.get("servesTrip") : null));
+    }
+
     @PutMapping("/{driverId}/availability")
     @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<java.util.Map<String, String>> toggleAvailability(

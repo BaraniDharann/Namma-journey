@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from './dash/Icon'
 import { getBookingById } from '../utils/api'
+import { vehicleIcon, vehicleLabel } from '../dash/vehicles'
 
 const POLL_MS = 3000
 
@@ -9,7 +10,12 @@ const POLL_MS = 3000
 function describe(b) {
   if (b.status === 'CANCELLED') return { done: true, title: 'Ride cancelled', text: 'This ride was cancelled.' }
   if (b.driver && (b.status === 'CONFIRMED' || b.status === 'STARTED')) {
-    return { done: true, title: `${b.driver.name} is coming to pick you up`, text: 'Your driver accepted the ride. You can call them from My Bookings.' }
+    const plate = [b.driver.vehicleModel, b.driver.vehicleNumber].filter(Boolean).join(' · ')
+    return {
+      done: true,
+      title: `${b.driver.name} is coming to pick you up`,
+      text: `${vehicleLabel(b.driver.vehicleType || b.vehicleType)}${plate ? ` — ${plate}` : ''}. Look for this vehicle at your pickup.`,
+    }
   }
   if (b.dispatchState === 'NO_DRIVER') {
     return { done: true, title: 'No driver nearby yet', text: "Every driver near your pickup is busy. Our team is assigning one by hand, and we'll notify you." }
@@ -40,7 +46,7 @@ export default function RideSearchStatus({ userId, booking: initial }) {
     <div>
       <div className="rn-search" role="status" aria-live="polite">
         <span className={`rn-radar${state.done ? ' is-done' : ''}`}>
-          <Icon name={booking.driver ? 'check' : 'car'} size={24} />
+          <Icon name={booking.driver ? 'check' : vehicleIcon(booking.vehicleType)} size={24} />
         </span>
         <div style={{ minWidth: 0 }}>
           <b>{state.title}</b>

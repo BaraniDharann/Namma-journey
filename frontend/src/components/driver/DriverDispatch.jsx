@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import Icon from '../dash/Icon'
 import { driverBookingAction } from '../../utils/api'
 import { inr, shortPlace } from '../../dash/metrics'
+import { modeLabel, vehicleIcon, vehicleLabel } from '../../dash/vehicles'
 import useDriverDispatch, { DRIVER_TRIPS_EVENT } from '../../hooks/useDriverDispatch'
 
 /**
@@ -70,7 +71,7 @@ function RideOfferCard({ driverId, booking, deadline, onDone }) {
       <div className="rn-card" role="alertdialog" aria-modal="true" aria-labelledby="rn-title" aria-describedby="rn-left">
         <div className="rn-head">
           <div style={{ minWidth: 0 }}>
-            <div className="rn-kicker">New ride nearby</div>
+            <div className="rn-kicker">New {modeLabel(booking)} nearby</div>
             <h2 id="rn-title" className="rn-title">Pickup {pickupAway ? `${pickupAway} away` : 'near you'}</h2>
           </div>
           <div className="rn-fare">{inr(booking.totalAmount)}<small>fare</small></div>
@@ -84,7 +85,7 @@ function RideOfferCard({ driverId, booking, deadline, onDone }) {
           <div className="rn-facts">
             {booking.distanceKm != null && <span className="rn-fact"><Icon name="route" size={14} />{km(booking.distanceKm)} trip</span>}
             <span className="rn-fact"><Icon name="users" size={14} />{booking.travelMembers || 1} passenger{(booking.travelMembers || 1) === 1 ? '' : 's'}</span>
-            {booking.acType && <span className="rn-fact"><Icon name="car" size={14} />{booking.acType === 'AC' ? 'AC' : 'Non-AC'}</span>}
+            <span className="rn-fact"><Icon name={vehicleIcon(booking.vehicleType)} size={14} />{vehicleLabel(booking.vehicleType)}</span>
           </div>
         </div>
         <div className={`rn-timer${left <= 10 ? ' is-low' : ''}`} aria-hidden="true">

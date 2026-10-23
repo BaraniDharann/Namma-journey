@@ -137,6 +137,37 @@ class DriverOverlapConstraintTest {
     }
 
     @Test
+    @DisplayName("V14: existing rows become car trips, and a bike or auto cannot be set to take trips")
+    void tripsAreByCar() throws Exception {
+        flyway(null).migrate();
+        try (Connection c = connect()) {
+            UUID trip = insert(c, DRIVER, "PENDING", "2026-11-01", "2026-11-01");
+            try (PreparedStatement ps = c.prepareStatement(
+                    "SELECT service_mode, vehicle_type FROM travel_bookings WHERE id = ?")) {
+                ps.setObject(1, trip);
+                try (ResultSet rs = ps.executeQuery()) {
+                    rs.next();
+                    assertEquals("TRIP", rs.getString(1));
+                    assertEquals("CAR", rs.getString(2));
+                }
+            }
+            try (ResultSet rs = c.createStatement().executeQuery("SELECT count(*) FROM city_fares")) {
+                rs.next();
+                assertEquals(3, rs.getInt(1), "bike, auto and car fares are seeded");
+            }
+            c.createStatement().executeUpdate("""
+                    INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
+                        first_login, email_verified, token_version, created_at, vehicle_type, serves_trip)
+                    VALUES ('Ravi', '9000000001', 'x', 'L-1', '111122223333', 'ROLE_DRIVER', 'ACTIVE',
+                        true, false, 0, now(), 'AUTO', false)
+                    """);
+            SQLException ex = assertThrows(SQLException.class, () -> c.createStatement().executeUpdate(
+                    "UPDATE drivers SET serves_trip = true WHERE mobile = '9000000001'"));
+            assertEquals("23514", ex.getSQLState(), "check_violation: trips need a car");
+        }
+    }
+
+    @Test
     @DisplayName("two bookings racing for the same driver: exactly one wins")
     void concurrentInsertsLetExactlyOneThrough() throws Exception {
         flyway(null).migrate();

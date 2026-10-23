@@ -1,15 +1,16 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import PlaceAutocomplete from '../../components/PlaceAutocomplete'
 import RouteMap from '../../components/RouteMap'
 import { useAuth } from '../../context/AuthContext'
-import { createBooking, getCurrentPricing } from '../../utils/api'
+import { createBooking, getCurrentPricing, getCityFareEstimate } from '../../utils/api'
 import { actionKey } from '../../utils/idempotency'
 import { MobileRequiredPanel, needsMobileNumber } from '../../components/MobileNumberGate'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty } from '../../components/dash/ui'
 import { inr, shortPlace } from '../../dash/metrics'
+import { VEHICLES, VEHICLE_ORDER, vehicleLabel, modeLabel } from '../../dash/vehicles'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 import RideSearchStatus from '../../components/RideSearchStatus'
 
@@ -30,6 +31,17 @@ const localToday = () => {
 
 const temples = ['Tirupati Balaji', 'Shirdi Sai Baba', 'Vaishno Devi', 'Kedarnath', 'Badrinath', 'Somnath', 'Rameshwaram', 'Kashi Vishwanath', 'Mahakaleshwar', 'Jagannath Puri']
 
+const MODES = [
+  { key: 'CITY', icon: 'bike', label: 'City ride', desc: 'Bike, auto or car, right now' },
+  { key: 'TRIP', icon: 'temple', label: 'Trip', desc: 'Temple, holiday or outstation, by car' },
+]
+
+const emptyForm = (mode = 'TRIP') => ({
+  mode, vehicleType: 'AUTO',
+  fromPlace: '', toPlace: '', fromLat: null, fromLon: null, toLat: null, toLon: null,
+  fromDate: '', toDate: '', travelMembers: 1, acType: 'AC', bookingType: 'DISTANCE_BASED', bookingHours: 2,
+})
+
 export default function NewBooking() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -38,24 +50,36 @@ export default function NewBooking() {
   // One key per booking attempt, reused if the request is retried, so it can only book once.
   const bookingKey = useRef(actionKey())
 
-  const [form, setForm] = useState({
-    // A link that names a date is a trip planned ahead; otherwise default to a ride now.
-    rideNow: !searchParams.get('date'),
+  const [form, setForm] = useState(() => ({
+    ...emptyForm(searchParams.get('mode') === 'city' ? 'CITY' : 'TRIP'),
     fromPlace: searchParams.get('from') || '', toPlace: searchParams.get('to') || '',
-    fromLat: null, fromLon: null, toLat: null, toLon: null,
-    fromDate: searchParams.get('date') || '', toDate: '', travelMembers: Number(searchParams.get('members')) || 1, acType: 'AC',
-    bookingType: 'DISTANCE_BASED', bookingHours: 2
-  })
+    fromDate: searchParams.get('date') || '', travelMembers: Number(searchParams.get('members')) || 1,
+  }))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(null)
   const [pricing, setPricing] = useState({ pricePerKm: 10, pricePerHour: 150 })
+  const [estimate, setEstimate] = useState({ loading: false, data: null, failed: false })
 
-  React.useEffect(() => {
+  const city = form.mode === 'CITY'
+
+  useEffect(() => {
     getCurrentPricing().then(res => {
       if (res.data) setPricing(res.data)
     }).catch(() => {})
   }, [])
+
+  // City fares for bike, auto and car, from the real road route, once both places are picked.
+  useEffect(() => {
+    if (!city || !form.fromLat || !form.toLat) return
+    let stale = false
+    setEstimate((e) => ({ ...e, loading: true, failed: false }))
+    getCityFareEstimate(form)
+      .then((r) => { if (!stale) setEstimate({ loading: false, data: r.data, failed: false }) })
+      .catch(() => { if (!stale) setEstimate({ loading: false, data: null, failed: true }) })
+    return () => { stale = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new route needs new fares
+  }, [city, form.fromLat, form.fromLon, form.toLat, form.toLon])
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
@@ -67,23 +91,37 @@ export default function NewBooking() {
     setForm(p => ({ ...p, toPlace: name, toLat: lat, toLon: lon }))
   }
 
+  const fareFor = (type) => estimate.data?.options?.find((o) => o.vehicleType === type)
+  const tooManyFor = (type) => Number(form.travelMembers) > (VEHICLES[type]?.maxPassengers ?? 1)
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.fromLat || !form.toLat) {
       setError('Please select both locations from the dropdown suggestions for accurate distance calculation.')
       return
     }
-    if (!form.rideNow && (!form.fromDate || !form.toDate)) {
-      setError('Please pick both a start date and an end date.')
-      return
-    }
-    if (!form.rideNow && new Date(form.toDate) < new Date(form.fromDate)) {
-      setError('End date cannot be before the start date.')
-      return
-    }
-    if (form.bookingType === 'HOUR_BASED' && (!form.bookingHours || Number(form.bookingHours) < 1)) {
-      setError('Please enter a valid number of hours for an hour-based booking.')
-      return
+    if (city) {
+      if (tooManyFor(form.vehicleType)) {
+        setError(`A ${vehicleLabel(form.vehicleType).toLowerCase()} can't take ${form.travelMembers} passengers. Choose a bigger vehicle.`)
+        return
+      }
+      if (estimate.data && !estimate.data.withinCity) {
+        setError(`City rides go up to ${estimate.data.maxKm} km. Book this one as a Trip instead.`)
+        return
+      }
+    } else {
+      if (!form.fromDate || !form.toDate) {
+        setError('Please pick both a start date and an end date.')
+        return
+      }
+      if (new Date(form.toDate) < new Date(form.fromDate)) {
+        setError('End date cannot be before the start date.')
+        return
+      }
+      if (form.bookingType === 'HOUR_BASED' && (!form.bookingHours || Number(form.bookingHours) < 1)) {
+        setError('Please enter a valid number of hours for an hour-based booking.')
+        return
+      }
     }
     setLoading(true)
     setError('')
@@ -97,20 +135,21 @@ export default function NewBooking() {
         fromLon: form.fromLon,
         toLat: form.toLat,
         toLon: form.toLon,
-        // Ride Now: the server sets both dates to today in India; these only satisfy the form contract.
-        fromDate: form.rideNow ? localToday() : form.fromDate,
-        toDate: form.rideNow ? localToday() : form.toDate,
-        rideNow: form.rideNow,
+        serviceMode: form.mode,
+        vehicleType: city ? form.vehicleType : 'CAR',
+        // A City ride is for today in India, set by the server; these only satisfy the form contract.
+        fromDate: city ? localToday() : form.fromDate,
+        toDate: city ? localToday() : form.toDate,
         travelMembers: Number(form.travelMembers),
-        acType: form.acType,
-        bookingType: form.bookingType,
-        bookingHours: form.bookingType === 'HOUR_BASED' ? Number(form.bookingHours) : null,
+        acType: city ? 'NON_AC' : form.acType,
+        bookingType: city ? 'DISTANCE_BASED' : form.bookingType,
+        bookingHours: !city && form.bookingType === 'HOUR_BASED' ? Number(form.bookingHours) : null,
       }, bookingKey.current.get())
       // Done: the next booking is a new action and needs its own key.
       bookingKey.current.reset()
       setSuccess(res.data)
-      // A ride now gets its own live "finding your driver" panel; the celebration is for planned trips.
-      if (res.data?.dispatchMode === 'RIDE_NOW') return
+      // A City ride gets its own live "finding your driver" panel; the celebration is for planned trips.
+      if (res.data?.serviceMode === 'CITY') return
       celebrate({
         title: 'Trip booked',
         message: `${shortPlace(res.data?.fromPlace || form.fromPlace)} → ${shortPlace(res.data?.toPlace || form.toPlace)}. A verified driver will be assigned shortly.`,
@@ -125,28 +164,28 @@ export default function NewBooking() {
   }
 
   if (success) {
-    const rideNow = success.dispatchMode === 'RIDE_NOW'
+    const cityRide = success.serviceMode === 'CITY'
     return (
       <DashboardLayout navItems={navItems} role="ROLE_USER">
-        <PageHead title={rideNow ? 'Ride booked' : 'Booking Confirmed!'} sub={rideNow ? 'Matching you with the nearest driver' : 'We are matching you with a driver now'}>
+        <PageHead title={cityRide ? 'Ride booked' : 'Booking Confirmed!'} sub={cityRide ? 'Matching you with the nearest driver' : 'We are matching you with a driver now'}>
           <button type="button" onClick={() => navigate('/user/bookings')} className="pc-btn"><Icon name="calendar" />View Bookings</button>
-          <button type="button" onClick={() => { setSuccess(null); setForm({ rideNow: true, fromPlace:'', toPlace:'', fromLat:null, fromLon:null, toLat:null, toLon:null, fromDate:'', toDate:'', travelMembers:1, acType:'AC', bookingType:'DISTANCE_BASED', bookingHours:2 }) }}
+          <button type="button" onClick={() => { setSuccess(null); setForm(emptyForm(success.serviceMode)) }}
             className="pc-btn pc-btn-ghost"><Icon name="plus" />New Booking</button>
         </PageHead>
         <div className="pc-grid">
-          {rideNow && (
+          {cityRide && (
             <Panel span={12} title="Your driver">
               <RideSearchStatus userId={user.userId} booking={success} />
             </Panel>
           )}
-          <Panel span={7} title="Your trip" meta={<StatusPill status={success.status || 'PENDING'} />}>
+          <Panel span={7} title={cityRide ? 'Your ride' : 'Your trip'} meta={<StatusPill status={success.status || 'PENDING'} />}>
             <div className="pc-route">
               <i /><div style={{ overflowWrap: 'anywhere' }}>{success.fromPlace}<small>From</small></div>
               <span className="pc-route-ln" /><span />
               <i className="is-end" /><div style={{ overflowWrap: 'anywhere' }}>{success.toPlace}<small>To</small></div>
             </div>
             <div className="pc-rows" style={{ marginTop: 14 }}>
-              {[['Type', success.bookingType === 'HOUR_BASED' ? `Hour Based (${success.bookingHours}h)` : 'Distance Based'], ['Distance', `${success.distanceKm?.toFixed(1)} km`]].map(([k, v]) => (
+              {[['Type', cityRide ? modeLabel(success) : success.bookingType === 'HOUR_BASED' ? `Trip · Hour Based (${success.bookingHours}h)` : 'Trip · Distance Based'], ['Distance', `${success.distanceKm?.toFixed(1)} km`]].map(([k, v]) => (
                 <div key={k} className="pc-row" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
                   <span style={{ color: 'var(--pc-ink-2)' }}>{k}</span>
                   <b>{v}</b>
@@ -156,7 +195,9 @@ export default function NewBooking() {
           </Panel>
           <Panel span={5} title="Amount">
             <div className="pc-figure" style={{ fontSize: 40, color: 'var(--pc-brand-deep)' }}>{inr(success.totalAmount)}</div>
-            <p style={{ margin: '10px 0 0', fontSize: 13.5, color: 'var(--pc-ink-2)' }}>You can pay once a driver confirms the trip.</p>
+            <p style={{ margin: '10px 0 0', fontSize: 13.5, color: 'var(--pc-ink-2)' }}>
+              {cityRide ? 'Pay your driver at the end of the ride.' : 'You can pay once a driver confirms the trip.'}
+            </p>
           </Panel>
         </div>
       </DashboardLayout>
@@ -187,15 +228,31 @@ export default function NewBooking() {
   const lbl = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
   const picked = <div style={{ fontSize: 12, color: 'var(--pc-good)', marginTop: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={13} />Location selected</div>
   const hourTotal = form.bookingHours * pricing.pricePerHour
+  const row = { gridTemplateColumns: 'minmax(0,1fr) auto' }
+  const chosenFare = fareFor(form.vehicleType)
 
   return (
     <DashboardLayout navItems={navItems} role="ROLE_USER">
-      <PageHead title="Book a Trip" sub="Fill in the details to book your journey" />
+      <PageHead title={city ? 'Book a City Ride' : 'Book a Trip'} sub={city ? 'The nearest driver comes to you' : 'Fill in the details to book your journey'} />
 
       {error && <div className="alert-error" role="alert" style={{ marginBottom: 16, padding: '12px 16px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}><Icon name="alert" size={16} />{error}</div>}
 
       <form onSubmit={handleSubmit} className="pc-grid">
-        <Panel span={7} title="Trip details">
+        <Panel span={7} title={city ? 'Ride details' : 'Trip details'}>
+          {/* City or Trip */}
+          <div role="group" aria-label="What do you need?" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 22 }}>
+            {MODES.map(m => (
+              <button key={m.key} type="button" aria-pressed={form.mode === m.key} onClick={() => { set('mode', m.key); setError('') }}
+                style={{ ...choice(form.mode === m.key), alignItems: 'flex-start', padding: 16 }}>
+                <Icon name={m.icon} size={20} />
+                <span>
+                  <span style={{ display: 'block', fontSize: 15, marginBottom: 2 }}>{m.label}</span>
+                  <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--pc-muted)' }}>{m.desc}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+
           {/* Route Details */}
           <h3 style={subHead}><Icon name="pin" size={15} />Route</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -204,7 +261,7 @@ export default function NewBooking() {
               <PlaceAutocomplete
                 value={form.fromPlace}
                 onChange={handleFromChange}
-                placeholder="Search your city, town or area..."
+                placeholder={city ? 'Where should the driver pick you up?' : 'Search your city, town or area...'}
                 required
               />
               {form.fromLat && picked}
@@ -214,94 +271,131 @@ export default function NewBooking() {
               <PlaceAutocomplete
                 value={form.toPlace}
                 onChange={handleToChange}
-                placeholder="Search temple, city or destination..."
+                placeholder={city ? 'Where are you going?' : 'Search temple, city or destination...'}
                 required
               />
               {form.toLat && picked}
-              <div className="pc-chips" style={{ marginTop: 10 }}>
-                {temples.slice(0, 5).map(t => (
-                  <button key={t} type="button" aria-pressed={form.toPlace === t} onClick={() => handleToChange({ name: t, lat: null, lon: null })}
-                    className={`pc-btn pc-btn-sm ${form.toPlace === t ? '' : 'pc-btn-ghost'}`}>
-                    <Icon name="temple" size={14} />{t}
-                  </button>
-                ))}
-              </div>
+              {!city && (
+                <div className="pc-chips" style={{ marginTop: 10 }}>
+                  {temples.slice(0, 5).map(t => (
+                    <button key={t} type="button" aria-pressed={form.toPlace === t} onClick={() => handleToChange({ name: t, lat: null, lon: null })}
+                      className={`pc-btn pc-btn-sm ${form.toPlace === t ? '' : 'pc-btn-ghost'}`}>
+                      <Icon name="temple" size={14} />{t}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Booking Type */}
-          <h3 style={{ ...subHead, marginTop: 24 }}><Icon name="clock" size={15} />Booking type</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 14 }}>
-            {[{ key: 'DISTANCE_BASED', icon: 'route', label: 'Distance Based', desc: 'Pay per kilometer' }, { key: 'HOUR_BASED', icon: 'clock', label: 'Hour Based', desc: 'Pay per hour' }].map(type => (
-              <button key={type.key} type="button" aria-pressed={form.bookingType === type.key} onClick={() => set('bookingType', type.key)}
-                style={{ ...choice(form.bookingType === type.key), alignItems: 'flex-start', padding: 16 }}>
-                <Icon name={type.icon} size={18} />
-                <span>
-                  <span style={{ display: 'block', fontSize: 14, marginBottom: 2 }}>{type.label}</span>
-                  <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--pc-muted)' }}>{type.desc}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-          {form.bookingType === 'HOUR_BASED' && (
-            <div style={{ background: 'var(--pc-wash)', borderRadius: 14, padding: 18 }}>
-              <label style={{ ...lbl, marginBottom: 10 }}>Select Hours *</label>
+          {city ? (
+            <>
+              {/* Passengers, then the vehicle with its fare */}
+              <h3 style={{ ...subHead, marginTop: 24 }}><Icon name="users" size={15} />Passengers</h3>
               <div className="pc-chips">
-                {[1, 2, 3, 4, 5, 6, 8, 10, 12, 24].map(h => (
-                  <button key={h} type="button" aria-pressed={form.bookingHours === h} onClick={() => set('bookingHours', h)}
-                    className={`pc-btn pc-btn-sm ${form.bookingHours === h ? '' : 'pc-btn-ghost'}`} style={{ minWidth: 52 }}>
-                    {h}h
+                {[1, 2, 3, 4, 5, 6, 7].map(n => (
+                  <button key={n} type="button" aria-pressed={Number(form.travelMembers) === n} onClick={() => set('travelMembers', n)}
+                    className={`pc-btn pc-btn-sm ${Number(form.travelMembers) === n ? '' : 'pc-btn-ghost'}`} style={{ minWidth: 44 }}>
+                    {n}
                   </button>
                 ))}
               </div>
-            </div>
-          )}
 
-          {/* Travel Details */}
-          <h3 style={{ ...subHead, marginTop: 24 }}><Icon name="calendar" size={15} />Travel details</h3>
-          <div role="group" aria-label="When" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 14 }}>
-            {[{ now: true, icon: 'car', label: 'Ride now', desc: 'Nearest driver comes to you' }, { now: false, icon: 'calendar', label: 'Schedule', desc: 'Pick your travel dates' }].map(opt => (
-              <button key={opt.label} type="button" aria-pressed={form.rideNow === opt.now} onClick={() => set('rideNow', opt.now)}
-                style={{ ...choice(form.rideNow === opt.now), alignItems: 'flex-start', padding: 16 }}>
-                <Icon name={opt.icon} size={18} />
-                <span>
-                  <span style={{ display: 'block', fontSize: 14, marginBottom: 2 }}>{opt.label}</span>
-                  <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--pc-muted)' }}>{opt.desc}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-          {!form.rideNow && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 14 }}>
-            <div>
-              <label style={lbl}>From Date *</label>
-              <input type="date" className="input-field" value={form.fromDate} min={new Date().toISOString().split('T')[0]} onChange={e => set('fromDate', e.target.value)} required style={{ width: '100%', padding: '10px 14px', outline: 'none' }} />
-            </div>
-            <div>
-              <label style={lbl}>To Date *</label>
-              <input type="date" className="input-field" value={form.toDate} min={form.fromDate || new Date().toISOString().split('T')[0]} onChange={e => set('toDate', e.target.value)} required style={{ width: '100%', padding: '10px 14px', outline: 'none' }} />
-            </div>
-          </div>
-          )}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-            <div>
-              <label style={lbl}>Travel Members *</label>
-              <select className="input-field" value={form.travelMembers} onChange={e => set('travelMembers', e.target.value)} style={{ width: '100%', padding: '10px 14px', outline: 'none' }}>
-                {Array.from({ length: 20 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n} Person{n > 1 ? 's' : ''}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={lbl}>Vehicle Type *</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                {['AC', 'NON_AC'].map(type => (
-                  <button key={type} type="button" aria-pressed={form.acType === type} onClick={() => set('acType', type)}
-                    style={{ ...choice(form.acType === type), justifyContent: 'center', padding: 11 }}>
-                    <Icon name="car" size={16} />{type === 'AC' ? 'AC' : 'Non-AC'}
+              <h3 style={{ ...subHead, marginTop: 24 }}><Icon name="car" size={15} />Vehicle</h3>
+              <div role="radiogroup" aria-label="Vehicle" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+                {VEHICLE_ORDER.map(type => {
+                  const v = VEHICLES[type]
+                  const fare = fareFor(type)
+                  const full = tooManyFor(type)
+                  const on = form.vehicleType === type
+                  return (
+                    <button key={type} type="button" role="radio" aria-checked={on} disabled={full}
+                      onClick={() => set('vehicleType', type)}
+                      style={{ ...choice(on), flexDirection: 'column', alignItems: 'flex-start', gap: 6, padding: 16, opacity: full ? 0.5 : 1, cursor: full ? 'not-allowed' : 'pointer' }}>
+                      <Icon name={v.icon} size={26} />
+                      <span style={{ fontSize: 15 }}>{v.label}</span>
+                      <span className="pc-figure" style={{ fontSize: 20 }}>
+                        {fare ? inr(fare.fare) : estimate.loading ? '…' : '—'}
+                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--pc-muted)' }}>{full ? 'Too many passengers' : v.blurb}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {!form.fromLat || !form.toLat ? (
+                <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--pc-muted)' }}>Pick both places to see the fares.</p>
+              ) : estimate.failed ? (
+                <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--pc-muted)' }}>Fares could not be worked out right now. You will see the fare when you book.</p>
+              ) : estimate.data && !estimate.data.withinCity ? (
+                <p role="alert" style={{ margin: '10px 0 0', fontSize: 13, fontWeight: 700, color: 'var(--pc-warn)' }}>
+                  This route is {estimate.data.distanceKm} km. City rides go up to {estimate.data.maxKm} km —{' '}
+                  <button type="button" onClick={() => set('mode', 'TRIP')} style={{ background: 'none', border: 0, padding: 0, color: 'var(--pc-brand-deep)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>book it as a Trip</button>.
+                </p>
+              ) : null}
+            </>
+          ) : (
+            <>
+              {/* Booking Type */}
+              <h3 style={{ ...subHead, marginTop: 24 }}><Icon name="clock" size={15} />Booking type</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 14 }}>
+                {[{ key: 'DISTANCE_BASED', icon: 'route', label: 'Distance Based', desc: 'Pay per kilometer' }, { key: 'HOUR_BASED', icon: 'clock', label: 'Hour Based', desc: 'Pay per hour' }].map(type => (
+                  <button key={type.key} type="button" aria-pressed={form.bookingType === type.key} onClick={() => set('bookingType', type.key)}
+                    style={{ ...choice(form.bookingType === type.key), alignItems: 'flex-start', padding: 16 }}>
+                    <Icon name={type.icon} size={18} />
+                    <span>
+                      <span style={{ display: 'block', fontSize: 14, marginBottom: 2 }}>{type.label}</span>
+                      <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--pc-muted)' }}>{type.desc}</span>
+                    </span>
                   </button>
                 ))}
               </div>
-            </div>
-          </div>
+              {form.bookingType === 'HOUR_BASED' && (
+                <div style={{ background: 'var(--pc-wash)', borderRadius: 14, padding: 18 }}>
+                  <label style={{ ...lbl, marginBottom: 10 }}>Select Hours *</label>
+                  <div className="pc-chips">
+                    {[1, 2, 3, 4, 5, 6, 8, 10, 12, 24].map(h => (
+                      <button key={h} type="button" aria-pressed={form.bookingHours === h} onClick={() => set('bookingHours', h)}
+                        className={`pc-btn pc-btn-sm ${form.bookingHours === h ? '' : 'pc-btn-ghost'}`} style={{ minWidth: 52 }}>
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Travel Details */}
+              <h3 style={{ ...subHead, marginTop: 24 }}><Icon name="calendar" size={15} />Travel details</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={lbl}>From Date *</label>
+                  <input type="date" className="input-field" value={form.fromDate} min={localToday()} onChange={e => set('fromDate', e.target.value)} required style={{ width: '100%', padding: '10px 14px', outline: 'none' }} />
+                </div>
+                <div>
+                  <label style={lbl}>To Date *</label>
+                  <input type="date" className="input-field" value={form.toDate} min={form.fromDate || localToday()} onChange={e => set('toDate', e.target.value)} required style={{ width: '100%', padding: '10px 14px', outline: 'none' }} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                <div>
+                  <label style={lbl}>Travel Members *</label>
+                  <select className="input-field" value={form.travelMembers} onChange={e => set('travelMembers', e.target.value)} style={{ width: '100%', padding: '10px 14px', outline: 'none' }}>
+                    {Array.from({ length: 20 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n} Person{n > 1 ? 's' : ''}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={lbl}>Car *</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {['AC', 'NON_AC'].map(type => (
+                      <button key={type} type="button" aria-pressed={form.acType === type} onClick={() => set('acType', type)}
+                        style={{ ...choice(form.acType === type), justifyContent: 'center', padding: 11 }}>
+                        <Icon name="car" size={16} />{type === 'AC' ? 'AC' : 'Non-AC'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </Panel>
 
         <div className="pc-span-5" style={{ display: 'grid', gap: 16, alignContent: 'start', minWidth: 0 }}>
@@ -319,37 +413,59 @@ export default function NewBooking() {
 
           <Panel title="Price summary">
             <div className="pc-rows">
-              <div className="pc-row" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
-                <span style={{ color: 'var(--pc-ink-2)' }}>Booking type</span>
-                <b>{form.bookingType === 'HOUR_BASED' ? 'Hour Based' : 'Distance Based'}</b>
-              </div>
-              {form.bookingType === 'HOUR_BASED' ? (
+              {city ? (
                 <>
-                  <div className="pc-row" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
-                    <span style={{ color: 'var(--pc-ink-2)' }}>Rate: {inr(pricing.pricePerHour)}/hour</span>
-                    <b>Duration: {form.bookingHours} hour{form.bookingHours > 1 ? 's' : ''}</b>
+                  <div className="pc-row" style={row}>
+                    <span style={{ color: 'var(--pc-ink-2)' }}>Ride</span>
+                    <b>{vehicleLabel(form.vehicleType)} · {form.travelMembers} passenger{Number(form.travelMembers) === 1 ? '' : 's'}</b>
                   </div>
-                  <div className="pc-row" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
-                    <span style={{ color: 'var(--pc-ink-2)' }}>Estimated total</span>
-                    <span className="pc-figure" style={{ fontSize: 26, color: 'var(--pc-brand-deep)' }}>{inr(hourTotal)}</span>
+                  {estimate.data && (
+                    <div className="pc-row" style={row}>
+                      <span style={{ color: 'var(--pc-ink-2)' }}>Road distance · time</span>
+                      <b>{estimate.data.distanceKm} km · ~{estimate.data.minutes} min</b>
+                    </div>
+                  )}
+                  <div className="pc-row" style={row}>
+                    <span style={{ color: 'var(--pc-ink-2)' }}>Fare</span>
+                    <span className="pc-figure" style={{ fontSize: 26, color: 'var(--pc-brand-deep)' }}>{chosenFare ? inr(chosenFare.fare) : '—'}</span>
                   </div>
                 </>
               ) : (
-                <div className="pc-row" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
-                  <span style={{ color: 'var(--pc-ink-2)' }}>Rate</span>
-                  <b>{inr(pricing.pricePerKm)}/km</b>
-                </div>
+                <>
+                  <div className="pc-row" style={row}>
+                    <span style={{ color: 'var(--pc-ink-2)' }}>Booking type</span>
+                    <b>{form.bookingType === 'HOUR_BASED' ? 'Hour Based' : 'Distance Based'}</b>
+                  </div>
+                  {form.bookingType === 'HOUR_BASED' ? (
+                    <>
+                      <div className="pc-row" style={row}>
+                        <span style={{ color: 'var(--pc-ink-2)' }}>Rate: {inr(pricing.pricePerHour)}/hour</span>
+                        <b>Duration: {form.bookingHours} hour{form.bookingHours > 1 ? 's' : ''}</b>
+                      </div>
+                      <div className="pc-row" style={row}>
+                        <span style={{ color: 'var(--pc-ink-2)' }}>Estimated total</span>
+                        <span className="pc-figure" style={{ fontSize: 26, color: 'var(--pc-brand-deep)' }}>{inr(hourTotal)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="pc-row" style={row}>
+                      <span style={{ color: 'var(--pc-ink-2)' }}>Rate</span>
+                      <b>{inr(pricing.pricePerKm)}/km</b>
+                    </div>
+                  )}
+                  <div className="pc-row" style={row}>
+                    <span style={{ color: 'var(--pc-ink-2)' }}>Travellers · car</span>
+                    <b>{form.travelMembers} · {form.acType === 'AC' ? 'AC' : 'Non-AC'}</b>
+                  </div>
+                </>
               )}
-              <div className="pc-row" style={{ gridTemplateColumns: 'minmax(0,1fr) auto' }}>
-                <span style={{ color: 'var(--pc-ink-2)' }}>Travellers · vehicle</span>
-                <b>{form.travelMembers} · {form.acType === 'AC' ? 'AC' : 'Non-AC'}</b>
-              </div>
             </div>
-            {form.bookingType !== 'HOUR_BASED' && (
+            {(city || form.bookingType !== 'HOUR_BASED') && (
               <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--pc-muted)' }}>The final fare is worked out from the road distance when you confirm.</p>
             )}
-            <button type="submit" disabled={loading} className="pc-btn" style={{ width: '100%', marginTop: 16, minHeight: 48, fontSize: 15 }}>
-              {loading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Calculating route & price...</> : <><Icon name="check" />{form.rideNow ? 'Book ride now' : 'Confirm Booking'}</>}
+            <button type="submit" disabled={loading || (city && tooManyFor(form.vehicleType))} className="pc-btn" style={{ width: '100%', marginTop: 16, minHeight: 48, fontSize: 15 }}>
+              {loading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Calculating route & price...</>
+                : <><Icon name={city ? VEHICLES[form.vehicleType]?.icon : 'check'} />{city ? `Book ${vehicleLabel(form.vehicleType).toLowerCase()} now` : 'Confirm Booking'}</>}
             </button>
           </Panel>
         </div>

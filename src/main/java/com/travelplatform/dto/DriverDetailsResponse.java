@@ -30,4 +30,23 @@ public class DriverDetailsResponse {
      */
     private boolean telegramLinked;
     private java.time.LocalDateTime createdAt;
+    private String vehicleType;
+    private String vehicleNumber;
+    private String vehicleModel;
+    private Boolean vehicleAc;
+    private Integer vehicleSeats;
+    private Boolean servesCity;
+    private Boolean servesTrip;
+
+    /** Copies the vehicle and City/Trip switches; shared by every mapper that shows a driver. */
+    public DriverDetailsResponse withVehicle(com.travelplatform.entity.Driver driver) {
+        this.vehicleType = driver.getVehicleType() == null ? null : driver.getVehicleType().name();
+        this.vehicleNumber = driver.getVehicleNumber();
+        this.vehicleModel = driver.getVehicleModel();
+        this.vehicleAc = driver.isVehicleAc();
+        this.vehicleSeats = driver.getVehicleSeats();
+        this.servesCity = driver.isServesCity();
+        this.servesTrip = driver.isServesTrip();
+        return this;
+    }
 }

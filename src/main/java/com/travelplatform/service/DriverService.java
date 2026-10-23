@@ -75,6 +75,20 @@ public class DriverService {
         }
     }
 
+    /** The driver's own City rides / Trips switches. Bike and auto drivers cannot take trips. */
+    @Transactional
+    @org.springframework.cache.annotation.Caching(evict = {
+            @org.springframework.cache.annotation.CacheEvict(value = "allDrivers", allEntries = true),
+            @org.springframework.cache.annotation.CacheEvict(value = "driverById", key = "#driverId")
+    })
+    public DriverDetailsResponse updateModes(Long driverId, Boolean servesCity, Boolean servesTrip) {
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new RuntimeException("Driver not found"));
+        DriverVehicles.setModes(driver, servesCity, servesTrip);
+        driverRepository.save(driver);
+        return getDriverProfile(driverId);
+    }
+
     public DriverDetailsResponse getDriverProfile(Long driverId) {
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
@@ -93,7 +107,7 @@ public class DriverService {
         d.setEmailVerified(driver.isEmailVerified());
         d.setFirstLogin(driver.isFirstLogin());
         d.setCreatedAt(driver.getCreatedAt());
-        return d;
+        return d.withVehicle(driver);
     }
 
     public List<TravelBookingResponse> getAssignedBookings(Long driverId) {
@@ -205,6 +219,7 @@ public class DriverService {
         Driver replacement = driverRepository
                 .findAvailableDriversExcluding(booking.getFromDate(), booking.getToDate(), declined)
                 .stream()
+                .filter(d -> UserService.suitsAc(d, booking.getAcType()))
                 .findFirst()
                 .orElse(null);
 
@@ -328,7 +343,7 @@ public class DriverService {
             driverDetails.setMobile(driver.getMobile());
             driverDetails.setPhoto(driver.getPhoto());
             driverDetails.setLicenseNumber(driver.getLicenseNumber());
-            response.setDriver(driverDetails);
+            response.setDriver(driverDetails.withVehicle(driver));
         }
 
         return response.withDispatch(booking);

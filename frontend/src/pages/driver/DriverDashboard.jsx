@@ -4,7 +4,8 @@ import toast from 'react-hot-toast'
 import DashboardLayout from '../../components/DashboardLayout'
 import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
-import { getDriverBookings, getDriverProfile, toggleDriverAvailability, driverBookingAction, invalidateCache } from '../../utils/api'
+import { getDriverBookings, getDriverProfile, toggleDriverAvailability, driverBookingAction, invalidateCache, updateDriverModes } from '../../utils/api'
+import { vehicleIcon, vehicleLabel, modeLabel } from '../../dash/vehicles'
 import { DRIVER_STATUS_EVENT, DRIVER_TRIPS_EVENT } from '../../hooks/useDriverDispatch'
 import Icon from '../../components/dash/Icon'
 import { Panel, PanelLink, PageHead, StatusPill, Empty, Skeleton, ErrorNote } from '../../components/dash/ui'
@@ -37,6 +38,23 @@ export default function DriverDashboard() {
   const [bookings, setBookings] = useState([])
   const [state, setState] = useState({ loading: true, ok: true })
   const [status, setStatus] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [savingMode, setSavingMode] = useState(null)
+
+  // City rides / Trips: which work reaches this driver. Bike and auto drivers only see City rides.
+  const toggleMode = async (key) => {
+    if (!profile || savingMode) return
+    setSavingMode(key)
+    try {
+      const r = await updateDriverModes(user.userId, { [key]: !profile[key] })
+      setProfile(r.data)
+      const on = r.data?.[key]
+      toast.success(key === 'servesCity'
+        ? (on ? 'City rides on. Nearby ride requests can reach you.' : 'City rides off.')
+        : (on ? 'Trips on. Date bookings can be assigned to you.' : 'Trips off.'))
+    } catch { /* surfaced by the api toast */ }
+    setSavingMode(null)
+  }
   const [toggling, setToggling] = useState(false)
   const [acting, setActing] = useState(null)
 
@@ -55,7 +73,7 @@ export default function DriverDashboard() {
     return () => window.removeEventListener(DRIVER_TRIPS_EVENT, onTrips)
   }, [load])
   useEffect(() => {
-    getDriverProfile(user.userId).then((r) => setStatus(r.data?.status || 'ACTIVE')).catch(() => setStatus('ACTIVE'))
+    getDriverProfile(user.userId).then((r) => { setStatus(r.data?.status || 'ACTIVE'); setProfile(r.data) }).catch(() => setStatus('ACTIVE'))
   }, [user.userId])
 
   const online = status === 'ACTIVE'
@@ -123,6 +141,27 @@ export default function DriverDashboard() {
           {online ? 'Online' : 'Offline'}
         </button>
       </PageHead>
+
+      {profile && (
+        <div className="pc-modebar" aria-label="Your vehicle and the work you take">
+          <span className="pc-modebar-vehicle">
+            <Icon name={vehicleIcon(profile.vehicleType)} size={20} />
+            <b>{vehicleLabel(profile.vehicleType)}</b>
+            {profile.vehicleNumber && <span>{profile.vehicleNumber}</span>}
+            {profile.vehicleType === 'CAR' && <span>{profile.vehicleSeats} seats · {profile.vehicleAc ? 'AC' : 'Non-AC'}</span>}
+          </span>
+          <button type="button" className="pc-switch" role="switch" aria-checked={!!profile.servesCity}
+            disabled={!!savingMode} onClick={() => toggleMode('servesCity')}>
+            <span className="pc-switch-track" />City rides
+          </button>
+          {profile.vehicleType === 'CAR' && (
+            <button type="button" className="pc-switch" role="switch" aria-checked={!!profile.servesTrip}
+              disabled={!!savingMode} onClick={() => toggleMode('servesTrip')}>
+              <span className="pc-switch-track" />Trips
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="pc-grid">
         <Panel span={7} title={m.next ? `${m.next.status === 'STARTED' ? 'Trip in progress' : 'Next trip'} · ${whenLabel(m.next)}` : 'Next trip'} meta={m.next && <StatusPill status={m.next.status} />}>
@@ -207,7 +246,7 @@ export default function DriverDashboard() {
                 <div key={b.bookingId} className="pc-row">
                   <div style={{ minWidth: 0 }}>
                     <div className="pc-row-title">{shortPlace(b.fromPlace)} → {shortPlace(b.toPlace)}</div>
-                    <small>{whenLabel(b)} · {b.travelMembers || 1} passenger{(b.travelMembers || 1) === 1 ? '' : 's'}{b.distanceKm ? ` · ${Math.round(b.distanceKm)} km` : ''}{b.acType ? ` · ${b.acType === 'AC' ? 'AC' : 'Non-AC'}` : ''}</small>
+                    <small>{modeLabel(b)} · {whenLabel(b)} · {b.travelMembers || 1} passenger{(b.travelMembers || 1) === 1 ? '' : 's'}{b.distanceKm ? ` · ${Math.round(b.distanceKm)} km` : ''}{b.serviceMode !== 'CITY' && b.acType ? ` · ${b.acType === 'AC' ? 'AC' : 'Non-AC'}` : ''}</small>
                   </div>
                   <b>{inr(b.totalAmount)}</b>
                   <div className="pc-chips">

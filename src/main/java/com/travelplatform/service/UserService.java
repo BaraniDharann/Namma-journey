@@ -7,6 +7,7 @@ import com.travelplatform.dto.TravelBookingRequest;
 import com.travelplatform.dto.TravelBookingResponse;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.entity.TravelBooking;
+import com.travelplatform.entity.VehicleType;
 import com.travelplatform.entity.TripDriverPhoto;
 import com.travelplatform.repository.DriverRepository;
 import com.travelplatform.repository.TravelBookingRepository;
@@ -62,9 +63,12 @@ public class UserService {
     @org.springframework.beans.factory.annotation.Autowired
     private TripRules tripRules;
 
-    // Ride Now dispatch. Null only in unit tests that build UserService by hand.
+    // City rides: dispatch and fares. Null only in unit tests that build UserService by hand.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DispatchService dispatchService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CityFareService cityFareService;
     
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -103,12 +107,26 @@ public class UserService {
             throw new IllegalArgumentException(MOBILE_REQUIRED_MESSAGE);
         }
 
-        // Ride Now is a trip for today, whatever dates the form still held.
-        boolean rideNow = Boolean.TRUE.equals(request.getRideNow()) && dispatchService != null;
-        if (rideNow) {
+        // A City ride is for right now and distance-priced, whatever the form still held.
+        boolean city = "CITY".equalsIgnoreCase(request.getServiceMode());
+        if (city) {
+            if (dispatchService == null || cityFareService == null) {
+                throw new IllegalStateException("City rides are not available");
+            }
+            VehicleType vehicle = VehicleType.parse(request.getVehicleType());
+            if (vehicle == null) {
+                throw new IllegalArgumentException("Choose a bike, auto or car for your city ride");
+            }
+            if (request.getTravelMembers() != null && request.getTravelMembers() > vehicle.maxPassengers()) {
+                throw new IllegalArgumentException("A " + vehicle.name().toLowerCase(java.util.Locale.ROOT)
+                        + " ride carries at most " + vehicle.maxPassengers() + " passenger"
+                        + (vehicle.maxPassengers() == 1 ? "" : "s") + ". Choose a bigger vehicle.");
+            }
             java.time.LocalDate today = dispatchService.now().toLocalDate();
             request.setFromDate(today);
             request.setToDate(today);
+            request.setBookingType(TravelBooking.BookingType.DISTANCE_BASED.name());
+            request.setBookingHours(null);
         }
 
         if (request.getFromDate() == null || request.getToDate() == null) {
@@ -139,7 +157,12 @@ public class UserService {
         // lost, and after MAX_DRIVER_ATTEMPTS save the booking unassigned so the owner can place
         // it - the traveller's booking never fails because of a clash they cannot see.
         List<Long> lostDrivers = new ArrayList<>();
-        if (rideNow) {
+        if (city) {
+            if (routeInfo.getDistanceKm() != null && routeInfo.getDistanceKm() > cityFareService.maxKm()) {
+                throw new IllegalArgumentException(String.format(java.util.Locale.ROOT,
+                        "City rides go up to %.0f km, and this one is %.0f km. Book it as a Trip instead.",
+                        cityFareService.maxKm(), routeInfo.getDistanceKm()));
+            }
             // Saved with nobody; DispatchService offers it to the nearest online driver once it commits.
             return saveWithDriver(userId, request, routeInfo, lostDrivers, false);
         }
@@ -169,7 +192,10 @@ public class UserService {
                         ? driverRepository.findAvailableDrivers(request.getFromDate(), request.getToDate())
                         : driverRepository.findAvailableDriversExcluding(
                                 request.getFromDate(), request.getToDate(), lostDrivers);
-                driver = candidates.isEmpty() ? null : candidates.get(0);
+                driver = candidates.stream()
+                        .filter(d -> suitsAc(d, request.getAcType()))
+                        .findFirst()
+                        .orElse(null);
             }
 
             TravelBooking savedBooking;
@@ -214,7 +240,13 @@ public class UserService {
         BigDecimal pricePerHourAtBooking = null;
         BigDecimal totalAmount;
 
-        if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
+        boolean city = "CITY".equalsIgnoreCase(request.getServiceMode());
+        VehicleType vehicle = city ? VehicleType.parse(request.getVehicleType()) : VehicleType.CAR;
+
+        if (city) {
+            totalAmount = cityFareService.fare(vehicle, routeInfo.getDistanceKm(),
+                    routeInfo.getTimeMinutes() == null ? 0 : routeInfo.getTimeMinutes());
+        } else if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
             bookingType = TravelBooking.BookingType.HOUR_BASED;
             bookingHours = request.getBookingHours();
             pricePerHourAtBooking = ownerService.getCurrentPricePerHour();
@@ -225,6 +257,8 @@ public class UserService {
         }
 
         TravelBooking booking = new TravelBooking();
+        booking.setServiceMode(city ? TravelBooking.ServiceMode.CITY : TravelBooking.ServiceMode.TRIP);
+        booking.setVehicleType(vehicle);
         booking.setUserId(userId);
         booking.setUserName(request.getUserName());
         booking.setUserPhone(request.getUserPhone());
@@ -249,12 +283,17 @@ public class UserService {
         booking.setBookingDate(LocalDateTime.now());
         booking.setDriverId(driver != null ? driver.getId() : null);
         booking.setStatus(TravelBooking.BookingStatus.PENDING);
-        if (Boolean.TRUE.equals(request.getRideNow()) && dispatchService != null) {
+        if (city) {
             booking.setDispatchMode(TravelBooking.DispatchMode.RIDE_NOW);
             booking.setDispatchState(TravelBooking.DispatchState.SEARCHING);
             booking.setDispatchStartedAt(dispatchService.now());
         }
         return booking;
+    }
+
+    /** An AC trip needs an AC car; a non-AC trip takes any car. */
+    static boolean suitsAc(Driver driver, String acType) {
+        return !"AC".equalsIgnoreCase(acType) || driver.isVehicleAc();
     }
 
     /** True when Postgres refused the insert because the driver already has an overlapping trip. */
@@ -338,6 +377,11 @@ public class UserService {
         // driver would be told ₹100 settles it while revenue reported ₹5000.
         if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
             throw new RuntimeException("Only a pending booking can be changed. Cancel it and book again instead.");
+        }
+        // A City ride is already being offered to drivers near the pickup; a new route or vehicle
+        // is a new ride.
+        if (booking.getServiceMode() == TravelBooking.ServiceMode.CITY) {
+            throw new RuntimeException("A city ride can't be changed. Cancel it and book again instead.");
         }
         if (paymentRepository.findByBookingId(bookingId).isPresent()) {
             throw new RuntimeException("A payment has been started for this booking, so it can no longer be changed.");
@@ -482,7 +526,7 @@ public class UserService {
             driverDetails.setMobile(driver.getMobile());
             driverDetails.setPhoto(driver.getPhoto());
             driverDetails.setLicenseNumber(driver.getLicenseNumber());
-            response.setDriver(driverDetails);
+            response.setDriver(driverDetails.withVehicle(driver));
         }
 
         return response.withDispatch(booking);

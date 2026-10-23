@@ -48,6 +48,8 @@ public class TravelBookingResponse {
     private Long offerSecondsLeft;
     private Double offerDistanceKm;
     private LocalDateTime tripEndedAt;
+    private String serviceMode;
+    private String vehicleType;
 
     /** Copies the Ride Now fields; shared by every service that maps a booking. */
     public TravelBookingResponse withDispatch(com.travelplatform.entity.TravelBooking booking) {
@@ -59,6 +61,8 @@ public class TravelBookingResponse {
                         LocalDateTime.now(java.time.ZoneId.of("Asia/Kolkata")), booking.getOfferExpiresAt()).getSeconds());
         this.offerDistanceKm = booking.getOfferDistanceKm();
         this.tripEndedAt = booking.getTripEndedAt();
+        this.serviceMode = booking.getServiceMode() == null ? null : booking.getServiceMode().name();
+        this.vehicleType = booking.getVehicleType() == null ? null : booking.getVehicleType().name();
         return this;
     }
 }

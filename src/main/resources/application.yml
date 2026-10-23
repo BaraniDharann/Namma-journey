@@ -125,6 +125,10 @@ app:
     search-timeout-seconds: ${DISPATCH_SEARCH_TIMEOUT_SECONDS:120}
     presence-ttl-seconds: ${DISPATCH_PRESENCE_TTL_SECONDS:60}
 
+  # City mode: the longest City ride by road. Anything further is booked as a Trip.
+  city:
+    max-km: ${CITY_MAX_KM:50}
+
   booking:
     # Open (pending/confirmed/started) bookings one passenger may hold at once, so a single account
     # cannot tie up the whole fleet with reservations (TripRules).

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { getDailyRevenue, getMonthlyRevenue, getMonthlyRevenueSeries, getYearlyRevenue, setPricing, setHourlyPricing, getCurrentPricing, getOwnerBookings, getOwnerDrivers } from '../../utils/api'
 import { useAuth } from '../../context/AuthContext'
+import CityFaresPanel from '../../components/owner/CityFaresPanel'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { AreaChart, BarChart, Donut } from '../../components/dash/charts'
@@ -408,7 +409,7 @@ export default function OwnerRevenue() {
         </Panel>
 
         {/* Pricing Config */}
-        <Panel span={4} title="Pricing Config">
+        <Panel span={4} title="Trip pricing">
           <div className="pc-rows">
             <div style={{ padding: '4px 0 14px' }}>
               <div style={{ fontSize: 12, color: 'var(--pc-muted)', fontWeight: 700, marginBottom: 4 }}>Current Price/km</div>
@@ -432,6 +433,8 @@ export default function OwnerRevenue() {
             </div>
           </div>
         </Panel>
+
+        <CityFaresPanel span={12} />
 
         {/* Full Report Table + Download */}
         <Panel span={12} pad={false} title="Complete Trip Report" meta={`${filteredBookings.length} trips found`}>

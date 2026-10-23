@@ -49,8 +49,15 @@ public class TravelBookingRequest {
 
     private String bookingType; // DISTANCE_BASED or HOUR_BASED
 
-    /** True for a ride wanted now: the dates are set to today and the nearest driver is offered it. */
-    private Boolean rideNow;
+    /**
+     * CITY: a ride now, offered to the nearest driver of {@link #vehicleType}; the dates become
+     * today. TRIP (the default): a trip for the given dates, by car.
+     */
+    @Pattern(regexp = "^(CITY|TRIP)?$", message = "Service mode must be CITY or TRIP")
+    private String serviceMode;
+
+    /** BIKE, AUTO or CAR. Required for a City ride; a Trip is always by car. */
+    private String vehicleType;
 
     @Min(value = 1, message = "Minimum 1 hour required")
     @Max(value = 24, message = "Maximum 24 hours allowed")

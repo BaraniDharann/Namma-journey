@@ -73,6 +73,23 @@ class OwnerServiceAssignNotifyTest {
     }
 
     @Test
+    @DisplayName("the owner cannot give a Trip to an auto, or a bike ride to a car")
+    void vehicleMustMatch() {
+        Driver auto = driver(91L);
+        auto.setVehicleType(com.travelplatform.entity.VehicleType.AUTO);
+        IllegalArgumentException ex = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.assignDriver(BOOKING_ID, 91L));
+        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("needs a car"));
+
+        booking.setServiceMode(TravelBooking.ServiceMode.CITY);
+        booking.setVehicleType(com.travelplatform.entity.VehicleType.BIKE);
+        driver(92L);
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.assignDriver(BOOKING_ID, 92L));
+        verify(notificationService, never()).notifyDriverAssigned(any(), any());
+    }
+
+    @Test
     @DisplayName("re-saving the same driver does not send a duplicate notification")
     void noDuplicateForSameDriver() {
         booking.setDriverId(88L);
