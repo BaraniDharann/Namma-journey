@@ -35,7 +35,7 @@ export default function EmailCodeScreen({ email, onVerified, onResend, onBack })
       setOtp('')
       setNotice('A new code has been sent to your email.')
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || 'Could not resend the code. Please try again.')
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || 'Could not resend the code. Please try again.')
     } finally {
       setResending(false)
     }

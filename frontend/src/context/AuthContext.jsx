@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { logoutEverywhere } from '../utils/api'
+import { clearVerificationCache } from '../components/driver/gateView'
 
 const AuthContext = createContext(null)
 
@@ -102,6 +103,7 @@ export function AuthProvider({ children }) {
     // Revoke on the server with the token captured now (it is cleared just below).
     // Fire-and-forget: a network error must never keep someone signed in on this device.
     logoutEverywhere(token).catch(() => {})
+    clearVerificationCache()
     setToken(null)
     setUser(null)
     safeStorage(() => localStorage.removeItem('nj_token'))

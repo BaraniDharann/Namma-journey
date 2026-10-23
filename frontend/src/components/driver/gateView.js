@@ -17,3 +17,11 @@ export const DOCUMENTS = [
   { key: 'aadhaarPhoto', label: 'Aadhaar card', icon: 'id' },
   { key: 'rcPhoto', label: 'Vehicle RC', icon: 'car' },
 ]
+
+// Each driver page renders its own DashboardLayout, so the gate remounts on every navigation.
+// Remembering the last status per driver lets an approved driver see the page at once while a
+// background check confirms it. Keyed by id, so another driver never inherits it.
+const lastVerification = new Map()
+export const getCachedVerification = (driverId) => lastVerification.get(String(driverId)) ?? null
+export const setCachedVerification = (driverId, v) => { lastVerification.set(String(driverId), v) }
+export const clearVerificationCache = () => lastVerification.clear()

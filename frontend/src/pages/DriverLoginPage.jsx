@@ -5,6 +5,7 @@ import { driverLogin, driverForgotPassword, driverVerifyOtp, driverRequestResetO
 import { offerToSaveLogin } from '../utils/rememberLogin'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
 import Icon from '../components/dash/Icon'
+import { assertCodeResent } from '../components/auth/codeResend'
 import EmailCodeScreen from '../components/auth/EmailCodeScreen'
 
 const OTP_VALIDITY_SECONDS = 5 * 60
@@ -152,7 +153,7 @@ export default function DriverLoginPage() {
 
   if (unverifiedEmail) {
     return (
-      <EmailCodeScreen email={unverifiedEmail} onResend={() => driverLogin(form)} onBack={() => setUnverifiedEmail('')}
+      <EmailCodeScreen email={unverifiedEmail} onResend={() => driverLogin(form).then(assertCodeResent)} onBack={() => setUnverifiedEmail('')}
         onVerified={(data) => { void offerToSaveLogin(form.mobile, form.password, data?.name); login(data); navigate('/driver/dashboard') }} />
     )
   }

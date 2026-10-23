@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import Icon from '../dash/Icon'
 import DocTile from './DocTile'
-import { gateView, DOCUMENTS } from './gateView'
+import { gateView, DOCUMENTS, getCachedVerification, setCachedVerification } from './gateView'
 import { getDriverVerification, resubmitDriverDocuments } from '../../utils/api'
 
 const POLL_REVIEW_MS = 30000 // waiting on the owner: notice approval without a manual refresh
@@ -12,7 +12,7 @@ const POLL_REVIEW_MS = 30000 // waiting on the owner: notice approval without a 
  * form when rejected. Approved drivers (every owner-created driver, too) pass straight through.
  */
 export default function ApplicationGate({ driverId, children }) {
-  const [verification, setVerification] = useState(null)
+  const [verification, setVerification] = useState(() => getCachedVerification(driverId))
   const [failed, setFailed] = useState(false)
   const [files, setFiles] = useState({})
   const [sending, setSending] = useState(false)
@@ -21,6 +21,7 @@ export default function ApplicationGate({ driverId, children }) {
   const check = useCallback(async () => {
     try {
       const { data } = await getDriverVerification(driverId)
+      setCachedVerification(driverId, data)
       setVerification(data)
       setFailed(false)
     } catch {
@@ -29,15 +30,17 @@ export default function ApplicationGate({ driverId, children }) {
     }
   }, [driverId])
 
+  const view = gateView(verification)
+
+  // Always confirm in the background, but once approved there is nothing left to watch for.
   useEffect(() => {
     if (!driverId) return undefined
     check()
+    if (view === 'app') return undefined
     const onFocus = () => check()
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [driverId, check])
-
-  const view = gateView(verification)
+  }, [driverId, check, view === 'app']) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (view !== 'review') return undefined
     const t = setInterval(check, POLL_REVIEW_MS)

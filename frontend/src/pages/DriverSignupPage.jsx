@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { driverSignup, driverLogin } from '../utils/api'
 import { offerToSaveLogin } from '../utils/rememberLogin'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
+import { assertCodeResent } from '../components/auth/codeResend'
 import EmailCodeScreen from '../components/auth/EmailCodeScreen'
 import VehicleFields, { DEFAULT_VEHICLE } from '../components/owner/VehicleFields'
 import DocTile from '../components/driver/DocTile'
@@ -75,7 +76,7 @@ export default function DriverSignupPage() {
   }
 
   // Signing in again is how the server re-sends the code to a driver whose email is unverified.
-  const resend = () => driverLogin({ mobile: about.mobile, password: about.password })
+  const resend = () => driverLogin({ mobile: about.mobile, password: about.password }).then(assertCodeResent)
 
   const verified = (data) => {
     void offerToSaveLogin(about.mobile, about.password, data?.name)
