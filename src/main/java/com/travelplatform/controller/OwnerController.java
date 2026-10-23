@@ -58,8 +58,11 @@ public class OwnerController {
     @PostMapping("/drivers/{id}/reject")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<DriverDetailsResponse> rejectDriver(
-            @PathVariable Long id, @RequestBody Map<String, String> body,
+            @PathVariable Long id, @RequestBody(required = false) Map<String, String> body,
             org.springframework.security.core.Authentication authentication) {
+        if (body == null) {
+            throw new IllegalArgumentException("Give a reason of 5 to 500 characters");
+        }
         return ResponseEntity.ok(driverVerificationService.reject(id, body.get("reason"), reviewerId(authentication)));
     }
 

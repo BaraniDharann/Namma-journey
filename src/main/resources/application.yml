@@ -114,6 +114,10 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost,http://localhost:5173,http://localhost:4173}
 
+  drivers:
+    # Self-signed-up drivers who never confirm their email are removed after this many hours.
+    unverified-ttl-hours: ${DRIVER_UNVERIFIED_TTL_HOURS:48}
+
   trips:
     # Days before its date a confirmed trip may be started. 0 = not before the trip date.
     early-start-days: ${TRIP_EARLY_START_DAYS:0}

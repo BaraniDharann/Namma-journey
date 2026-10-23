@@ -194,7 +194,10 @@ public class AuthController {
      * POST /api/auth/driver/signup/verify-email
      */
     @PostMapping("/driver/signup/verify-email")
-    public ResponseEntity<Map<String, Object>> driverSignupVerifyEmail(@RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> driverSignupVerifyEmail(@RequestBody(required = false) Map<String, String> body) {
+        if (body == null) {
+            throw new IllegalArgumentException("Email and code are required");
+        }
         return ResponseEntity.ok(driverSignupService.verifyEmail(body.get("email"), body.get("otp")));
     }
 }

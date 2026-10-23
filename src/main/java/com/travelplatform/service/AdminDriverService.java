@@ -46,7 +46,8 @@ public class AdminDriverService {
             com.travelplatform.dto.VehicleRequest vehicle) {
 
         // Checked before any file is written: a bad number plate should not leave orphaned uploads.
-        DriverVehicles.apply(new Driver(), vehicle);
+        Driver plateCheck = new Driver();
+        DriverVehicles.apply(plateCheck, vehicle);
 
         // Cheap uniqueness checks first so we don't waste disk on a request that will fail.
         if (driverRepository.existsByMobile(mobile)) {
@@ -61,17 +62,31 @@ public class AdminDriverService {
         if (driverRepository.existsByAadhaarNumber(aadhaarNumber)) {
             throw new IllegalArgumentException("Aadhaar number already registered");
         }
+        requirePlateFree(plateCheck.getVehicleNumber(), null);
 
         // File IO happens BEFORE the @Transactional block — disk hiccups must not roll back
         // a successful DB insert, and a DB rollback must not orphan written files.
-        String photoUrl = fileStorageService.storeFile(photo, "photo");
-        String licensePhotoUrl = fileStorageService.storeFile(licensePhoto, "license");
-        String aadhaarPhotoUrl = fileStorageService.storeFile(aadhaarPhoto, "aadhaar");
-
+        java.util.List<String> stored = new java.util.ArrayList<>();
         String generatedPassword = generatePassword();
-        Driver driver = persistDriver(
-                name, mobile, email, licenseNumber, aadhaarNumber,
-                photoUrl, licensePhotoUrl, aadhaarPhotoUrl, generatedPassword, vehicle);
+        Driver driver;
+        try {
+            String photoUrl = store(photo, "photo", stored);
+            String licensePhotoUrl = store(licensePhoto, "license", stored);
+            String aadhaarPhotoUrl = store(aadhaarPhoto, "aadhaar", stored);
+            driver = persistDriver(
+                    name, mobile, email, licenseNumber, aadhaarNumber,
+                    photoUrl, licensePhotoUrl, aadhaarPhotoUrl, generatedPassword, vehicle);
+        } catch (RuntimeException e) {
+            // Identity scans must not outlive a driver that was never saved.
+            for (String path : stored) {
+                try {
+                    fileStorageService.delete(path);
+                } catch (RuntimeException ignored) {
+                    // Best-effort; must not hide the original failure.
+                }
+            }
+            throw e;
+        }
 
         // Email is @Async on EmailService, but dispatching it AFTER the DB commit means
         // a slow SMTP handshake never lengthens the API response.
@@ -137,6 +152,25 @@ public class AdminDriverService {
         return driverRepository.save(driver);
     }
 
+    private String store(MultipartFile file, String kind, java.util.List<String> stored) {
+        String path = fileStorageService.storeFile(file, kind);
+        stored.add(path);
+        return path;
+    }
+
+    /** One plate, one driver, ignoring case and spacing (same key as the V16 unique index). */
+    private void requirePlateFree(String plate, Long ownDriverId) {
+        if (plate == null || plate.isBlank()) {
+            return;
+        }
+        String key = plate.replaceAll("\s+", "").toUpperCase(java.util.Locale.ROOT);
+        driverRepository.findByVehicleKey(key)
+                .filter(other -> !other.getId().equals(ownDriverId))
+                .ifPresent(other -> {
+                    throw new IllegalArgumentException("Vehicle number already registered");
+                });
+    }
+
     /** The owner sets a driver's vehicle and City/Trip switches - e.g. for drivers added before V14. */
     @Caching(evict = {
             @CacheEvict(value = "allDrivers", allEntries = true),
@@ -146,6 +180,7 @@ public class AdminDriverService {
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
         DriverVehicles.apply(driver, vehicle);
+        requirePlateFree(driver.getVehicleNumber(), driverId);
         return driverRepository.save(driver);
     }
 

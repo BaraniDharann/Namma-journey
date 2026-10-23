@@ -4,8 +4,6 @@ import com.travelplatform.dto.DriverDetailsResponse;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.exception.ResourceNotFoundException;
 import com.travelplatform.repository.DriverRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
@@ -30,8 +28,6 @@ import java.util.Map;
 @Service
 public class DriverVerificationService {
 
-    private static final Logger log = LoggerFactory.getLogger(DriverVerificationService.class);
-
     @Autowired
     private DriverRepository driverRepository;
     @Autowired
@@ -46,11 +42,11 @@ public class DriverVerificationService {
     @Autowired(required = false)
     private DriverService driverService;
 
-    /** Only INDEPENDENT drivers ever go through review; owner-created ones are approved from the start. */
+    /** Only INDEPENDENT drivers ever go through review, and only once they have confirmed their email. */
     @Transactional(readOnly = true)
     public List<DriverDetailsResponse> applications(Driver.Verification status) {
         Driver.Verification wanted = status == null ? Driver.Verification.UNDER_REVIEW : status;
-        return driverRepository.findByFleetAndVerificationStatusOrderBySubmittedAtAsc(Driver.Fleet.INDEPENDENT, wanted)
+        return driverRepository.findByFleetAndVerificationStatusAndEmailVerifiedTrueOrderBySubmittedAtAsc(Driver.Fleet.INDEPENDENT, wanted)
                 .stream().map(ownerService::mapToDriverDetails).toList();
     }
     @Transactional
@@ -63,7 +59,8 @@ public class DriverVerificationService {
         requireUnderReview(d);
         decide(d, Driver.Verification.APPROVED, null, ownerId);
         evictApproval(driverId);
-        dispatcher.dispatch("notice", () -> notifySafely(() -> notificationService.notifyDriverApproved(d), driverId));
+        // The in-app row is saved inside this transaction; the notice's email goes out after commit.
+        notificationService.notifyDriverApproved(d);
         return ownerService.mapToDriverDetails(d);
     }
 
@@ -81,7 +78,7 @@ public class DriverVerificationService {
         requireUnderReview(d);
         decide(d, Driver.Verification.REJECTED, trimmed, ownerId);
         evictApproval(driverId);
-        dispatcher.dispatch("notice", () -> notifySafely(() -> notificationService.notifyDriverRejected(d), driverId));
+        notificationService.notifyDriverRejected(d);
         return ownerService.mapToDriverDetails(d);
     }
 
@@ -169,7 +166,7 @@ public class DriverVerificationService {
         d.setRejectionReason(null);
         d.setSubmittedAt(now);
         dispatcher.dispatch("cleanup", () -> deleteAll(replaced));
-        dispatcher.dispatch("notice", () -> notifySafely(() -> notificationService.notifyDriverApplication(d, true), driverId));
+        notificationService.notifyDriverApplication(d, true);
         return ownerService.mapToDriverDetails(d);
     }
 
@@ -216,11 +213,6 @@ public class DriverVerificationService {
         }
     }
 
-    private static void stamp(Driver d, Long ownerId) {
-        d.setReviewedAt(LocalDateTime.now());
-        d.setReviewedBy(ownerId);
-    }
-
     private String store(MultipartFile file, String kind, List<String> stored) {
         String path = fileStorageService.storeFile(file, kind);
         stored.add(path);
@@ -235,15 +227,6 @@ public class DriverVerificationService {
             } catch (RuntimeException ignored) {
                 // Cleanup is best-effort and must not hide the real outcome.
             }
-        }
-    }
-
-    /** The decision is saved; a missed notice must not turn it into an error. */
-    private void notifySafely(Runnable notice, Long driverId) {
-        try {
-            notice.run();
-        } catch (RuntimeException e) {
-            log.warn("Notice for driver {} failed: {}", driverId, e.toString());
         }
     }
 

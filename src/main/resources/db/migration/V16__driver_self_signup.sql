@@ -15,11 +15,11 @@ ALTER TABLE drivers
     -- Trips are assigned by the owner, so a driver who is not in the owner's fleet never takes them.
     ADD CONSTRAINT drivers_independent_no_trips CHECK (NOT serves_trip OR fleet = 'OWNER_FLEET');
 
--- One plate, one driver, however it was typed. Owners could save the same plate twice before this,
+-- One plate, one driver, however it was typed (case and spacing ignored). Owners could save the same plate twice before this,
 -- so clear the later duplicates (keeping the lowest id) or the index below would fail the migration.
 UPDATE drivers d SET vehicle_number = NULL
 WHERE d.vehicle_number IS NOT NULL
   AND EXISTS (SELECT 1 FROM drivers o
-              WHERE o.id < d.id AND upper(o.vehicle_number) = upper(d.vehicle_number));
+              WHERE o.id < d.id AND upper(replace(o.vehicle_number, ' ', '')) = upper(replace(d.vehicle_number, ' ', '')));
 
-CREATE UNIQUE INDEX uq_drivers_vehicle_number ON drivers (upper(vehicle_number)) WHERE vehicle_number IS NOT NULL;
+CREATE UNIQUE INDEX uq_drivers_vehicle_number ON drivers (upper(replace(vehicle_number, ' ', ''))) WHERE vehicle_number IS NOT NULL;

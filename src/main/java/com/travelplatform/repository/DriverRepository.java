@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,8 +21,17 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     boolean existsByEmail(String email);
     boolean existsByLicenseNumber(String licenseNumber);
     boolean existsByAadhaarNumber(String aadhaarNumber);
-    boolean existsByVehicleNumberIgnoreCase(String vehicleNumber);
-    List<Driver> findByFleetAndVerificationStatusOrderBySubmittedAtAsc(Driver.Fleet fleet, Driver.Verification verificationStatus);
+    Optional<Driver> findByLicenseNumber(String licenseNumber);
+    Optional<Driver> findByAadhaarNumber(String aadhaarNumber);
+
+    /** The driver holding this plate, compared on its spaceless upper-case key (same key as the V16 unique index). */
+    @Query("SELECT d FROM Driver d WHERE UPPER(REPLACE(d.vehicleNumber, ' ', '')) = :key")
+    Optional<Driver> findByVehicleKey(@Param("key") String key);
+
+    /** Only drivers who confirmed their email reach the owner's queue. */
+    List<Driver> findByFleetAndVerificationStatusAndEmailVerifiedTrueOrderBySubmittedAtAsc(Driver.Fleet fleet, Driver.Verification verificationStatus);
+
+    List<Driver> findByFleetAndEmailVerifiedFalseAndSubmittedAtBefore(Driver.Fleet fleet, LocalDateTime before);
 
     // Conditional moves: the WHERE on the expected status is what refuses a stale decision (no @Version on Driver).
     @org.springframework.data.jpa.repository.Modifying

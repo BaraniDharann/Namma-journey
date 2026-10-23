@@ -194,6 +194,13 @@ class DriverOverlapConstraintTest {
                         true, false, 0, now(), 'KA01AB1234')
                     """));
             assertEquals("23505", plate.getSQLState(), "unique_violation: same plate in another case");
+            SQLException spaced = assertThrows(SQLException.class, () -> c.createStatement().executeUpdate("""
+                    INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
+                        first_login, email_verified, token_version, created_at, vehicle_number)
+                    VALUES ('Tim', '9000000004', 'x', 'L-4', '111122226666', 'ROLE_DRIVER', 'ACTIVE',
+                        true, false, 0, now(), 'KA 01 AB 1234')
+                    """));
+            assertEquals("23505", spaced.getSQLState(), "unique_violation: same plate with different spacing");
         }
     }
 

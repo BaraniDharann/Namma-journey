@@ -166,11 +166,19 @@ class DriverVerificationServiceTest {
         Driver older = driver(2, Driver.Verification.UNDER_REVIEW);
         older.setSubmittedAt(LocalDateTime.of(2026, 1, 1, 0, 0));
         // The repository sorts by submittedAt; the stub returns what that query would.
-        when(drivers.findByFleetAndVerificationStatusOrderBySubmittedAtAsc(
+        when(drivers.findByFleetAndVerificationStatusAndEmailVerifiedTrueOrderBySubmittedAtAsc(
                 Driver.Fleet.INDEPENDENT, Driver.Verification.UNDER_REVIEW))
                 .thenReturn(List.of(older, newer));
         List<DriverDetailsResponse> out = service.applications(Driver.Verification.UNDER_REVIEW);
         assertEquals(List.of(2L, 1L), out.stream().map(DriverDetailsResponse::getDriverId).toList());
+    }
+
+    @Test
+    void queueAsksOnlyForVerifiedEmails() {
+        service.applications(null);
+        verify(drivers).findByFleetAndVerificationStatusAndEmailVerifiedTrueOrderBySubmittedAtAsc(
+                Driver.Fleet.INDEPENDENT, Driver.Verification.UNDER_REVIEW);
+        verifyNoMoreInteractions(drivers);
     }
 
     @Test
@@ -213,17 +221,16 @@ class DriverVerificationServiceTest {
     }
 
     @Test
-    void noticesAndOldFileDeletionWaitForCommit() {
+    void oldFileDeletionWaitsForCommitButTheNoticeRowIsWrittenInside() {
         driver(1, Driver.Verification.REJECTED);
         org.springframework.transaction.support.TransactionTemplate tx =
                 new org.springframework.transaction.support.TransactionTemplate(new NoOpTransactionManager());
         tx.executeWithoutResult(s -> {
             service.resubmit(1L, null, null, null, img);
-            verifyNoInteractions(notifications);
+            verify(notifications).notifyDriverApplication(any(Driver.class), eq(true));
             verify(files, never()).delete(anyString());
         });
         verify(files).delete("uploads/drivers/rc_old.jpg");
-        verify(notifications).notifyDriverApplication(any(Driver.class), eq(true));
     }
 
     @Test
@@ -237,20 +244,17 @@ class DriverVerificationServiceTest {
         });
         verify(files).delete("uploads/drivers/new_rc.jpg");
         verify(files, never()).delete("uploads/drivers/rc_old.jpg");
-        verifyNoInteractions(notifications);
     }
 
     @Test
-    void approveNoticeWaitsForCommit() {
+    void approveNoticeRowIsWrittenInsideTheTransaction() {
         driver(1, Driver.Verification.UNDER_REVIEW);
         org.springframework.transaction.support.TransactionTemplate tx =
                 new org.springframework.transaction.support.TransactionTemplate(new NoOpTransactionManager());
         tx.executeWithoutResult(s -> {
             service.approve(1L, 9L);
-            verifyNoInteractions(notifications);
-            s.setRollbackOnly();
+            verify(notifications).notifyDriverApproved(any(Driver.class));
         });
-        verifyNoInteractions(notifications);
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.travelplatform.repository.DriverRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -15,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -74,7 +76,7 @@ class DriverSignupServiceTest {
         f.setEmail("ravi@x.com");
         f.setPassword("longenough");
         f.setLicenseNumber("DL-1");
-        f.setAadhaarNumber("1234");
+        f.setAadhaarNumber("123412341234");
         f.setVehicleType("AUTO");
         f.setVehicleNumber("ka 01 ab 1234");
         f.setVehicleModel("Bajaj");
@@ -107,34 +109,154 @@ class DriverSignupServiceTest {
         assertNotNull(d.getSubmittedAt());
         assertTrue(encoder.matches("longenough", d.getPassword()));
         verify(otp).sendOtp("ravi@x.com");
-        verify(notifications).notifyDriverApplication(d, false);
+        verifyNoInteractions(notifications); // the owner hears only after the email is confirmed
         assertEquals("ravi@x.com", result.get("email"));
         assertEquals("We've emailed you a code to confirm your email.", result.get("message"));
     }
 
     @Test
     void duplicateRefusedBeforeAnyFileStored() {
-        when(drivers.existsByMobile("9000000001")).thenReturn(true);
+        Driver verified = holder(50L, true, Driver.Fleet.INDEPENDENT);
+        when(drivers.findByMobile("9000000001")).thenReturn(Optional.of(verified));
         assertEquals("Mobile number already registered", refusal());
-        when(drivers.existsByMobile(anyString())).thenReturn(false);
+        when(drivers.findByMobile(anyString())).thenReturn(Optional.empty());
 
-        when(drivers.existsByEmail("ravi@x.com")).thenReturn(true);
+        when(drivers.findByEmail("ravi@x.com")).thenReturn(Optional.of(verified));
         assertEquals("Email already registered", refusal());
-        when(drivers.existsByEmail(anyString())).thenReturn(false);
+        when(drivers.findByEmail(anyString())).thenReturn(Optional.empty());
 
-        when(drivers.existsByLicenseNumber("DL-1")).thenReturn(true);
+        when(drivers.findByLicenseNumber("DL-1")).thenReturn(Optional.of(verified));
         assertEquals("License number already registered", refusal());
-        when(drivers.existsByLicenseNumber(anyString())).thenReturn(false);
+        when(drivers.findByLicenseNumber(anyString())).thenReturn(Optional.empty());
 
-        when(drivers.existsByAadhaarNumber("1234")).thenReturn(true);
+        when(drivers.findByAadhaarNumber("123412341234")).thenReturn(Optional.of(verified));
         assertEquals("Aadhaar number already registered", refusal());
-        when(drivers.existsByAadhaarNumber(anyString())).thenReturn(false);
+        when(drivers.findByAadhaarNumber(anyString())).thenReturn(Optional.empty());
 
-        when(drivers.existsByVehicleNumberIgnoreCase("KA 01 AB 1234")).thenReturn(true);
+        when(drivers.findByVehicleKey("KA01AB1234")).thenReturn(Optional.of(verified));
         assertEquals("Vehicle number already registered", refusal());
 
         verify(files, never()).storeFile(any(), anyString());
         verify(drivers, never()).save(any());
+    }
+
+    private Driver holder(long id, boolean verified, Driver.Fleet fleet) {
+        Driver d = new Driver();
+        d.setId(id);
+        d.setFleet(fleet);
+        d.setEmailVerified(verified);
+        d.setPhoto("old/photo_" + id);
+        d.setLicensePhoto("old/license_" + id);
+        d.setAadhaarPhoto("old/aadhaar_" + id);
+        d.setRcPhoto("old/rc_" + id);
+        return d;
+    }
+
+    @Test
+    void ownerFleetDriverConflictAlwaysRefused() {
+        when(drivers.findByMobile("9000000001")).thenReturn(Optional.of(holder(60L, false, Driver.Fleet.OWNER_FLEET)));
+        assertEquals("Mobile number already registered", refusal());
+        verify(drivers, never()).delete(any());
+        verify(drivers, never()).save(any());
+    }
+
+    @Test
+    void resignupReplacesUnverifiedConflictAndDeletesItsFilesAfterCommit() {
+        Driver old = holder(40L, false, Driver.Fleet.INDEPENDENT);
+        when(drivers.findByEmail("ravi@x.com")).thenReturn(Optional.of(old));
+        when(drivers.findByMobile("9000000001")).thenReturn(Optional.of(old)); // same row twice: deleted once
+
+        signup(form());
+
+        InOrder order = inOrder(drivers);
+        order.verify(drivers).delete(old);
+        order.verify(drivers).flush();
+        order.verify(drivers).save(any(Driver.class));
+        verify(drivers, times(1)).delete(any());
+        verify(files).delete("old/photo_40");
+        verify(files).delete("old/license_40");
+        verify(files).delete("old/aadhaar_40");
+        verify(files).delete("old/rc_40");
+        verify(otp).sendOtp("ravi@x.com");
+    }
+
+    @Test
+    void failedResignupKeepsOldFilesAndRemovesNewOnes() {
+        Driver old = holder(40L, false, Driver.Fleet.INDEPENDENT);
+        when(drivers.findByEmail("ravi@x.com")).thenReturn(Optional.of(old));
+        when(drivers.save(any(Driver.class))).thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"));
+
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () -> signup(form()));
+
+        verify(files, never()).delete("old/photo_40");
+        verify(files).delete("uploads/drivers/photo_x.jpg");
+    }
+
+    @Test
+    void mobileMustBeIndianNumber() {
+        for (String bad : new String[]{"1234567890", "98765", "98765432101", "98765abcde"}) {
+            DriverSelfSignupForm f = form();
+            f.setMobile(bad);
+            assertEquals("Invalid Indian mobile number",
+                    assertThrows(IllegalArgumentException.class, () -> signup(f)).getMessage());
+        }
+        verify(files, never()).storeFile(any(), anyString());
+    }
+
+    @Test
+    void aadhaarMustBeTwelveDigitsAndSpacesAreStripped() {
+        DriverSelfSignupForm bad = form();
+        bad.setAadhaarNumber("1234 5678");
+        assertEquals("Invalid Aadhaar number",
+                assertThrows(IllegalArgumentException.class, () -> signup(bad)).getMessage());
+
+        DriverSelfSignupForm ok = form();
+        ok.setAadhaarNumber("1234 5678 9012");
+        signup(ok);
+        ArgumentCaptor<Driver> saved = ArgumentCaptor.forClass(Driver.class);
+        verify(drivers).save(saved.capture());
+        assertEquals("123456789012", saved.getValue().getAadhaarNumber());
+    }
+
+    @Test
+    void emailAndLicenceAreNormalised() {
+        DriverSelfSignupForm f = form();
+        f.setEmail("  Ravi@X.COM ");
+        f.setLicenseNumber("  dl-1 ");
+        signup(f);
+        ArgumentCaptor<Driver> saved = ArgumentCaptor.forClass(Driver.class);
+        verify(drivers).save(saved.capture());
+        assertEquals("ravi@x.com", saved.getValue().getEmail());
+        assertEquals("DL-1", saved.getValue().getLicenseNumber());
+        verify(drivers).findByEmail("ravi@x.com");
+        verify(drivers).findByLicenseNumber("DL-1");
+        verify(otp).sendOtp("ravi@x.com");
+    }
+
+    @Test
+    void purgeDeletesOnlyOldUnverifiedIndependentRowsAndTheirFiles() {
+        Driver old = holder(41L, false, Driver.Fleet.INDEPENDENT);
+        when(drivers.findByFleetAndEmailVerifiedFalseAndSubmittedAtBefore(eq(Driver.Fleet.INDEPENDENT), any()))
+                .thenReturn(List.of(old));
+        ArgumentCaptor<java.time.LocalDateTime> cutoff = ArgumentCaptor.forClass(java.time.LocalDateTime.class);
+
+        assertEquals(1, service.purgeUnverified());
+
+        verify(drivers).findByFleetAndEmailVerifiedFalseAndSubmittedAtBefore(eq(Driver.Fleet.INDEPENDENT), cutoff.capture());
+        assertTrue(cutoff.getValue().isBefore(java.time.LocalDateTime.now().minusHours(47)));
+        assertTrue(cutoff.getValue().isAfter(java.time.LocalDateTime.now().minusHours(49)));
+        verify(drivers).delete(old);
+        verify(files).delete("old/photo_41");
+        verify(files).delete("old/rc_41");
+    }
+
+    @Test
+    void purgeSkipsRowsThatTurnedVerifiedOrOwnerFleet() {
+        when(drivers.findByFleetAndEmailVerifiedFalseAndSubmittedAtBefore(any(), any()))
+                .thenReturn(List.of(holder(42L, true, Driver.Fleet.INDEPENDENT), holder(43L, false, Driver.Fleet.OWNER_FLEET)));
+        assertEquals(0, service.purgeUnverified());
+        verify(drivers, never()).delete(any());
+        verify(files, never()).delete(anyString());
     }
 
     private String refusal() {
@@ -187,6 +309,27 @@ class DriverSignupServiceTest {
         assertEquals(false, r.get("firstLogin"));
         assertTrue(d.isEmailVerified());
         verify(drivers).save(d);
+        verify(notifications).notifyDriverApplication(d, false);
+    }
+
+    @Test
+    void verifyEmailLowercasesTheAddress() {
+        Driver d = pending();
+        when(otp.verifyOtp("ravi@x.com", "123456")).thenReturn(true);
+        when(jwt.generateToken(anyString(), anyString(), anyLong())).thenReturn("tok");
+        service.verifyEmail(" Ravi@X.com ", "123456");
+        assertTrue(d.isEmailVerified());
+    }
+
+    @Test
+    void verifyEmailRefusedWhenAlreadyVerified() {
+        Driver d = pending();
+        d.setEmailVerified(true);
+        when(otp.verifyOtp(anyString(), anyString())).thenReturn(true);
+
+        assertThrows(BadCredentialsException.class, () -> service.verifyEmail("ravi@x.com", "123456"));
+        verify(jwt, never()).generateToken(anyString(), anyString(), anyLong());
+        verifyNoInteractions(notifications);
     }
 
     @Test
