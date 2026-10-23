@@ -37,6 +37,12 @@ public class DriverDetailsResponse {
     private Integer vehicleSeats;
     private Boolean servesCity;
     private Boolean servesTrip;
+    /** OWNER_FLEET or INDEPENDENT, and where the owner's document check stands. */
+    private String fleet;
+    private String verificationStatus;
+    private String rejectionReason;
+    private String rcPhoto;
+    private java.time.LocalDateTime submittedAt;
 
     /** Copies the vehicle and City/Trip switches; shared by every mapper that shows a driver. */
     public DriverDetailsResponse withVehicle(com.travelplatform.entity.Driver driver) {
@@ -47,6 +53,20 @@ public class DriverDetailsResponse {
         this.vehicleSeats = driver.getVehicleSeats();
         this.servesCity = driver.isServesCity();
         this.servesTrip = driver.isServesTrip();
+        return this;
+    }
+
+    /**
+     * Copies fleet and verification. The RC scan is an identity document, so the caller passes the
+     * signing it uses for the licence and Aadhaar links rather than this DTO knowing about storage.
+     */
+    public DriverDetailsResponse withVerification(com.travelplatform.entity.Driver driver,
+                                                  java.util.function.UnaryOperator<String> sign) {
+        this.fleet = driver.getFleet() == null ? null : driver.getFleet().name();
+        this.verificationStatus = driver.getVerificationStatus() == null ? null : driver.getVerificationStatus().name();
+        this.rejectionReason = driver.getRejectionReason();
+        this.rcPhoto = sign.apply(driver.getRcPhoto());
+        this.submittedAt = driver.getSubmittedAt();
         return this;
     }
 }

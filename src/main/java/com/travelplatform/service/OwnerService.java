@@ -261,7 +261,8 @@ public class OwnerService {
         d.setFirstLogin(driver.isFirstLogin());
         d.setTelegramLinked(driver.getTelegramChatId() != null);
         d.setCreatedAt(driver.getCreatedAt());
-        return d.withVehicle(driver);
+        return d.withVehicle(driver).withVerification(driver,
+                path -> signedUploadUrls == null ? path : signedUploadUrls.signIfSensitive(path));
     }
 
     @Transactional

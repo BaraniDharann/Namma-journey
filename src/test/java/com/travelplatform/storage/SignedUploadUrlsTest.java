@@ -62,6 +62,7 @@ class SignedUploadUrlsTest {
     void onlySensitiveFilesAreSigned() {
         assertTrue(SignedUploadUrls.isSensitive("uploads/drivers/aadhaar_x.jpg"));
         assertTrue(SignedUploadUrls.isSensitive("uploads/drivers/license_x.jpg"));
+        assertTrue(SignedUploadUrls.isSensitive("uploads/drivers/rc_x.jpg"));
         assertFalse(SignedUploadUrls.isSensitive("uploads/drivers/photo_x.jpg"));
         assertFalse(SignedUploadUrls.isSensitive("uploads/trips/trip_1/end.jpg"));
         assertEquals("/uploads/drivers/photo_x.jpg", urls.signIfSensitive("/uploads/drivers/photo_x.jpg"));

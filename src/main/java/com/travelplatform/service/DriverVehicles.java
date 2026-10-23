@@ -66,8 +66,12 @@ final class DriverVehicles {
             driver.setVehicleAc(false);
             driver.setVehicleSeats(type.maxPassengers());
         }
-        // On the owner's form a bike or auto simply takes no trips, rather than being an error.
-        setModes(driver, r.getServesCity(), type == VehicleType.CAR ? r.getServesTrip() : Boolean.FALSE);
+        // On the owner's form a bike, auto or independent driver simply takes no trips, rather than being an error.
+        setModes(driver, r.getServesCity(), type == VehicleType.CAR && !independent(driver) ? r.getServesTrip() : Boolean.FALSE);
+    }
+
+    private static boolean independent(Driver driver) {
+        return driver.getFleet() == Driver.Fleet.INDEPENDENT;
     }
 
     /** Turns City rides and Trips on or off. Null leaves a switch as it is. */
@@ -80,10 +84,13 @@ final class DriverVehicles {
                 throw new IllegalArgumentException("Trips are by car only. A "
                         + driver.getVehicleType().name().toLowerCase(Locale.ROOT) + " driver takes City rides.");
             }
+            if (servesTrip && independent(driver)) {
+                throw new IllegalArgumentException("Trips are assigned by the owner to their own fleet. Independent drivers take City rides.");
+            }
             driver.setServesTrip(servesTrip);
         }
         // Switching to a bike or auto ends trips; not a choice the owner has to remember to make.
-        if (driver.getVehicleType() != VehicleType.CAR) {
+        if (driver.getVehicleType() != VehicleType.CAR || independent(driver)) {
             driver.setServesTrip(false);
         }
     }

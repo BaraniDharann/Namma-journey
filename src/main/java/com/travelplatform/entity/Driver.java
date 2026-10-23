@@ -111,6 +111,37 @@ public class Driver {
     @Column(name = "serves_trip", nullable = false)
     private boolean servesTrip = true;
 
+    /** Existing and owner-created drivers are OWNER_FLEET; self-signups are INDEPENDENT and never take Trips (drivers_independent_no_trips). */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 12)
+    private Fleet fleet = Fleet.OWNER_FLEET;
+
+    /** Owner-created drivers need no check, so the default is APPROVED; self-signups start UNDER_REVIEW. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "verification_status", nullable = false, length = 12)
+    private Verification verificationStatus = Verification.APPROVED;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
+    /** Registration certificate scan; sensitive, so served by signed link only. */
+    @Column(name = "rc_photo", length = 1000)
+    private String rcPhoto;
+
+    @Column(name = "submitted_at")
+    private LocalDateTime submittedAt;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    /** Id of the owner who approved or rejected. */
+    @Column(name = "reviewed_by")
+    private Long reviewedBy;
+
+    public boolean isApproved() {
+        return verificationStatus == Verification.APPROVED;
+    }
+
     public Long getId() {
         return id;
     }
@@ -273,5 +304,15 @@ public class Driver {
     
     public enum Status {
         ACTIVE, INACTIVE
+    }
+
+    /** Whose driver this is: the owner's own fleet, or someone who signed up themselves. */
+    public enum Fleet {
+        OWNER_FLEET, INDEPENDENT
+    }
+
+    /** Where a driver stands with the owner's document check. */
+    public enum Verification {
+        UNDER_REVIEW, APPROVED, REJECTED
     }
 }

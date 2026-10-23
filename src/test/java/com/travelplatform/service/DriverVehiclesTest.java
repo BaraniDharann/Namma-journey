@@ -74,4 +74,22 @@ class DriverVehiclesTest {
         assertThrows(IllegalArgumentException.class,
                 () -> DriverVehicles.apply(d, new VehicleRequest(null, null, null, null, 40, null, null)));
     }
+
+    @Test
+    @DisplayName("an independent driver cannot switch Trips on, even with a car")
+    void independentDriverCannotTakeTrips() {
+        Driver d = new Driver();
+        d.setFleet(Driver.Fleet.INDEPENDENT);
+        assertThrows(IllegalArgumentException.class, () -> DriverVehicles.setModes(d, null, true));
+    }
+
+    @Test
+    @DisplayName("the owner's form quietly keeps Trips off for an independent driver")
+    void applyForcesTripsOffForIndependent() {
+        Driver d = new Driver();
+        d.setFleet(Driver.Fleet.INDEPENDENT);
+        DriverVehicles.apply(d, vehicle("CAR", true, true));
+        assertFalse(d.isServesTrip());
+        assertTrue(d.isServesCity());
+    }
 }

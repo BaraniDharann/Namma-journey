@@ -107,7 +107,8 @@ public class DriverService {
         d.setEmailVerified(driver.isEmailVerified());
         d.setFirstLogin(driver.isFirstLogin());
         d.setCreatedAt(driver.getCreatedAt());
-        return d.withVehicle(driver);
+        return d.withVehicle(driver).withVerification(driver,
+                path -> signedUploadUrls == null ? path : signedUploadUrls.signIfSensitive(path));
     }
 
     public List<TravelBookingResponse> getAssignedBookings(Long driverId) {

@@ -14,7 +14,7 @@ import java.time.Duration;
 import java.util.Base64;
 
 /**
- * Expiring, server-signed links for drivers' identity documents (Aadhaar and licence scans).
+ * Expiring, server-signed links for drivers' identity documents (Aadhaar and licence and RC scans).
  *
  * <p>These were served to anyone holding the URL, with no expiry - and the URL was written to the
  * logs. An &lt;img&gt; tag cannot send the JWT, so instead the API hands the owner (or the driver
@@ -28,7 +28,7 @@ import java.util.Base64;
 @Component
 public class SignedUploadUrls {
 
-    private static final String[] SENSITIVE_PREFIXES = {"uploads/drivers/aadhaar_", "uploads/drivers/license_"};
+    private static final String[] SENSITIVE_PREFIXES = {"uploads/drivers/aadhaar_", "uploads/drivers/license_", "uploads/drivers/rc_"};
 
     private final byte[] key;
     private final Duration ttl;

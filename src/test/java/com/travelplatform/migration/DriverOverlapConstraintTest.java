@@ -168,6 +168,36 @@ class DriverOverlapConstraintTest {
     }
 
     @Test
+    @DisplayName("V16: existing drivers stay owner-fleet and approved; independents take no trips; a plate is unique in any case")
+    void driverSelfSignupColumns() throws Exception {
+        flyway(null).migrate();
+        try (Connection c = connect()) {
+            try (ResultSet rs = c.createStatement().executeQuery(
+                    "SELECT fleet, verification_status FROM drivers WHERE id = " + DRIVER)) {
+                rs.next();
+                assertEquals("OWNER_FLEET", rs.getString(1));
+                assertEquals("APPROVED", rs.getString(2));
+            }
+            c.createStatement().executeUpdate("""
+                    INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
+                        first_login, email_verified, token_version, created_at, vehicle_number)
+                    VALUES ('Ravi', '9000000002', 'x', 'L-2', '111122224444', 'ROLE_DRIVER', 'ACTIVE',
+                        true, false, 0, now(), 'ka01ab1234')
+                    """);
+            SQLException trips = assertThrows(SQLException.class, () -> c.createStatement().executeUpdate(
+                    "UPDATE drivers SET fleet = 'INDEPENDENT', serves_trip = true WHERE mobile = '9000000002'"));
+            assertEquals("23514", trips.getSQLState(), "check_violation: an independent driver takes no trips");
+            SQLException plate = assertThrows(SQLException.class, () -> c.createStatement().executeUpdate("""
+                    INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
+                        first_login, email_verified, token_version, created_at, vehicle_number)
+                    VALUES ('Sam', '9000000003', 'x', 'L-3', '111122225555', 'ROLE_DRIVER', 'ACTIVE',
+                        true, false, 0, now(), 'KA01AB1234')
+                    """));
+            assertEquals("23505", plate.getSQLState(), "unique_violation: same plate in another case");
+        }
+    }
+
+    @Test
     @DisplayName("two bookings racing for the same driver: exactly one wins")
     void concurrentInsertsLetExactlyOneThrough() throws Exception {
         flyway(null).migrate();
