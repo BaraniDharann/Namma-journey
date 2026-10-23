@@ -8,6 +8,7 @@ const navItems = [
   { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
   { path: '/owner/bookings', icon: '', label: 'All Bookings' },
   { path: '/owner/drivers', icon: '', label: 'Drivers' },
+  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
   { path: '/owner/cities', icon: '', label: 'Cities' },
   { path: '/owner/payments', icon: '', label: 'Payments' },
   { path: '/owner/reviews', icon: '', label: 'Reviews' },

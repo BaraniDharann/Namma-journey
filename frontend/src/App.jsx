@@ -26,6 +26,7 @@ const DriverProfile   = lazy(() => import('./pages/driver/DriverProfile'))
 const OwnerDashboard = lazy(() => import('./pages/owner/OwnerDashboard'))
 const OwnerBookings  = lazy(() => import('./pages/owner/OwnerBookings'))
 const OwnerDrivers   = lazy(() => import('./pages/owner/OwnerDrivers'))
+const OwnerDriverApplications = lazy(() => import('./pages/owner/OwnerDriverApplications'))
 const OwnerCities    = lazy(() => import('./pages/owner/OwnerCities'))
 const OwnerPayments  = lazy(() => import('./pages/owner/OwnerPayments'))
 const OwnerReviews   = lazy(() => import('./pages/owner/OwnerReviews'))
@@ -107,6 +108,7 @@ function AppRoutes() {
         <Route path="/owner/dashboard" element={<ProtectedRoute role="ROLE_OWNER"><OwnerDashboard /></ProtectedRoute>} />
         <Route path="/owner/bookings"  element={<ProtectedRoute role="ROLE_OWNER"><OwnerBookings /></ProtectedRoute>} />
         <Route path="/owner/drivers"   element={<ProtectedRoute role="ROLE_OWNER"><OwnerDrivers /></ProtectedRoute>} />
+        <Route path="/owner/driver-applications" element={<ProtectedRoute role="ROLE_OWNER"><OwnerDriverApplications /></ProtectedRoute>} />
         <Route path="/owner/cities"    element={<ProtectedRoute role="ROLE_OWNER"><OwnerCities /></ProtectedRoute>} />
         <Route path="/owner/payments"  element={<ProtectedRoute role="ROLE_OWNER"><OwnerPayments /></ProtectedRoute>} />
         <Route path="/owner/reviews"   element={<ProtectedRoute role="ROLE_OWNER"><OwnerReviews /></ProtectedRoute>} />

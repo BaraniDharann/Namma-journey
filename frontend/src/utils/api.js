@@ -236,6 +236,13 @@ export const getYearlyRevenue = (year) => api.get(`/owner/revenue/yearly?year=${
 export const createDriver = (formData) => api.post('/owner/drivers', formData, { timeout: 60000 })
   .then(res => { invalidateCache('drivers'); return res })
 export const getOwnerDrivers = () => cachedGet('/owner/drivers')
+// Uncached on purpose: an owner deciding on an application must always see the current state,
+// and the document URLs are signed and expire.
+export const getDriverApplications = (status) => api.get('/owner/driver-applications', { params: { status } })
+export const approveDriver = (driverId) => api.post(`/owner/drivers/${driverId}/approve`)
+  .then(res => { invalidateCache('drivers'); return res })
+export const rejectDriver = (driverId, reason) => api.post(`/owner/drivers/${driverId}/reject`, { reason })
+  .then(res => { invalidateCache('drivers'); return res })
 export const getOwnerDriverById = (driverId) => api.get(`/owner/drivers/${driverId}`)
 export const deleteOwnerDriver = (driverId) => api.delete(`/owner/drivers/${driverId}`)
   .then(res => { invalidateCache('drivers'); return res })

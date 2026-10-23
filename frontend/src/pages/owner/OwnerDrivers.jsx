@@ -12,6 +12,7 @@ const navItems = [
   { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
   { path: '/owner/bookings', icon: '', label: 'All Bookings' },
   { path: '/owner/drivers', icon: '', label: 'Drivers' },
+  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
   { path: '/owner/cities', icon: '', label: 'Cities' },
   { path: '/owner/payments', icon: '', label: 'Payments' },
   { path: '/owner/reviews', icon: '', label: 'Reviews' },
@@ -303,6 +304,7 @@ function DriverList() {
                   <Icon name={vehicleIcon(d.vehicleType)} size={14} />{vehicleLabel(d.vehicleType)}
                   {d.servesCity && d.servesTrip ? ' · City + Trips' : d.servesTrip ? ' · Trips' : d.servesCity ? ' · City' : ' · Off'}
                 </span>
+                <span className="pc-pill">{d.fleet === 'INDEPENDENT' ? 'Independent' : 'Trip fleet'}</span>
                 <StatusPill status={d.status} label={d.status} />
                 {d.emailVerified && <span className="pc-pill pc-pill-ok">Email</span>}
                 <button type="button" onClick={() => openDetail(d.driverId)} disabled={detailLoading} className="pc-btn pc-btn-ghost pc-btn-sm"><Icon name="eye" size={14} />View Details</button>
@@ -370,7 +372,7 @@ export default function OwnerDrivers() {
       </PageHead>
 
       <div className="pc-chips" role="tablist" aria-label="Driver views" style={{ marginBottom: 18 }}>
-        {[['list', 'users', 'Driver List'], ['create', 'plus', 'Create Driver']].map(([key, icon, label]) => (
+        {[['list', 'users', 'Driver List'], ['create', 'plus', 'Add Trip fleet driver']].map(([key, icon, label]) => (
           <button
             key={key}
             type="button"
