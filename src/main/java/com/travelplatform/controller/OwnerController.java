@@ -38,6 +38,38 @@ public class OwnerController {
     private final TelegramLinkService telegramLinkService;
     private final com.travelplatform.service.CityFareService cityFareService;
     private final com.travelplatform.service.CityService cityService;
+    private final com.travelplatform.service.DriverVerificationService driverVerificationService;
+
+    /** Self-signed-up drivers waiting for (or past) review; oldest first. */
+    @GetMapping("/driver-applications")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<DriverDetailsResponse>> driverApplications(
+            @RequestParam(required = false) com.travelplatform.entity.Driver.Verification status) {
+        return ResponseEntity.ok(driverVerificationService.applications(status));
+    }
+
+    @PostMapping("/drivers/{id}/approve")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<DriverDetailsResponse> approveDriver(
+            @PathVariable Long id, org.springframework.security.core.Authentication authentication) {
+        return ResponseEntity.ok(driverVerificationService.approve(id, reviewerId(authentication)));
+    }
+
+    @PostMapping("/drivers/{id}/reject")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<DriverDetailsResponse> rejectDriver(
+            @PathVariable Long id, @RequestBody Map<String, String> body,
+            org.springframework.security.core.Authentication authentication) {
+        return ResponseEntity.ok(driverVerificationService.reject(id, body.get("reason"), reviewerId(authentication)));
+    }
+
+    private static Long reviewerId(org.springframework.security.core.Authentication authentication) {
+        try {
+            return Long.valueOf(authentication.getName());
+        } catch (NumberFormatException e) {
+            return null; // the audit column is best-effort
+        }
+    }
 
     @GetMapping("/city-fares")
     @PreAuthorize("hasRole('OWNER')")

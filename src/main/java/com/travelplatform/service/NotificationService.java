@@ -57,6 +57,35 @@ public class NotificationService {
         notificationRepository.save(notification);
     }
 
+    public void notifyDriverApproved(Driver d) {
+        notificationRepository.save(driverNotice(d, "DRIVER_APPROVED", "Account approved",
+                "Your account has been approved. You can go online and take rides now."));
+        if (d.getEmail() != null) {
+            dispatcher.dispatch("email", () -> emailService.sendDriverApprovedEmail(d.getEmail(), d.getName()));
+        }
+    }
+
+    public void notifyDriverRejected(Driver d) {
+        notificationRepository.save(driverNotice(d, "DRIVER_REJECTED", "Documents need attention",
+                "Your application was not approved: " + d.getRejectionReason()
+                        + " Please upload the corrected documents."));
+        if (d.getEmail() != null) {
+            dispatcher.dispatch("email", () ->
+                    emailService.sendDriverRejectedEmail(d.getEmail(), d.getName(), d.getRejectionReason()));
+        }
+    }
+
+    private Notification driverNotice(Driver d, String type, String title, String message) {
+        Notification n = new Notification();
+        n.setRecipientId(d.getId().toString());
+        n.setRecipientRole("ROLE_DRIVER");
+        n.setType(type);
+        n.setTitle(title);
+        n.setMessage(message);
+        n.setCreatedAt(LocalDateTime.now());
+        return n;
+    }
+
     public void notifyDriverAssigned(TravelBooking booking, Driver driver) {
         Notification notification = new Notification();
         notification.setRecipientId(driver.getId().toString());

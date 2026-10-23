@@ -244,7 +244,8 @@ public class OwnerService {
         return mapToDriverDetails(driver);
     }
 
-    private DriverDetailsResponse mapToDriverDetails(Driver driver) {
+    /** Owner-facing view with signed document links; also used by DriverVerificationService. */
+    public DriverDetailsResponse mapToDriverDetails(Driver driver) {
         DriverDetailsResponse d = new DriverDetailsResponse();
         d.setDriverId(driver.getId());
         d.setName(driver.getName());

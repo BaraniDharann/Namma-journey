@@ -21,6 +21,7 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     boolean existsByLicenseNumber(String licenseNumber);
     boolean existsByAadhaarNumber(String aadhaarNumber);
     boolean existsByVehicleNumberIgnoreCase(String vehicleNumber);
+    List<Driver> findByFleetAndVerificationStatusOrderBySubmittedAtAsc(Driver.Fleet fleet, Driver.Verification verificationStatus);
 
     // "Busy" everywhere below means an active trip the driver has not ended yet: an ended trip
     // awaiting payment no longer occupies them, matching no_driver_overlap since V13.

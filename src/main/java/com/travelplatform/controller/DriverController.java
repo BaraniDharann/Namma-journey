@@ -46,9 +46,30 @@ public class DriverController {
     @Autowired
     private com.travelplatform.service.DriverPresenceService driverPresenceService;
 
+    @Autowired
+    private com.travelplatform.service.DriverVerificationService driverVerificationService;
+
     // SpEL guard reused on per-driver endpoints. Without it any logged-in driver could read
     // or mutate another driver's bookings simply by changing the URL.
     private static final String SAME_DRIVER = "hasRole('DRIVER') and #driverId.toString() == authentication.principal";
+
+    /** A rejected driver sends corrected documents; any subset of the four. */
+    @PutMapping(value = "/{driverId}/documents", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<DriverDetailsResponse> resubmitDocuments(
+            @PathVariable Long driverId,
+            @RequestPart(value = "photo", required = false) MultipartFile photo,
+            @RequestPart(value = "licensePhoto", required = false) MultipartFile licensePhoto,
+            @RequestPart(value = "aadhaarPhoto", required = false) MultipartFile aadhaarPhoto,
+            @RequestPart(value = "rcPhoto", required = false) MultipartFile rcPhoto) {
+        return ResponseEntity.ok(driverVerificationService.resubmit(driverId, photo, licensePhoto, aadhaarPhoto, rcPhoto));
+    }
+
+    @GetMapping("/{driverId}/verification")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<Map<String, Object>> verification(@PathVariable Long driverId) {
+        return ResponseEntity.ok(driverVerificationService.status(driverId));
+    }
 
     @GetMapping("/{driverId}/bookings")
     @PreAuthorize(SAME_DRIVER)

@@ -1,6 +1,7 @@
 package com.travelplatform.service;
 
 import jakarta.mail.internet.MimeMessage;
+import org.springframework.web.util.HtmlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -113,6 +114,40 @@ public class EmailService {
             }
         } catch (Exception e) {
             log.error("Failed to send OTP email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    @Async("emailExecutor")
+    public void sendDriverApprovedEmail(String toEmail, String name) {
+        sendSimple(toEmail, "Your Namma Journey driver account is approved",
+                "<html><body><h2>You are approved</h2><p>Hi " + HtmlUtils.htmlEscape(name == null ? "" : name)
+                + ", the owner has approved your documents. You can go online and take rides now.</p>"
+                + "<br><p>Best regards,<br>Namma Journey Team</p></body></html>");
+    }
+
+    @Async("emailExecutor")
+    public void sendDriverRejectedEmail(String toEmail, String name, String reason) {
+        sendSimple(toEmail, "Your Namma Journey application needs changes",
+                "<html><body><h2>Application not approved</h2><p>Hi " + HtmlUtils.htmlEscape(name == null ? "" : name)
+                + ", the owner could not approve your documents.</p><p><strong>Reason:</strong> "
+                + HtmlUtils.htmlEscape(reason == null ? "" : reason)
+                + "</p><p>Sign in and upload the corrected documents to apply again.</p>"
+                + "<br><p>Best regards,<br>Namma Journey Team</p></body></html>");
+    }
+
+    private void sendSimple(String toEmail, String subject, String html) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(html, true);
+            if (deliver(message)) {
+                log.info("Email '{}' sent to: {}", subject, toEmail);
+            }
+        } catch (Exception e) {
+            log.error("Failed to send '{}' to {}: {}", subject, toEmail, e.getMessage());
         }
     }
 
