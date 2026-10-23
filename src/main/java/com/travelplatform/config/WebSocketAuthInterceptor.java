@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
  * <ul>
  *   <li>CONNECT needs a valid JWT; there is no anonymous session.</li>
  *   <li>SUBSCRIBE must be exactly /topic/booking/{uuid}/location, and BookingAccessGuard must
- *       allow this caller on that booking.</li>
+ *       allow this caller on that booking - or /topic/driver/{id}/offers, by that driver only.</li>
  *   <li>SEND is only accepted to /app/** (handled by @MessageMapping, which checks the driver).
  *       Only the server publishes to /topic.</li>
  * </ul>
@@ -39,6 +39,8 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     private static final Pattern BOOKING_TOPIC = Pattern.compile(
             "^/topic/booking/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/location$");
+
+    private static final Pattern DRIVER_OFFER_TOPIC = Pattern.compile("^/topic/driver/(\\d{1,18})/offers$");
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -91,6 +93,16 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     private void authorizeSubscription(StompHeaderAccessor accessor) {
         String destination = accessor.getDestination();
+        // A driver's own Ride Now offers - nobody else's.
+        Matcher offers = destination == null ? null : DRIVER_OFFER_TOPIC.matcher(destination);
+        if (offers != null && offers.matches()) {
+            if (!(accessor.getUser() instanceof Authentication auth)
+                    || auth.getAuthorities().stream().noneMatch(a -> "ROLE_DRIVER".equals(a.getAuthority()))
+                    || !offers.group(1).equals(auth.getName())) {
+                throw new MessagingException("Not authorized for these offers");
+            }
+            return;
+        }
         Matcher m = destination == null ? null : BOOKING_TOPIC.matcher(destination);
         if (m == null || !m.matches()) {
             throw new MessagingException("Subscription not allowed: " + destination);

@@ -45,6 +45,14 @@ public class DriverService {
 
     @Value("${file.upload-dir:uploads}")
     private String uploadDir;
+
+    // Field-injected, like signedUploadUrls, so the tests that build DriverService by hand still
+    // compile; null there, and Ride Now handling is skipped.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DispatchService dispatchService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DriverPresenceService presenceService;
     
     @Transactional
     public void updateAvailability(Long driverId, String status) {
@@ -61,6 +69,10 @@ public class DriverService {
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
         driver.setStatus(parsed);
         driverRepository.save(driver);
+        // Offline means no Ride Now offers, at once - not when the last position report lapses.
+        if (parsed == Driver.Status.INACTIVE && presenceService != null) {
+            presenceService.remove(driverId);
+        }
     }
 
     public DriverDetailsResponse getDriverProfile(Long driverId) {
@@ -120,8 +132,14 @@ public class DriverService {
         if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
             throw new RuntimeException("Only pending bookings can be accepted");
         }
+        // A Ride Now offer is only theirs until its deadline; after that it is on its way to the
+        // next driver, and a late tap must not snatch it back.
+        if (dispatchService != null && dispatchService.offerExpired(booking)) {
+            throw new RuntimeException("This ride offer has expired");
+        }
 
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
+        DispatchService.markMatched(booking);
         TravelBooking updated = bookingRepository.save(booking);
 
         Driver driver = driverRepository.findById(driverId)
@@ -162,6 +180,12 @@ public class DriverService {
 
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
+
+        // A Ride Now trip goes back to the nearest-driver search, not to whoever is free by date.
+        if (booking.getDispatchMode() == TravelBooking.DispatchMode.RIDE_NOW && dispatchService != null) {
+            dispatchService.release(booking, driverId);
+            return mapToResponse(booking);
+        }
 
         // Record the refusal before looking for a replacement. Availability is "no overlapping
         // active trip", which this driver satisfies again the moment their id leaves the
@@ -307,7 +331,7 @@ public class DriverService {
             response.setDriver(driverDetails);
         }
 
-        return response;
+        return response.withDispatch(booking);
     }
     
     private String formatTime(Long minutes) {

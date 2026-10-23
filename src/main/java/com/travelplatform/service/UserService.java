@@ -61,6 +61,10 @@ public class UserService {
     // Required in the app; null only in unit tests that build UserService by hand.
     @org.springframework.beans.factory.annotation.Autowired
     private TripRules tripRules;
+
+    // Ride Now dispatch. Null only in unit tests that build UserService by hand.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DispatchService dispatchService;
     
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -99,6 +103,14 @@ public class UserService {
             throw new IllegalArgumentException(MOBILE_REQUIRED_MESSAGE);
         }
 
+        // Ride Now is a trip for today, whatever dates the form still held.
+        boolean rideNow = Boolean.TRUE.equals(request.getRideNow()) && dispatchService != null;
+        if (rideNow) {
+            java.time.LocalDate today = dispatchService.now().toLocalDate();
+            request.setFromDate(today);
+            request.setToDate(today);
+        }
+
         if (request.getFromDate() == null || request.getToDate() == null) {
             throw new IllegalArgumentException("From date and to date are required");
         }
@@ -127,6 +139,10 @@ public class UserService {
         // lost, and after MAX_DRIVER_ATTEMPTS save the booking unassigned so the owner can place
         // it - the traveller's booking never fails because of a clash they cannot see.
         List<Long> lostDrivers = new ArrayList<>();
+        if (rideNow) {
+            // Saved with nobody; DispatchService offers it to the nearest online driver once it commits.
+            return saveWithDriver(userId, request, routeInfo, lostDrivers, false);
+        }
         for (int attempt = 0; attempt < MAX_DRIVER_ATTEMPTS; attempt++) {
             try {
                 return saveWithDriver(userId, request, routeInfo, lostDrivers, true);
@@ -181,6 +197,9 @@ public class UserService {
             if (driver != null) {
                 notificationService.notifyDriverAssigned(savedBooking, driver);
             }
+            if (savedBooking.getDispatchMode() == TravelBooking.DispatchMode.RIDE_NOW) {
+                dispatchService.dispatchAfterCommit(savedBooking.getId());
+            }
             Metrics.counter("namma.bookings.placed", "assigned", String.valueOf(driver != null)).increment();
             return mapToResponse(savedBooking);
         });
@@ -230,11 +249,16 @@ public class UserService {
         booking.setBookingDate(LocalDateTime.now());
         booking.setDriverId(driver != null ? driver.getId() : null);
         booking.setStatus(TravelBooking.BookingStatus.PENDING);
+        if (Boolean.TRUE.equals(request.getRideNow()) && dispatchService != null) {
+            booking.setDispatchMode(TravelBooking.DispatchMode.RIDE_NOW);
+            booking.setDispatchState(TravelBooking.DispatchState.SEARCHING);
+            booking.setDispatchStartedAt(dispatchService.now());
+        }
         return booking;
     }
 
     /** True when Postgres refused the insert because the driver already has an overlapping trip. */
-    private static boolean isDriverOverlap(DataIntegrityViolationException ex) {
+    static boolean isDriverOverlap(DataIntegrityViolationException ex) {
         for (Throwable t = ex; t != null && t.getCause() != t; t = t.getCause()) {
             if (t instanceof SQLException sql && EXCLUSION_VIOLATION.equals(sql.getSQLState())) {
                 return true;
@@ -461,7 +485,7 @@ public class UserService {
             response.setDriver(driverDetails);
         }
 
-        return response;
+        return response.withDispatch(booking);
     }
     
     private String formatTime(Long minutes) {

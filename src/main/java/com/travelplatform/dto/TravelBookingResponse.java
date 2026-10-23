@@ -37,4 +37,28 @@ public class TravelBookingResponse {
     private java.math.BigDecimal pricePerHourAtBooking;
     private String driverEndTripPhoto;
     private DriverDetailsResponse driver;
+    private String dispatchMode;
+    private String dispatchState;
+    private LocalDateTime offerExpiresAt;
+    /**
+     * Seconds left on the driver's offer, worked out here. offerExpiresAt is an Indian wall-clock
+     * time with no zone, which a browser in another zone would read hours off; a countdown in
+     * seconds needs no clock agreement at all.
+     */
+    private Long offerSecondsLeft;
+    private Double offerDistanceKm;
+    private LocalDateTime tripEndedAt;
+
+    /** Copies the Ride Now fields; shared by every service that maps a booking. */
+    public TravelBookingResponse withDispatch(com.travelplatform.entity.TravelBooking booking) {
+        this.dispatchMode = booking.getDispatchMode() == null ? null : booking.getDispatchMode().name();
+        this.dispatchState = booking.getDispatchState() == null ? null : booking.getDispatchState().name();
+        this.offerExpiresAt = booking.getOfferExpiresAt();
+        this.offerSecondsLeft = booking.getOfferExpiresAt() == null ? null
+                : Math.max(0, java.time.Duration.between(
+                        LocalDateTime.now(java.time.ZoneId.of("Asia/Kolkata")), booking.getOfferExpiresAt()).getSeconds());
+        this.offerDistanceKm = booking.getOfferDistanceKm();
+        this.tripEndedAt = booking.getTripEndedAt();
+        return this;
+    }
 }

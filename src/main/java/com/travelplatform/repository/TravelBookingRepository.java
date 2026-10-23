@@ -68,4 +68,10 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
     long countActiveBookingsByDriverId(@Param("driverId") Long driverId);
 
     Page<TravelBooking> findAll(Pageable pageable);
+
+    /** Ride Now bookings the dispatch sweep has to act on: offers past their deadline, and searches still running. */
+    @Query("SELECT b.id FROM TravelBooking b WHERE b.status = 'PENDING' AND (" +
+           "(b.dispatchState = com.travelplatform.entity.TravelBooking.DispatchState.OFFERED AND b.offerExpiresAt < :now) " +
+           "OR b.dispatchState = com.travelplatform.entity.TravelBooking.DispatchState.SEARCHING)")
+    List<UUID> findDispatchWork(@Param("now") LocalDateTime now);
 }

@@ -72,6 +72,63 @@ public class NotificationService {
         log.info("Notification sent to driver {} for booking: {}", driver.getId(), booking.getId());
     }
 
+    /**
+     * A Ride Now offer: this driver is the nearest, and has seconds to take it. No email - it
+     * would arrive after the offer is gone. The Telegram card carries the same Accept button as
+     * an assignment; accepting after the deadline is refused there too.
+     */
+    public void notifyRideOffered(TravelBooking booking, Driver driver) {
+        Notification notification = new Notification();
+        notification.setRecipientId(driver.getId().toString());
+        notification.setRecipientRole("ROLE_DRIVER");
+        notification.setType("RIDE_OFFERED");
+        notification.setTitle("New ride nearby");
+        notification.setMessage("Pickup " + (booking.getOfferDistanceKm() != null
+                ? String.format(java.util.Locale.ROOT, "%.1f km away", booking.getOfferDistanceKm()) : "near you")
+                + " at " + booking.getFromPlace() + ", going to " + booking.getToPlace()
+                + ". Accept within " + secondsLeft(booking) + " seconds.");
+        notification.setBookingId(booking.getId().toString());
+        notification.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(notification);
+
+        dispatcher.dispatch("telegram", () -> telegramDispatchService.sendTripAssigned(booking, driver));
+    }
+
+    /** Nobody nearby took a Ride Now booking in time: the owner places it, the passenger is told. */
+    public void notifyNoDriverNearby(TravelBooking booking) {
+        String route = booking.getFromPlace() + " to " + booking.getToPlace();
+
+        Notification owner = new Notification();
+        owner.setRecipientId("owner");
+        owner.setRecipientRole("ROLE_OWNER");
+        owner.setType("RIDE_NO_DRIVER");
+        owner.setTitle("Ride Now needs a driver");
+        owner.setMessage("No driver near the pickup took the ride from " + route
+                + " for " + booking.getUserName() + ". Assign one manually.");
+        owner.setBookingId(booking.getId().toString());
+        owner.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(owner);
+
+        Notification user = new Notification();
+        user.setRecipientId(booking.getUserId().toString());
+        user.setRecipientRole("ROLE_USER");
+        user.setType("RIDE_NO_DRIVER");
+        user.setTitle("Still finding your driver");
+        user.setMessage("No driver near " + booking.getFromPlace()
+                + " is free right now. Our team is assigning one to you by hand.");
+        user.setBookingId(booking.getId().toString());
+        user.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(user);
+    }
+
+    private static long secondsLeft(TravelBooking booking) {
+        if (booking.getOfferExpiresAt() == null) {
+            return 0;
+        }
+        return Math.max(0, java.time.Duration.between(
+                LocalDateTime.now(java.time.ZoneId.of("Asia/Kolkata")), booking.getOfferExpiresAt()).getSeconds());
+    }
+
     public void notifyTripAccepted(TravelBooking booking, Driver driver) {
         Notification notification = new Notification();
         notification.setRecipientId(booking.getUserId().toString());

@@ -1,5 +1,6 @@
 package com.travelplatform.config;
 
+import com.travelplatform.service.DriverOfferPublisher;
 import com.travelplatform.service.LocationTrackingService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -28,13 +29,19 @@ public class LocationRelayConfig {
 
     @Bean
     public RedisMessageListenerContainer locationRelayContainer(RedisConnectionFactory connectionFactory,
-                                                                LocationTrackingService locationTrackingService) {
+                                                                LocationTrackingService locationTrackingService,
+                                                                DriverOfferPublisher driverOfferPublisher) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
         container.addMessageListener(
                 (message, pattern) -> locationTrackingService.onRelayedLocation(
                         new String(message.getBody(), StandardCharsets.UTF_8)),
                 new ChannelTopic(LocationTrackingService.RELAY_CHANNEL));
+        // Ride Now offers have the same problem: the driver may be connected to another instance.
+        container.addMessageListener(
+                (message, pattern) -> driverOfferPublisher.onRelayed(
+                        new String(message.getBody(), StandardCharsets.UTF_8)),
+                new ChannelTopic(DriverOfferPublisher.RELAY_CHANNEL));
         // Redis being down is a supported state here (tracking falls back to local delivery),
         // so reconnect on a slow cadence instead of the 5s default that would fill the log.
         container.setRecoveryInterval(30_000L);

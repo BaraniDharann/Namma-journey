@@ -5,6 +5,7 @@ import { getNotifications, getUnreadCount, markNotificationAsRead, markAllNotifi
 import Icon, { navIcon, navTint } from './dash/Icon'
 import { TipLayer } from './dash/ui'
 import TelegramGate from './driver/TelegramGate'
+import DriverDispatch from './driver/DriverDispatch'
 
 function timeAgo(dateStr) {
   const now = new Date()
@@ -201,7 +202,9 @@ export default function DashboardLayout({ children, navItems, role }) {
         </header>
 
         <main className="pc-main dashboard-content">
-          {role === 'ROLE_DRIVER' ? <TelegramGate driverId={user?.userId}>{children}</TelegramGate> : children}
+          {role === 'ROLE_DRIVER'
+            ? <TelegramGate driverId={user?.userId}><DriverDispatch driverId={user?.userId}>{children}</DriverDispatch></TelegramGate>
+            : children}
         </main>
       </div>
       <TipLayer />

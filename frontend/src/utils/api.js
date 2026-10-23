@@ -177,6 +177,9 @@ export const getTripSummary = (userId, bookingId) => api.get(`/user/${userId}/bo
 
 // Driver APIs
 export const getDriverBookings = (driverId) => cachedGet(`/driver/${driverId}/bookings`)
+// Ride Now: uncached, because an offer lives for seconds, and silent, because it runs in the background.
+export const getDriverBookingsFresh = (driverId) => api.get(`/driver/${driverId}/bookings`, { _silent: true })
+export const reportDriverPresence = (driverId, latitude, longitude) => api.put(`/driver/${driverId}/presence`, { latitude, longitude }, { _silent: true })
 export const driverBookingAction = (driverId, bookingId, action) => api.post(`/driver/${driverId}/bookings/${bookingId}/action`, { action }).then(res => { invalidateCache('bookings'); return res })
 export const endTrip = (driverId, bookingId) => api.post(`/driver/${driverId}/bookings/${bookingId}/end-trip`).then(res => { invalidateCache('bookings'); invalidateCache('payments'); return res })
 export const markCashReceived = (driverId, bookingId, data) => api.post(`/driver/${driverId}/bookings/${bookingId}/cash-payment`, data).then(res => { invalidateCache('bookings'); invalidateCache('payments'); return res })

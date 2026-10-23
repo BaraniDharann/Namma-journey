@@ -1,0 +1,59 @@
+/* ═══════════════════════════════════════════════════════════════
+   Ride Now — the driver's offer card and the traveller's
+   "finding your driver" panel. Uses the dashboard (pc) tokens.
+   ═══════════════════════════════════════════════════════════════ */
+
+.rn-overlay {
+  position: fixed; inset: 0; z-index: 2500; display: grid; place-items: end center; padding: 16px;
+  background: rgba(15, 42, 43, .45); backdrop-filter: blur(3px);
+}
+@media (min-width: 640px) { .rn-overlay { place-items: center; } }
+
+.rn-card {
+  width: min(400px, 100%); border-radius: var(--pc-r); background: var(--pc-panel); color: var(--pc-ink);
+  box-shadow: 0 40px 80px -30px rgba(15, 42, 43, .7); overflow: hidden;
+  animation: rn-rise .35s var(--pc-ease);
+}
+.rn-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 0; }
+.rn-kicker { font: 800 11.5px var(--pc-fb); letter-spacing: .08em; text-transform: uppercase; color: var(--pc-brand-deep); }
+.rn-title { margin: 4px 0 0; font: 700 18px/1.25 var(--pc-fd); letter-spacing: -.02em; }
+.rn-fare { font: 700 24px var(--pc-fd); letter-spacing: -.02em; text-align: right; }
+.rn-fare small { display: block; font: 700 11.5px var(--pc-fb); color: var(--pc-muted); }
+
+.rn-body { padding: 14px 20px 0; }
+.rn-facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.rn-fact { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px;
+  background: var(--pc-wash); font: 800 12.5px var(--pc-fb); color: var(--pc-ink-2, var(--pc-ink)); }
+
+.rn-timer { margin: 16px 20px 0; height: 6px; border-radius: 999px; background: var(--pc-line); overflow: hidden; }
+.rn-timer i { display: block; height: 100%; background: var(--pc-brand); border-radius: inherit;
+  transform-origin: left center; transition: transform 1s linear; }
+.rn-timer.is-low i { background: var(--pc-bad); }
+.rn-left { margin: 6px 20px 0; font: 800 12.5px var(--pc-fb); color: var(--pc-muted); }
+
+.rn-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; padding: 16px 20px 20px; }
+.rn-actions .pc-btn { min-height: 50px; font-size: 15px; justify-content: center; }
+
+/* Driver-wide location notice, under the page header. */
+.rn-notice { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; padding: 12px 14px;
+  border-radius: var(--pc-r-sm); background: var(--pc-warn-soft); color: var(--pc-warn); font: 700 13px/1.45 var(--pc-fb); }
+
+/* Traveller: searching for a driver. */
+.rn-search { display: flex; gap: 14px; align-items: center; }
+.rn-radar { position: relative; flex: none; width: 54px; height: 54px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--pc-brand-soft); color: var(--pc-brand-deep); }
+.rn-radar::before, .rn-radar::after { content: ''; position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid var(--pc-brand); opacity: 0; animation: rn-ping 2s var(--pc-ease) infinite; }
+.rn-radar::after { animation-delay: 1s; }
+.rn-radar.is-done::before, .rn-radar.is-done::after { animation: none; }
+.rn-search b { display: block; font: 800 15px var(--pc-fb); }
+.rn-search small { display: block; margin-top: 2px; font: 600 13px/1.45 var(--pc-fb); color: var(--pc-muted); }
+
+@keyframes rn-rise { from { opacity: 0; transform: translateY(18px) scale(.98); } }
+@keyframes rn-ping { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(1.7); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .rn-card { animation: none; }
+  .rn-timer i { transition: none; }
+  .rn-radar::before, .rn-radar::after { animation: none; }
+}

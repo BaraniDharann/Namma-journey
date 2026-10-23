@@ -49,6 +49,28 @@ public class PaymentService {
     
     private static final int UPI_LINK_EXPIRY_MINUTES = 5;
 
+    // Field-injected so the tests that build PaymentService by hand are unaffected.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DriverPresenceService presenceService;
+
+    /**
+     * The ride is over on the ground. The booking stays STARTED until it is paid, but the driver
+     * is free from now (V13), and the drop-off is where they are: that is where the next Ride Now
+     * search should find them. Their phone's next position report replaces it with the real fix.
+     */
+    private void markTripEnded(TravelBooking booking, Long driverId) {
+        if (booking.getTripEndedAt() == null) {
+            booking.setTripEndedAt(LocalDateTime.now());
+            bookingRepository.save(booking);
+        }
+        if (presenceService != null && booking.getToLat() != null && booking.getToLon() != null
+                && driverRepository.findById(driverId)
+                        .map(d -> d.getStatus() == com.travelplatform.entity.Driver.Status.ACTIVE)
+                        .orElse(false)) {
+            presenceService.report(driverId, booking.getToLat(), booking.getToLon());
+        }
+    }
+
     @Transactional
     public PaymentResponse initiatePayment(UUID userId, UUID bookingId, PaymentRequest request) {
         TravelBooking booking = bookingRepository.findById(bookingId)
@@ -324,6 +346,7 @@ public class PaymentService {
         if (booking.getStatus() != TravelBooking.BookingStatus.STARTED) {
             throw new RuntimeException("Start the trip before ending it");
         }
+        markTripEnded(booking, driverId);
         java.util.Optional<Payment> existing = paymentRepository.findByBookingId(bookingId);
         if (existing.isPresent() && existing.get().getStatus() == Payment.PaymentStatus.VERIFIED) {
             // Prepaid: the money is already in, so ending the ride is what completes it. This

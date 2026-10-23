@@ -75,6 +75,9 @@ public class BookingAccessGuard {
                 .filter(b -> driverId.equals(b.getDriverId()))
                 .filter(b -> b.getStatus() == TravelBooking.BookingStatus.CONFIRMED
                         || b.getStatus() == TravelBooking.BookingStatus.STARTED)
+                // Ended but unpaid is still STARTED. A sender left running on it would keep
+                // overwriting where Ride Now thinks the driver is, now that they may be on the next ride.
+                .filter(b -> b.getTripEndedAt() == null)
                 .isPresent();
     }
 

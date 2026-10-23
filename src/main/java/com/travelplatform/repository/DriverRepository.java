@@ -20,11 +20,14 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     boolean existsByEmail(String email);
     boolean existsByLicenseNumber(String licenseNumber);
     boolean existsByAadhaarNumber(String aadhaarNumber);
-    
+
+    // "Busy" everywhere below means an active trip the driver has not ended yet: an ended trip
+    // awaiting payment no longer occupies them, matching no_driver_overlap since V13.
+
     @Query("SELECT d FROM Driver d WHERE d.status = 'ACTIVE' AND d.id NOT IN " +
            "(SELECT tb.driverId FROM TravelBooking tb WHERE tb.driverId IS NOT NULL " +
            "AND ((tb.fromDate <= :toDate AND tb.toDate >= :fromDate) " +
-           "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED')))")
+           "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL))")
     List<Driver> findAvailableDrivers(@Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate);
 
     /**
@@ -38,17 +41,29 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
            "AND d.id NOT IN :excludedDriverIds AND d.id NOT IN " +
            "(SELECT tb.driverId FROM TravelBooking tb WHERE tb.driverId IS NOT NULL " +
            "AND ((tb.fromDate <= :toDate AND tb.toDate >= :fromDate) " +
-           "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED')))")
+           "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL))")
     List<Driver> findAvailableDriversExcluding(@Param("fromDate") LocalDate fromDate,
                                                @Param("toDate") LocalDate toDate,
                                                @Param("excludedDriverIds") List<Long> excludedDriverIds);
 
     @Query("SELECT COUNT(tb) FROM TravelBooking tb WHERE tb.driverId = :driverId " +
-           "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') " +
+           "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL " +
            "AND tb.fromDate <= :toDate AND tb.toDate >= :fromDate " +
            "AND (:excludeBookingId IS NULL OR tb.id <> :excludeBookingId)")
     long countOverlappingActiveBookings(@Param("driverId") Long driverId,
                                         @Param("fromDate") LocalDate fromDate,
                                         @Param("toDate") LocalDate toDate,
                                         @Param("excludeBookingId") java.util.UUID excludeBookingId);
+
+    /**
+     * Of these drivers, the ones a Ride Now offer may go to on {@code day}: ACTIVE, and not busy
+     * that day. A pending offer is itself a PENDING booking with their id, so a driver already
+     * holding one is left out and never juggles two offers.
+     */
+    @Query("SELECT d.id FROM Driver d WHERE d.id IN :driverIds AND d.status = 'ACTIVE' AND d.id NOT IN " +
+           "(SELECT tb.driverId FROM TravelBooking tb WHERE tb.driverId IS NOT NULL " +
+           "AND tb.fromDate <= :day AND tb.toDate >= :day " +
+           "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL)")
+    List<Long> findDispatchableAmong(@Param("driverIds") java.util.Collection<Long> driverIds,
+                                     @Param("day") LocalDate day);
 }

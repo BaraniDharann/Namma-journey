@@ -43,6 +43,9 @@ public class DriverController {
     @Autowired
     private TelegramProperties telegramProperties;
 
+    @Autowired
+    private com.travelplatform.service.DriverPresenceService driverPresenceService;
+
     // SpEL guard reused on per-driver endpoints. Without it any logged-in driver could read
     // or mutate another driver's bookings simply by changing the URL.
     private static final String SAME_DRIVER = "hasRole('DRIVER') and #driverId.toString() == authentication.principal";
@@ -167,7 +170,26 @@ public class DriverController {
         if (!bookingAccessGuard.canReportLocation(dto.getDriverId(), dto.getBookingId())) {
             throw new org.springframework.security.access.AccessDeniedException("Not assigned to this trip");
         }
+        // A driver on a trip is online too; their live position is also where Ride Now finds them.
+        driverPresenceService.report(dto.getDriverId(), dto.getLatitude(), dto.getLongitude());
         return ResponseEntity.ok(locationTrackingService.updateLocation(dto));
+    }
+
+    /**
+     * An online driver's phone reporting where it is, every few seconds, so Ride Now can offer
+     * them trips near them. Only positions are kept, and only for a minute past the last report.
+     */
+    @PutMapping("/{driverId}/presence")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<Void> reportPresence(@PathVariable Long driverId,
+                                               @RequestBody(required = false) Map<String, Double> body) {
+        Double lat = body != null ? body.get("latitude") : null;
+        Double lon = body != null ? body.get("longitude") : null;
+        if (lat == null || lon == null) {
+            throw new IllegalArgumentException("latitude and longitude are required");
+        }
+        driverPresenceService.report(driverId, lat, lon);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{driverId}/availability")

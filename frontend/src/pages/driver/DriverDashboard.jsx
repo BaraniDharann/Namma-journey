@@ -4,7 +4,8 @@ import toast from 'react-hot-toast'
 import DashboardLayout from '../../components/DashboardLayout'
 import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
-import { getDriverBookings, getDriverProfile, toggleDriverAvailability, driverBookingAction } from '../../utils/api'
+import { getDriverBookings, getDriverProfile, toggleDriverAvailability, driverBookingAction, invalidateCache } from '../../utils/api'
+import { DRIVER_STATUS_EVENT, DRIVER_TRIPS_EVENT } from '../../hooks/useDriverDispatch'
 import Icon from '../../components/dash/Icon'
 import { Panel, PanelLink, PageHead, StatusPill, Empty, Skeleton, ErrorNote } from '../../components/dash/ui'
 import { Gauge } from '../../components/dash/charts'
@@ -47,6 +48,12 @@ export default function DriverDashboard() {
   }, [user.userId])
 
   useEffect(() => { load() }, [load])
+  // A Ride Now offer arrived, or was answered from the offer card: show the trip list as it is now.
+  useEffect(() => {
+    const onTrips = () => { invalidateCache('bookings'); load() }
+    window.addEventListener(DRIVER_TRIPS_EVENT, onTrips)
+    return () => window.removeEventListener(DRIVER_TRIPS_EVENT, onTrips)
+  }, [load])
   useEffect(() => {
     getDriverProfile(user.userId).then((r) => setStatus(r.data?.status || 'ACTIVE')).catch(() => setStatus('ACTIVE'))
   }, [user.userId])
@@ -59,7 +66,8 @@ export default function DriverDashboard() {
     try {
       await toggleDriverAvailability(user.userId, next)
       setStatus(next)
-      toast.success(next === 'ACTIVE' ? "You're online. New trips can reach you." : "You're offline. No new trips will be sent.")
+      window.dispatchEvent(new CustomEvent(DRIVER_STATUS_EVENT, { detail: next }))
+      toast.success(next === 'ACTIVE' ? "You're online. Rides near you can reach you." : "You're offline. No new trips will be sent.")
     } catch { /* surfaced by the api toast */ }
     setToggling(false)
   }
@@ -90,7 +98,8 @@ export default function DriverDashboard() {
       next: nextTrip(bookings, now),
       mix: typeMix(bookings),
       requests: bookings.filter((b) => b.status === 'PENDING'),
-      started: bookings.find((b) => b.status === 'STARTED'),
+      // An ended trip awaiting payment no longer shares location: the driver may be on the next ride.
+      started: bookings.find((b) => b.status === 'STARTED' && !b.tripEndedAt),
       done: bookings.filter((b) => b.status === 'COMPLETED').length,
       lifetime: bookings.filter((b) => b.status === 'COMPLETED').reduce((s, b) => s + (Number(b.totalAmount) || 0), 0),
     }
@@ -191,7 +200,7 @@ export default function DriverDashboard() {
 
         <Panel span={12} title="New requests" meta={m.requests.length ? `${m.requests.length} waiting` : undefined} action={<PanelLink to="/driver/bookings">All trips</PanelLink>}>
           {state.loading ? <Skeleton rows={3} /> : m.requests.length === 0 ? (
-            <Empty icon="bell" title="No new requests">We&apos;ll notify you when an owner assigns you a trip.</Empty>
+            <Empty icon="bell" title="No new requests">{online ? 'Rides near you pop up the moment they are booked. Owner-assigned trips appear here too.' : 'Go online to get rides near you.'}</Empty>
           ) : (
             <div className="pc-rows">
               {m.requests.slice(0, 5).map((b) => (

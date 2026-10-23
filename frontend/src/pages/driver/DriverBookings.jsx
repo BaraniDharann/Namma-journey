@@ -196,6 +196,8 @@ export default function DriverBookings() {
     setActionLoading(bookingId + 'END')
     try {
       const res = await endTrip(user.userId, bookingId)
+      // The ride is over: stop sharing its location. The driver is free for the next ride from here.
+      setTrackingBooking((t) => (t?.bookingId === bookingId ? null : t))
       if (res.data?.upiQrCode) setQrData(res.data)
       load()
     } catch { /* ignore */ }
@@ -328,9 +330,11 @@ export default function DriverBookings() {
                     )}
                     {b.status === 'STARTED' && (
                       <>
-                        <button type="button" className="pc-btn pc-btn-sm" onClick={() => setTrackingBooking(b)}>
-                          <Icon name="pin" size={15} />Track
-                        </button>
+                        {!b.tripEndedAt && (
+                          <button type="button" className="pc-btn pc-btn-sm" onClick={() => setTrackingBooking(b)}>
+                            <Icon name="pin" size={15} />Track
+                          </button>
+                        )}
                         <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => handleEndTrip(b.bookingId)} disabled={busy(b, 'END')}>
                           {busy(b, 'END') ? '...' : <><Icon name="camera" size={15} />End trip</>}
                         </button>

@@ -11,6 +11,7 @@ import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty } from '../../components/dash/ui'
 import { inr, shortPlace } from '../../dash/metrics'
 import { useCelebrate } from '../../components/celebrate/Celebration'
+import RideSearchStatus from '../../components/RideSearchStatus'
 
 const navItems = [
   { path: '/user/dashboard', icon: '', label: 'Dashboard' },
@@ -20,6 +21,12 @@ const navItems = [
   { path: '/user/package-bookings', icon: '', label: 'My Packages' },
   { path: '/user/profile', icon: '', label: 'Profile' },
 ]
+
+/** Today as YYYY-MM-DD in the browser's own calendar (toISOString would give the UTC day). */
+const localToday = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const temples = ['Tirupati Balaji', 'Shirdi Sai Baba', 'Vaishno Devi', 'Kedarnath', 'Badrinath', 'Somnath', 'Rameshwaram', 'Kashi Vishwanath', 'Mahakaleshwar', 'Jagannath Puri']
 
@@ -32,6 +39,8 @@ export default function NewBooking() {
   const bookingKey = useRef(actionKey())
 
   const [form, setForm] = useState({
+    // A link that names a date is a trip planned ahead; otherwise default to a ride now.
+    rideNow: !searchParams.get('date'),
     fromPlace: searchParams.get('from') || '', toPlace: searchParams.get('to') || '',
     fromLat: null, fromLon: null, toLat: null, toLon: null,
     fromDate: searchParams.get('date') || '', toDate: '', travelMembers: Number(searchParams.get('members')) || 1, acType: 'AC',
@@ -64,11 +73,11 @@ export default function NewBooking() {
       setError('Please select both locations from the dropdown suggestions for accurate distance calculation.')
       return
     }
-    if (!form.fromDate || !form.toDate) {
+    if (!form.rideNow && (!form.fromDate || !form.toDate)) {
       setError('Please pick both a start date and an end date.')
       return
     }
-    if (new Date(form.toDate) < new Date(form.fromDate)) {
+    if (!form.rideNow && new Date(form.toDate) < new Date(form.fromDate)) {
       setError('End date cannot be before the start date.')
       return
     }
@@ -88,8 +97,10 @@ export default function NewBooking() {
         fromLon: form.fromLon,
         toLat: form.toLat,
         toLon: form.toLon,
-        fromDate: form.fromDate,
-        toDate: form.toDate,
+        // Ride Now: the server sets both dates to today in India; these only satisfy the form contract.
+        fromDate: form.rideNow ? localToday() : form.fromDate,
+        toDate: form.rideNow ? localToday() : form.toDate,
+        rideNow: form.rideNow,
         travelMembers: Number(form.travelMembers),
         acType: form.acType,
         bookingType: form.bookingType,
@@ -98,6 +109,8 @@ export default function NewBooking() {
       // Done: the next booking is a new action and needs its own key.
       bookingKey.current.reset()
       setSuccess(res.data)
+      // A ride now gets its own live "finding your driver" panel; the celebration is for planned trips.
+      if (res.data?.dispatchMode === 'RIDE_NOW') return
       celebrate({
         title: 'Trip booked',
         message: `${shortPlace(res.data?.fromPlace || form.fromPlace)} → ${shortPlace(res.data?.toPlace || form.toPlace)}. A verified driver will be assigned shortly.`,
@@ -112,14 +125,20 @@ export default function NewBooking() {
   }
 
   if (success) {
+    const rideNow = success.dispatchMode === 'RIDE_NOW'
     return (
       <DashboardLayout navItems={navItems} role="ROLE_USER">
-        <PageHead title="Booking Confirmed!" sub="We are matching you with a driver now">
+        <PageHead title={rideNow ? 'Ride booked' : 'Booking Confirmed!'} sub={rideNow ? 'Matching you with the nearest driver' : 'We are matching you with a driver now'}>
           <button type="button" onClick={() => navigate('/user/bookings')} className="pc-btn"><Icon name="calendar" />View Bookings</button>
-          <button type="button" onClick={() => { setSuccess(null); setForm({ fromPlace:'', toPlace:'', fromLat:null, fromLon:null, toLat:null, toLon:null, fromDate:'', toDate:'', travelMembers:1, acType:'AC', bookingType:'DISTANCE_BASED', bookingHours:2 }) }}
+          <button type="button" onClick={() => { setSuccess(null); setForm({ rideNow: true, fromPlace:'', toPlace:'', fromLat:null, fromLon:null, toLat:null, toLon:null, fromDate:'', toDate:'', travelMembers:1, acType:'AC', bookingType:'DISTANCE_BASED', bookingHours:2 }) }}
             className="pc-btn pc-btn-ghost"><Icon name="plus" />New Booking</button>
         </PageHead>
         <div className="pc-grid">
+          {rideNow && (
+            <Panel span={12} title="Your driver">
+              <RideSearchStatus userId={user.userId} booking={success} />
+            </Panel>
+          )}
           <Panel span={7} title="Your trip" meta={<StatusPill status={success.status || 'PENDING'} />}>
             <div className="pc-route">
               <i /><div style={{ overflowWrap: 'anywhere' }}>{success.fromPlace}<small>From</small></div>
@@ -240,6 +259,19 @@ export default function NewBooking() {
 
           {/* Travel Details */}
           <h3 style={{ ...subHead, marginTop: 24 }}><Icon name="calendar" size={15} />Travel details</h3>
+          <div role="group" aria-label="When" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 14 }}>
+            {[{ now: true, icon: 'car', label: 'Ride now', desc: 'Nearest driver comes to you' }, { now: false, icon: 'calendar', label: 'Schedule', desc: 'Pick your travel dates' }].map(opt => (
+              <button key={opt.label} type="button" aria-pressed={form.rideNow === opt.now} onClick={() => set('rideNow', opt.now)}
+                style={{ ...choice(form.rideNow === opt.now), alignItems: 'flex-start', padding: 16 }}>
+                <Icon name={opt.icon} size={18} />
+                <span>
+                  <span style={{ display: 'block', fontSize: 14, marginBottom: 2 }}>{opt.label}</span>
+                  <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--pc-muted)' }}>{opt.desc}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          {!form.rideNow && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={lbl}>From Date *</label>
@@ -250,6 +282,7 @@ export default function NewBooking() {
               <input type="date" className="input-field" value={form.toDate} min={form.fromDate || new Date().toISOString().split('T')[0]} onChange={e => set('toDate', e.target.value)} required style={{ width: '100%', padding: '10px 14px', outline: 'none' }} />
             </div>
           </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
             <div>
               <label style={lbl}>Travel Members *</label>
@@ -316,7 +349,7 @@ export default function NewBooking() {
               <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--pc-muted)' }}>The final fare is worked out from the road distance when you confirm.</p>
             )}
             <button type="submit" disabled={loading} className="pc-btn" style={{ width: '100%', marginTop: 16, minHeight: 48, fontSize: 15 }}>
-              {loading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Calculating route & price...</> : <><Icon name="check" />Confirm Booking</>}
+              {loading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Calculating route & price...</> : <><Icon name="check" />{form.rideNow ? 'Book ride now' : 'Confirm Booking'}</>}
             </button>
           </Panel>
         </div>

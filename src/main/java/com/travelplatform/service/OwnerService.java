@@ -300,6 +300,8 @@ public class OwnerService {
         Long previousDriverId = booking.getDriverId();
         booking.setDriverId(driverId);
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
+        // The owner's choice ends a Ride Now search; the sweep leaves MATCHED bookings alone.
+        DispatchService.markMatched(booking);
         TravelBooking updatedBooking = travelBookingRepository.save(booking);
 
         // An unpaid payment follows the trip to its new driver, so the payment record and the
@@ -352,7 +354,7 @@ public class OwnerService {
             response.setDriver(driverDetails);
         }
         
-        return response;
+        return response.withDispatch(booking);
     }
     
     private String formatTime(Long minutes) {

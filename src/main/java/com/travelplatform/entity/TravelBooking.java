@@ -98,11 +98,51 @@ public class TravelBooking {
     @Column
     private Long version;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "dispatch_mode", nullable = false, length = 16)
+    private DispatchMode dispatchMode = DispatchMode.SCHEDULED;
+
+    /** Null for scheduled bookings: only a Ride Now booking searches for a nearby driver. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "dispatch_state", length = 16)
+    private DispatchState dispatchState;
+
+    @Column(name = "dispatch_started_at")
+    private LocalDateTime dispatchStartedAt;
+
+    @Column(name = "offer_expires_at")
+    private LocalDateTime offerExpiresAt;
+
+    @Column(name = "offer_distance_km")
+    private Double offerDistanceKm;
+
+    /** Set when the driver ends the trip; from then on it no longer occupies them (V13). */
+    @Column(name = "trip_ended_at")
+    private LocalDateTime tripEndedAt;
+
     public enum BookingStatus {
         PENDING, CONFIRMED, STARTED, COMPLETED, CANCELLED
     }
 
     public enum BookingType {
         DISTANCE_BASED, HOUR_BASED
+    }
+
+    public enum DispatchMode {
+        /** A trip for a date, assigned to any driver free on those days. */
+        SCHEDULED,
+        /** A trip wanted now, offered to the nearest online driver one at a time. */
+        RIDE_NOW
+    }
+
+    public enum DispatchState {
+        /** Looking for a driver; nobody holds the offer. */
+        SEARCHING,
+        /** {@code driverId} holds the offer until {@code offerExpiresAt}. */
+        OFFERED,
+        /** A driver accepted, or the owner assigned one. */
+        MATCHED,
+        /** Nobody nearby within the search time; left to the owner. */
+        NO_DRIVER
     }
 }

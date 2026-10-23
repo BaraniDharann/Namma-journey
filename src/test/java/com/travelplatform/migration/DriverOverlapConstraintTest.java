@@ -118,6 +118,25 @@ class DriverOverlapConstraintTest {
     }
 
     @Test
+    @DisplayName("V13: a trip the driver has ended frees them, even while it waits to be paid")
+    void endedTripDoesNotBlockTheNextRide() throws Exception {
+        flyway(null).migrate();
+        try (Connection c = connect()) {
+            UUID ended = insert(c, DRIVER, "STARTED", "2026-11-01", "2026-11-01");
+
+            assertThrows(SQLException.class, () -> insert(c, DRIVER, "PENDING", "2026-11-01", "2026-11-01"),
+                    "still on the trip: busy");
+
+            try (PreparedStatement ps = c.prepareStatement(
+                    "UPDATE travel_bookings SET trip_ended_at = now() WHERE id = ?")) {
+                ps.setObject(1, ended);
+                ps.executeUpdate();
+            }
+            insert(c, DRIVER, "PENDING", "2026-11-01", "2026-11-01"); // the next Ride Now offer
+        }
+    }
+
+    @Test
     @DisplayName("two bookings racing for the same driver: exactly one wins")
     void concurrentInsertsLetExactlyOneThrough() throws Exception {
         flyway(null).migrate();
