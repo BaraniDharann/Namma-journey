@@ -13,6 +13,7 @@ const navItems = [
   { path: '/owner/driver-applications', icon: '', label: 'Applications' },
   { path: '/owner/cities', icon: '', label: 'Cities' },
   { path: '/owner/payments', icon: '', label: 'Payments' },
+  { path: '/owner/payouts', icon: '', label: 'Payouts' },
   { path: '/owner/reviews', icon: '', label: 'Reviews' },
   { path: '/owner/packages', icon: '', label: 'Packages' },
   { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },

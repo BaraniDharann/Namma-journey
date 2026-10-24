@@ -40,6 +40,10 @@ public class City {
     @Column(nullable = false)
     private boolean active = true;
 
+    /** What the platform keeps from an independent driver's ride here, 0-50 % (V21). */
+    @Column(name = "commission_percent", nullable = false, precision = 5, scale = 2)
+    private java.math.BigDecimal commissionPercent = new java.math.BigDecimal("10.00");
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 }

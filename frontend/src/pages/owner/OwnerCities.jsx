@@ -12,6 +12,7 @@ const navItems = [
   { path: '/owner/driver-applications', icon: '', label: 'Applications' },
   { path: '/owner/cities', icon: '', label: 'Cities' },
   { path: '/owner/payments', icon: '', label: 'Payments' },
+  { path: '/owner/payouts', icon: '', label: 'Payouts' },
   { path: '/owner/reviews', icon: '', label: 'Reviews' },
   { path: '/owner/packages', icon: '', label: 'Packages' },
   { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
@@ -20,7 +21,7 @@ const navItems = [
 ]
 
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
-const EMPTY = { id: null, name: '', centerName: '', centerLat: null, centerLon: null, radiusKm: '30', active: true }
+const EMPTY = { id: null, name: '', centerName: '', centerLat: null, centerLon: null, radiusKm: '30', commissionPercent: '10', active: true }
 
 /** The places City rides are served. A pickup outside every active city can only be booked as a Trip. */
 export default function OwnerCities() {
@@ -39,11 +40,13 @@ export default function OwnerCities() {
   })
 
   const radius = Number(draft?.radiusKm)
+  const commission = Number(draft?.commissionPercent)
   const valid = draft && draft.name.trim() && draft.centerLat != null && radius >= 1 && radius <= 100
+    && draft.commissionPercent !== '' && commission >= 0 && commission <= 50
 
   const save = async () => {
     setSaving(true); setError('')
-    const body = { name: draft.name.trim(), centerLat: draft.centerLat, centerLon: draft.centerLon, radiusKm: radius, active: draft.active }
+    const body = { name: draft.name.trim(), centerLat: draft.centerLat, centerLon: draft.centerLon, radiusKm: radius, commissionPercent: commission, active: draft.active }
     try {
       const r = draft.id ? await updateCity(draft.id, body) : await createCity(body)
       upsert(r.data)
@@ -67,7 +70,7 @@ export default function OwnerCities() {
 
   const edit = (c) => {
     setError('')
-    setDraft({ id: c.id, name: c.name, centerName: `${c.centerLat.toFixed(4)}, ${c.centerLon.toFixed(4)}`, centerLat: c.centerLat, centerLon: c.centerLon, radiusKm: String(c.radiusKm), active: c.active })
+    setDraft({ id: c.id, name: c.name, centerName: `${c.centerLat.toFixed(4)}, ${c.centerLon.toFixed(4)}`, centerLat: c.centerLat, centerLon: c.centerLon, radiusKm: String(c.radiusKm), commissionPercent: String(c.commissionPercent ?? 10), active: c.active })
   }
 
   return (
@@ -96,6 +99,12 @@ export default function OwnerCities() {
               <input id="city-radius" className="input-field" type="number" min="1" max="100" step="1" inputMode="decimal"
                 value={draft.radiusKm} style={{ width: '100%' }} onChange={(e) => setDraft((d) => ({ ...d, radiusKm: e.target.value }))} />
             </div>
+            <div>
+              <label style={labelStyle} htmlFor="city-commission">Commission (%, 0 to 50)</label>
+              <input id="city-commission" className="input-field" type="number" min="0" max="50" step="0.5" inputMode="decimal"
+                value={draft.commissionPercent} style={{ width: '100%' }} onChange={(e) => setDraft((d) => ({ ...d, commissionPercent: e.target.value }))} />
+              <small style={{ color: 'var(--pc-muted)', fontSize: 12 }}>Kept from each ride by an independent driver here.</small>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
             <button type="button" className="pc-btn pc-btn-ghost" disabled={saving} onClick={() => setDraft(null)}>Cancel</button>
@@ -115,7 +124,7 @@ export default function OwnerCities() {
               <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '12px 14px', borderRadius: 12, background: 'var(--pc-wash)', border: '1px solid var(--pc-line)' }}>
                 <div>
                   <b style={{ fontSize: 15 }}>{c.name}</b>
-                  <div style={{ fontSize: 13, color: 'var(--pc-muted)' }}>{c.radiusKm} km around {c.centerLat.toFixed(4)}, {c.centerLon.toFixed(4)}</div>
+                  <div style={{ fontSize: 13, color: 'var(--pc-muted)' }}>{c.radiusKm} km around {c.centerLat.toFixed(4)}, {c.centerLon.toFixed(4)} · {Number(c.commissionPercent ?? 10)}% commission</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <button type="button" className="pc-switch" role="switch" aria-checked={c.active} onClick={() => toggle(c)}>

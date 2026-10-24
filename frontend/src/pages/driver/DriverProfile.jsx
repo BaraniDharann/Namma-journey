@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { getDriverProfile, toggleDriverAvailability } from '../../utils/api'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Skeleton } from '../../components/dash/ui'
+import EarningsPanel from '../../components/driver/EarningsPanel'
 
 const navItems = [
   { path: '/driver/dashboard', icon: '', label: 'Dashboard' },
@@ -129,6 +130,8 @@ export default function DriverProfile() {
               ))}
             </div>
           </Panel>
+
+          {d.fleet === 'INDEPENDENT' && <EarningsPanel driverId={user.userId} />}
         </div>
       )}
     </DashboardLayout>

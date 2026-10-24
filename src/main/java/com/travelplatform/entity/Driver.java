@@ -111,6 +111,15 @@ public class Driver {
     @Column(name = "serves_trip", nullable = false)
     private boolean servesTrip = true;
 
+    /**
+     * Where an independent driver is paid their earnings. Encrypted at rest (V21); never
+     * serialised with the entity - only the driver and the owner's payout screen read it.
+     */
+    @Convert(converter = com.travelplatform.security.EncryptedStringConverter.class)
+    @Column(name = "payout_upi_id", length = 512)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String payoutUpiId;
+
     /** Existing and owner-created drivers are OWNER_FLEET; self-signups are INDEPENDENT and never take Trips (drivers_independent_no_trips). */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 12)

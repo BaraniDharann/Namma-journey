@@ -69,6 +69,19 @@ public class PaymentService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DriverPresenceService presenceService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DriverLedgerService ledgerService;
+
+    /**
+     * A ride is done and paid: an independent driver's share (or the commission they owe on cash)
+     * goes into their ledger in this same transaction (V21). No-op for Trips and fleet drivers.
+     */
+    private void recordEarnings(TravelBooking booking, Payment fare) {
+        if (ledgerService != null) {
+            ledgerService.recordCompletedRide(booking, fare);
+        }
+    }
+
     /**
      * The ride is over on the ground. The booking stays STARTED until it is paid, but the driver
      * is free from now (V13), and the drop-off is where they are: that is where the next Ride Now
@@ -253,6 +266,7 @@ public class PaymentService {
         booking.setStatus(TravelBooking.BookingStatus.COMPLETED);
         bookingRepository.save(booking);
         locationTrackingService.removeLocation(bookingId.toString());
+        recordEarnings(booking, updated);
 
         notificationService.notifyPaymentReceived(booking);
 
@@ -328,6 +342,7 @@ public class PaymentService {
             booking.setStatus(TravelBooking.BookingStatus.COMPLETED);
             bookingRepository.save(booking);
             locationTrackingService.removeLocation(payment.getBookingId().toString());
+            recordEarnings(booking, verified);
         }
 
         notificationService.notifyPaymentReceived(booking);
@@ -386,6 +401,7 @@ public class PaymentService {
             booking.setStatus(TravelBooking.BookingStatus.COMPLETED);
             bookingRepository.save(booking);
             locationTrackingService.removeLocation(bookingId.toString());
+            recordEarnings(booking, existing.get());
             PaymentResponse response = mapToResponse(existing.get());
             response.setMessage("Already paid. Trip completed.");
             return response;

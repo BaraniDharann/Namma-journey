@@ -49,6 +49,11 @@ refuses to start rather than run on a value baked into the source.
       limited and not licensed for production traffic. Self-host or buy a provider before launch.
 - [ ] `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` — online payments. Without
       them the "Online" option refuses politely and UPI QR + cash work as before. See *Razorpay* below.
+- [ ] `APP_ENCRYPTION_KEY` — **required for driver payouts.** `openssl rand -base64 32`. Encrypts
+      payout UPI IDs at rest. Store it with your other secrets: losing it makes saved UPI IDs
+      unreadable (drivers must re-enter them), and changing it needs a re-encryption.
+- [ ] `TRIP_ADVANCE_PERCENT` (default 20; 0 turns Trip advances off), `TRIP_ADVANCE_HOLD_MINUTES`
+      (30), `TRIP_ADVANCE_REFUND_HOURS` (24)
 - [ ] `OUTBOX_TRANSPORT` — `in-process` (default, no extra infrastructure) or `sqs`. See *AWS SQS*
       below.
 - [ ] `STORAGE_TYPE=s3` + `S3_*` — **required on any host without a persistent disk** (Render's free

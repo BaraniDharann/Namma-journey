@@ -223,6 +223,9 @@ export const updateDriverLocation = (data) => api.post(`/driver/location/update`
 export const getOwnerBookings = () => cachedGet('/owner/bookings')
 export const getAllReviews = () => cachedGet('/owner/reviews')
 export const getPendingPayments = () => cachedGet('/owner/payments/pending')
+/** Independent drivers' balances and UPI IDs; recording a transfer changes them, so never cached. */
+export const getPayouts = () => api.get('/owner/payouts')
+export const recordPayout = (driverId, data) => api.post(`/owner/payouts/${driverId}`, data)
 export const verifyPayment = (paymentId) => api.post(`/owner/payments/${paymentId}/verify`).then(res => { invalidateCache('payments'); invalidateCache('bookings'); invalidateCache('revenue'); return res })
 export const assignDriver = (bookingId, driverId) => api.post(`/owner/bookings/${bookingId}/assign-driver`, { driverId }).then(res => { invalidateCache('bookings'); return res })
 export const setPricing = (pricePerKm, ownerId) => api.post(`/owner/pricing/set?pricePerKm=${pricePerKm}&ownerId=${ownerId}`)
@@ -255,6 +258,8 @@ export const deleteOwnerDriver = (driverId) => api.delete(`/owner/drivers/${driv
 export const createDriverTelegramLink = (driverId) => api.post(`/owner/drivers/${driverId}/telegram-link`)
   .then(res => { invalidateCache('drivers'); return res })
 export const getDriverProfile = (driverId) => api.get(`/driver/${driverId}/profile`)
+export const getDriverEarnings = (driverId) => api.get(`/driver/${driverId}/earnings`)
+export const setDriverPayoutUpi = (driverId, upiId) => api.put(`/driver/${driverId}/payout-upi`, { upiId })
 export const toggleDriverAvailability = (driverId, status) => api.put(`/driver/${driverId}/availability`, { status }).then(res => { invalidateCache('driver'); return res })
 export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/profile`, data).then(res => { invalidateCache('profile'); return res })
 

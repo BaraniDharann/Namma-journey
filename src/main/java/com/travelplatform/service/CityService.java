@@ -74,6 +74,13 @@ public class CityService {
                 || !(city.getCenterLon() >= -180 && city.getCenterLon() <= 180)) {
             throw new IllegalArgumentException("Choose the city's centre on the map");
         }
+        if (city.getCommissionPercent() == null) {
+            city.setCommissionPercent(new java.math.BigDecimal("10.00"));
+        }
+        if (city.getCommissionPercent().signum() < 0 || city.getCommissionPercent().compareTo(java.math.BigDecimal.valueOf(50)) > 0) {
+            throw new IllegalArgumentException("Commission must be between 0 and 50 %");
+        }
+        city.setCommissionPercent(city.getCommissionPercent().setScale(2, java.math.RoundingMode.HALF_UP));
         if (city.getCreatedAt() == null) {
             city.setCreatedAt(LocalDateTime.now());
         }
@@ -97,6 +104,13 @@ public class CityService {
         existing.setCenterLon(changes.getCenterLon());
         existing.setRadiusKm(changes.getRadiusKm());
         existing.setActive(changes.isActive());
+        existing.setCommissionPercent(changes.getCommissionPercent());
         return save(existing);
+    }
+
+    /** The commission for a ride in this city right now; the default 10 % if the city is gone. */
+    public java.math.BigDecimal commissionPercent(Long cityId) {
+        return cityId == null ? new java.math.BigDecimal("10.00")
+                : repository.findById(cityId).map(City::getCommissionPercent).orElse(new java.math.BigDecimal("10.00"));
     }
 }

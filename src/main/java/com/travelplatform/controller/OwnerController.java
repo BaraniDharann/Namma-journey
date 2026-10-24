@@ -39,6 +39,7 @@ public class OwnerController {
     private final com.travelplatform.service.CityFareService cityFareService;
     private final com.travelplatform.service.CityService cityService;
     private final com.travelplatform.service.DriverVerificationService driverVerificationService;
+    private final com.travelplatform.service.DriverLedgerService ledgerService;
 
     /** Self-signed-up drivers waiting for (or past) review; oldest first. */
     @GetMapping("/driver-applications")
@@ -236,6 +237,30 @@ public class OwnerController {
         return ResponseEntity.ok(reviewService.getAllReviews());
     }
     
+    /** Independent drivers, their payout UPI IDs (decrypted for the owner only) and balances. */
+    @GetMapping("/payouts")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<com.travelplatform.service.DriverLedgerService.PayoutRow>> getPayouts() {
+        return ResponseEntity.ok(ledgerService.payoutSummary());
+    }
+
+    /** Records a UPI transfer made outside the app: {type: PAYOUT|COLLECTION, amount, reference, note}. */
+    @PostMapping("/payouts/{driverId}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.entity.DriverLedgerEntry> recordPayout(
+            @PathVariable Long driverId, @RequestBody Map<String, String> body, java.security.Principal principal) {
+        com.travelplatform.entity.DriverLedgerEntry.Type type;
+        java.math.BigDecimal amount;
+        try {
+            type = com.travelplatform.entity.DriverLedgerEntry.Type.valueOf(String.valueOf(body.get("type")).trim().toUpperCase(java.util.Locale.ROOT));
+            amount = new java.math.BigDecimal(String.valueOf(body.get("amount")).trim());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Give a type (PAYOUT or COLLECTION) and an amount");
+        }
+        return ResponseEntity.ok(ledgerService.recordTransfer(driverId, type, amount,
+                body.get("reference"), body.get("note"), "owner:" + principal.getName()));
+    }
+
     @GetMapping("/payments/pending")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<PaymentResponse>> getPendingPayments() {

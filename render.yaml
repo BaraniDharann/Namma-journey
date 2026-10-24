@@ -102,6 +102,10 @@ services:
       # OUTBOX_SQS_QUEUE_URL / OUTBOX_SQS_ACCESS_KEY / OUTBOX_SQS_SECRET_KEY to use AWS SQS.
       - key: OUTBOX_TRANSPORT
         value: in-process
+      # Encrypts driver payout UPI IDs (openssl rand -base64 32). Set once and keep it: a new
+      # value makes stored UPI IDs unreadable.
+      - key: APP_ENCRYPTION_KEY
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

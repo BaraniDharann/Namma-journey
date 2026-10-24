@@ -163,6 +163,19 @@ app:
     # Empty = the endpoint refuses everyone.
     scrape-token: ${METRICS_SCRAPE_TOKEN:}
 
+  crypto:
+    # AES-256 key for encrypted columns (driver payout UPI IDs): base64 of 32 random bytes,
+    # `openssl rand -base64 32`. No default on purpose. Losing it makes stored UPI IDs unreadable
+    # (drivers re-enter them); changing it needs a re-encryption, so keep it with your secrets.
+    key: ${APP_ENCRYPTION_KEY:}
+
+  trip:
+    # Share of a Trip's fare paid online to hold it (0 switches advances off), how long an unpaid
+    # hold lasts, and until how long before the trip day a cancelled advance is refunded.
+    advance-percent: ${TRIP_ADVANCE_PERCENT:20}
+    advance-hold-minutes: ${TRIP_ADVANCE_HOLD_MINUTES:30}
+    advance-refund-hours: ${TRIP_ADVANCE_REFUND_HOURS:24}
+
   outbox:
     # Background jobs (notification emails, Razorpay refunds) are written to the outbox_events
     # table in the same transaction as the change they belong to, then delivered with retries.

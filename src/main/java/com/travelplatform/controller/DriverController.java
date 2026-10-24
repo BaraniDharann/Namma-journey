@@ -41,6 +41,23 @@ public class DriverController {
     private TelegramLinkService telegramLinkService;
 
     @Autowired
+    private com.travelplatform.service.DriverLedgerService ledgerService;
+
+    /** Balance with the platform, recent ledger lines, and the masked payout UPI ID. */
+    @GetMapping("/{driverId}/earnings")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<com.travelplatform.service.DriverLedgerService.EarningsView> getEarnings(@PathVariable Long driverId) {
+        return ResponseEntity.ok(ledgerService.earnings(driverId));
+    }
+
+    @PutMapping("/{driverId}/payout-upi")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<com.travelplatform.service.DriverLedgerService.EarningsView> setPayoutUpi(
+            @PathVariable Long driverId, @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(ledgerService.setPayoutUpi(driverId, body.get("upiId")));
+    }
+
+    @Autowired
     private TelegramProperties telegramProperties;
 
     @Autowired
