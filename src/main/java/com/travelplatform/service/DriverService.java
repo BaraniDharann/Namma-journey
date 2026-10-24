@@ -53,7 +53,11 @@ public class DriverService {
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DriverPresenceService presenceService;
-    
+
+    // The matching engine's copy of driver state; null in hand-built tests, where nothing reads it.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
+
     /**
      * Only APPROVED is remembered, for a minute, so location reports (every few seconds) do not hit
      * the database. Approve and reject evict the entry so a decision shows at once.
@@ -101,6 +105,9 @@ public class DriverService {
         }
         driver.setStatus(parsed);
         driverRepository.save(driver);
+        if (driverStates != null) {
+            driverStates.profileChanged(driver);
+        }
         // Offline means no Ride Now offers, at once - not when the last position report lapses.
         if (parsed == Driver.Status.INACTIVE && presenceService != null) {
             presenceService.remove(driverId);
@@ -118,6 +125,9 @@ public class DriverService {
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
         DriverVehicles.setModes(driver, servesCity, servesTrip);
         driverRepository.save(driver);
+        if (driverStates != null) {
+            driverStates.profileChanged(driver);
+        }
         return getDriverProfile(driverId);
     }
 
@@ -222,6 +232,9 @@ public class DriverService {
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         DispatchService.markMatched(booking);
         TravelBooking updated = bookingRepository.save(booking);
+        if (driverStates != null) {
+            driverStates.took(updated);
+        }
 
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));
@@ -291,6 +304,10 @@ public class DriverService {
         booking.setDriverId(replacement != null ? replacement.getId() : null);
         booking.setStatus(TravelBooking.BookingStatus.PENDING);
         TravelBooking updated = bookingRepository.save(booking);
+        if (driverStates != null) {
+            driverStates.freed(driverId, updated);
+            driverStates.took(updated);
+        }
 
         notificationService.notifyTripRejected(updated, driver, replacement);
         if (replacement != null) {
@@ -321,6 +338,9 @@ public class DriverService {
 
         booking.setStatus(TravelBooking.BookingStatus.STARTED);
         TravelBooking updated = bookingRepository.save(booking);
+        if (driverStates != null) {
+            driverStates.took(updated); // already BUSY from the accept; re-stated in case that write was lost
+        }
         return mapToResponse(updated);
     }
 

@@ -45,7 +45,11 @@ public class OwnerService {
     // Identity-document links handed to the owner expire and are server-signed (SignedUploadUrls).
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.storage.SignedUploadUrls signedUploadUrls;
-    
+
+    // The matching engine's copy of driver state; null in tests that build this service by hand.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
+
     public List<TravelBooking> getAllBookings() {
         return travelBookingRepository.findAll();
     }
@@ -322,6 +326,12 @@ public class OwnerService {
         // The owner's choice ends a Ride Now search; the sweep leaves MATCHED bookings alone.
         DispatchService.markMatched(booking);
         TravelBooking updatedBooking = travelBookingRepository.save(booking);
+        if (driverStates != null) {
+            if (previousDriverId != null && !previousDriverId.equals(driverId)) {
+                driverStates.freed(previousDriverId, updatedBooking);
+            }
+            driverStates.took(updatedBooking);
+        }
 
         // An unpaid payment follows the trip to its new driver, so the payment record and the
         // booking never name different drivers.

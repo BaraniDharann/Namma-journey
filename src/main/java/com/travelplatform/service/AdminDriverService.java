@@ -34,6 +34,10 @@ public class AdminDriverService {
     @Autowired
     private FileStorageService fileStorageService;
 
+    // The matching engine's copy of driver state; absent in tests that build this service by hand.
+    @Autowired(required = false)
+    private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
+
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$";
 
     @Caching(evict = {
@@ -86,6 +90,9 @@ public class AdminDriverService {
                 }
             }
             throw e;
+        }
+        if (driverStates != null) {
+            driverStates.profileChanged(driver);
         }
 
         // Email is @Async on EmailService, but dispatching it AFTER the DB commit means
@@ -181,7 +188,12 @@ public class AdminDriverService {
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
         DriverVehicles.apply(driver, vehicle);
         requirePlateFree(driver.getVehicleNumber(), driverId);
-        return driverRepository.save(driver);
+        Driver saved = driverRepository.save(driver);
+        if (driverStates != null) {
+            // A car switched to a bike must stop being offered car rides from the next round.
+            driverStates.profileChanged(saved);
+        }
+        return saved;
     }
 
     private String generatePassword() {

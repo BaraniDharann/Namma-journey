@@ -79,6 +79,9 @@ public class UserService {
     private EmailService emailService;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private TripAdvancePolicy advancePolicy;
+    // The matching engine's copy of driver state. Null only in unit tests that build UserService by hand.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
 
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -236,6 +239,9 @@ public class UserService {
             // (RazorpayPaymentService.settleAdvance), not about every hold that lapses unpaid.
             if (driver != null && !savedBooking.isAdvanceDue()) {
                 notificationService.notifyDriverAssigned(savedBooking, driver);
+            }
+            if (driver != null && driverStates != null) {
+                driverStates.took(savedBooking); // a Trip for today holds the car, paid or not (no_driver_overlap)
             }
             if (savedBooking.getDispatchMode() == TravelBooking.DispatchMode.RIDE_NOW) {
                 dispatchService.dispatchAfterCommit(savedBooking.getId());
@@ -525,6 +531,9 @@ public class UserService {
         booking.setHoldExpiresAt(null);
         bookingRepository.save(booking);
         notificationService.notifyBookingCancelled(booking);
+        if (driverStates != null) {
+            driverStates.freed(booking.getDriverId(), booking);
+        }
         if (refunded.signum() > 0 && emailService != null) {
             BigDecimal amount = refunded;
             userRepository.findById(userId).ifPresent(u ->

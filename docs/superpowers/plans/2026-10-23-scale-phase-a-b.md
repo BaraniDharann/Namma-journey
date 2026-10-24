@@ -422,17 +422,17 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
     in the last 10 min from Postgres. A driver is BUSY if they have a CONFIRMED or STARTED trip
     that hasn't ended, OFFERED if they hold an OFFERED booking, IDLE otherwise.
 
-- [ ] **Step 1: Write the failing tests** (local store):
+- [x] **Step 1: Write the failing tests** (local store):
   - `missingCardLoadedFromDatabase`
   - `compareAndSetOnlyFromExpected`
   - `putProfileKeepsState`
   - `reconcileFixesDrift`: the store says IDLE, the database says CONFIRMED, so reconcile gives
     BUSY
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement** both stores. `DispatchStoresConfig` chooses Redis when
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement** both stores. `DispatchStoresConfig` chooses Redis when
   `app.cache.type=redis` and a template exists, and local otherwise. This is the same switch
   `LocationRelayConfig` uses.
-- [ ] **Step 4: Wire the state changes.**
+- [x] **Step 4: Wire the state changes.**
 
   | Event | New state |
   |---|---|
@@ -442,8 +442,8 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
   | Decline or offer timeout | IDLE (Task 9) |
 
   Online/offline and the mode switches call `putProfile`.
-- [ ] **Step 5: Run** `mvn -o -q test`. Expected: 0 failures.
-- [ ] **Step 6: Commit** `feat(dispatch): driver state cache in Redis with a local twin`.
+- [x] **Step 5: Run** `mvn -o -q test`. Expected: 0 failures.
+- [x] **Step 6: Commit** `feat(dispatch): driver state cache in Redis with a local twin`.
 
 ### Task 8: Ride queue and city lock
 

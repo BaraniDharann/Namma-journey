@@ -72,6 +72,9 @@ public class PaymentService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DriverLedgerService ledgerService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
+
     /**
      * A ride is done and paid: an independent driver's share (or the commission they owe on cash)
      * goes into their ledger in this same transaction (V21). No-op for Trips and fleet drivers.
@@ -91,6 +94,9 @@ public class PaymentService {
         if (booking.getTripEndedAt() == null) {
             booking.setTripEndedAt(LocalDateTime.now());
             bookingRepository.save(booking);
+        }
+        if (driverStates != null) {
+            driverStates.freed(driverId, booking); // free for the next City ride while payment settles
         }
         if (presenceService != null && booking.getToLat() != null && booking.getToLon() != null
                 && driverRepository.findById(driverId)

@@ -91,6 +91,23 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
 
     Page<TravelBooking> findAll(Pageable pageable);
 
+    /**
+     * Of these drivers, the ones a booking occupies on {@code day} (DriverCardLoader's BUSY): an
+     * unended CONFIRMED or STARTED booking, or a PENDING one in their name that is not an offer.
+     * Exactly the bookings {@code no_driver_overlap} would hold against a City ride that day.
+     */
+    @Query("SELECT DISTINCT b.driverId FROM TravelBooking b WHERE b.driverId IN :driverIds " +
+           "AND b.tripEndedAt IS NULL AND b.fromDate <= :day AND b.toDate >= :day " +
+           "AND (b.status IN ('CONFIRMED', 'STARTED') OR (b.status = 'PENDING' AND (b.dispatchState IS NULL " +
+           "OR b.dispatchState <> com.travelplatform.entity.TravelBooking.DispatchState.OFFERED)))")
+    List<Long> findBusyDriverIds(@Param("driverIds") java.util.Collection<Long> driverIds,
+                                 @Param("day") java.time.LocalDate day);
+
+    /** Of these drivers, the ones holding an open Ride Now offer. */
+    @Query("SELECT b.driverId FROM TravelBooking b WHERE b.driverId IN :driverIds AND b.status = 'PENDING' " +
+           "AND b.dispatchState = com.travelplatform.entity.TravelBooking.DispatchState.OFFERED")
+    List<Long> findOfferedDriverIds(@Param("driverIds") java.util.Collection<Long> driverIds);
+
     /** Ride Now bookings the dispatch sweep has to act on: offers past their deadline, and searches still running. */
     @Query("SELECT b.id FROM TravelBooking b WHERE b.status = 'PENDING' AND (" +
            "(b.dispatchState = com.travelplatform.entity.TravelBooking.DispatchState.OFFERED AND b.offerExpiresAt < :now) " +
