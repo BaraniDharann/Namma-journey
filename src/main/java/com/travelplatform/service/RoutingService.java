@@ -12,6 +12,7 @@ import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import com.graphhopper.GHRequest;
@@ -78,8 +79,22 @@ public class RoutingService {
     }
     
     /**
-     * Calculate route using exact coordinates from frontend (accurate).
+     * The "routes" cache key. Rounded to 3 decimals (about 110 m), so a traveller nudging the pin
+     * or re-checking a fare reuses the route instead of asking the router again; a route between
+     * points that close differs by less than the fare rounds away. {@link Locale#ROOT} so a
+     * server running in, say, German still writes {@code 13.082}, never {@code 13,082}: every
+     * instance must build the same key for the shared Redis cache.
      */
+    public static String routeKey(double fromLat, double fromLon, double toLat, double toLon) {
+        return String.format(Locale.ROOT, "%.3f:%.3f:%.3f:%.3f", fromLat, fromLon, toLat, toLon);
+    }
+
+    /**
+     * Calculate route using exact coordinates from frontend (accurate). Cached for 10 minutes:
+     * a City ride's fare estimate and its booking route the same trip seconds apart, and at
+     * scale the router is the slowest call on that path.
+     */
+    @Cacheable(value = "routes", key = "T(com.travelplatform.service.RoutingService).routeKey(#fromLat,#fromLon,#toLat,#toLon)")
     public RouteInfo calculateRoute(double fromLat, double fromLon, double toLat, double toLon) {
         double[] fromCoords = {fromLat, fromLon};
         double[] toCoords = {toLat, toLon};

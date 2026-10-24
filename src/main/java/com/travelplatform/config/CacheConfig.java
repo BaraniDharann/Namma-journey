@@ -94,6 +94,7 @@ public class CacheConfig implements CachingConfigurer {
         ttls.put("yearlyRevenue",       Duration.ofMinutes(30));
         ttls.put("monthlyRevenueSeries", Duration.ofMinutes(10));
         ttls.put("placeSearch",         Duration.ofHours(24));   // External API — cache aggressively
+        ttls.put("routes",              Duration.ofMinutes(10)); // Coordinate routes; traffic changes, roads don't
         return ttls;
     }
 
