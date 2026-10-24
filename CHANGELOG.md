@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Trip advances** — a Trip is held until 20 % of the fare is paid online; unpaid holds are
+  released after 30 minutes. The balance is paid at the end of the trip (online, UPI or cash).
+  Cancelling refunds the advance unless the trip was confirmed and it is within 24 h of the
+  trip day
+- **City commission and driver payouts** — the owner sets a commission % per city; independent
+  drivers get a ledger (online rides: fare less commission owed to them; cash rides: commission
+  they owe). The owner pays by UPI and records the UTR on the new Payouts page. Driver payout UPI
+  IDs are stored AES-256-GCM encrypted (`APP_ENCRYPTION_KEY`)
 - **Online payments with Razorpay** — card, UPI and netbanking through Razorpay Checkout. The
   server creates the order from the booking's fare, settles it on a valid checkout signature,
   and Razorpay's signed webhook settles any payment whose tab closed first. Each fare is booked
