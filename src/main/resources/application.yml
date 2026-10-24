@@ -260,6 +260,15 @@ payment:
     id: ${OWNER_UPI_ID}
     name: ${OWNER_UPI_NAME:Namma Journey}
 
+# Razorpay online checkout (card / UPI / netbanking). Optional: with no keys the online option
+# refuses politely and UPI QR + cash work as before. rzp_test_ keys for testing, rzp_live_ for real.
+razorpay:
+  key-id: ${RAZORPAY_KEY_ID:}
+  key-secret: ${RAZORPAY_KEY_SECRET:}
+  # Same value as the secret entered in Razorpay Dashboard -> Webhooks.
+  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
+  merchant-name: ${OWNER_UPI_NAME:Namma Journey}
+
 logging:
   level:
     com.travelplatform: INFO

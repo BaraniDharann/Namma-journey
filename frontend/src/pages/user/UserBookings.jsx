@@ -4,7 +4,9 @@ import DashboardLayout from '../../components/DashboardLayout'
 import Pagination, { usePagination } from '../../components/Pagination'
 import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
-import { getUserBookings, deleteBooking, initiatePayment, submitReview, getTripSummary } from '../../utils/api'
+import toast from 'react-hot-toast'
+import { getUserBookings, deleteBooking, initiatePayment, submitReview, getTripSummary, createRazorpayOrder, verifyRazorpayPayment } from '../../utils/api'
+import { openRazorpayCheckout } from '../../utils/razorpay'
 import { actionKey } from '../../utils/idempotency'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
@@ -177,13 +179,26 @@ function UpiQrModal({ result, onClose, onPaid }) {
   )
 }
 
-function PaymentModal({ booking, onClose, onPay, onPaid }) {
-  const [method, setMethod] = useState('UPI')
+const PAY_METHODS = [
+  { id: 'ONLINE', label: 'Online', icon: 'card' },
+  { id: 'UPI', label: 'UPI', icon: 'qr' },
+  { id: 'CASH', label: 'Cash', icon: 'wallet' },
+]
+
+function PaymentModal({ booking, onClose, onPay, onPaid, onPayOnline }) {
+  const [method, setMethod] = useState('ONLINE')
   const [loading, setLoading] = useState(false)
   const [upiResult, setUpiResult] = useState(null)
 
   const handlePay = async () => {
     setLoading(true)
+    if (method === 'ONLINE') {
+      // Closed popup = stay here so they can pick another way; paid = done.
+      const paid = await onPayOnline(booking)
+      setLoading(false)
+      if (paid) onClose()
+      return
+    }
     const res = await onPay(booking.bookingId, { paymentMethod: method })
     if (method === 'UPI' && res?.upiQrCode) {
       setUpiResult(res)
@@ -209,14 +224,19 @@ function PaymentModal({ booking, onClose, onPay, onPaid }) {
         </div>
         <div style={{ padding: 24 }}>
           <div className="pc-figure" style={{ fontSize: 36, color: 'var(--pc-brand-deep)', marginBottom: 20, textAlign: 'center' }}>{inr(booking.totalAmount)}</div>
-          <div role="radiogroup" aria-label="Payment method" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-            {['UPI', 'CASH'].map(m => (
+          <div role="radiogroup" aria-label="Payment method" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
+            {PAY_METHODS.map(({ id: m, label, icon }) => (
               <button key={m} type="button" role="radio" aria-checked={method === m} onClick={() => setMethod(m)}
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', borderRadius: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer', transition: 'all 0.15s', background: method === m ? 'var(--pc-brand-soft)' : 'var(--pc-wash)', color: method === m ? 'var(--pc-brand-deep)' : 'var(--pc-ink-2)', border: method === m ? '2px solid var(--pc-brand)' : '2px solid var(--pc-line)' }}>
-                <Icon name={m === 'UPI' ? 'qr' : 'wallet'} size={17} />{m === 'UPI' ? 'UPI' : 'Cash'}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 8px', borderRadius: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer', transition: 'all 0.15s', background: method === m ? 'var(--pc-brand-soft)' : 'var(--pc-wash)', color: method === m ? 'var(--pc-brand-deep)' : 'var(--pc-ink-2)', border: method === m ? '2px solid var(--pc-brand)' : '2px solid var(--pc-line)' }}>
+                <Icon name={icon} size={17} />{label}
               </button>
             ))}
           </div>
+          <p style={{ fontSize: 12, color: 'var(--pc-muted)', margin: '0 0 20px', textAlign: 'center' }}>
+            {method === 'ONLINE' ? 'Card, UPI or netbanking via Razorpay. Confirmed instantly.'
+              : method === 'UPI' ? 'Scan a QR with any UPI app. Confirmed by the owner.'
+              : 'Pay the driver at the end of the trip.'}
+          </p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button type="button" onClick={onClose} className="pc-btn pc-btn-ghost" style={{ flex: 1 }}>Cancel</button>
             <button type="button" onClick={handlePay} disabled={loading} className="pc-btn" style={{ flex: 1 }}>
@@ -291,10 +311,44 @@ export default function UserBookings() {
     } catch { return null }
   }
 
+  // Resolves true once paid (or handed to the watcher), false if the popup was closed or failed.
+  const handleOnlinePayment = async (booking) => {
+    let order
+    try {
+      order = (await createRazorpayOrder(user.userId, booking.bookingId)).data
+    } catch { return false } // the API layer already toasted the reason
+
+    let checkout
+    try {
+      checkout = await openRazorpayCheckout(order, { name: user.name, email: user.email, contact: user.mobile })
+    } catch (e) {
+      toast.error(e?.message || 'Payment failed. You have not been charged.')
+      return false
+    }
+    if (!checkout) return false
+
+    const label = `${shortPlace(booking.fromPlace)} → ${shortPlace(booking.toPlace)}`
+    try {
+      await verifyRazorpayPayment(user.userId, booking.bookingId, {
+        razorpayOrderId: checkout.razorpay_order_id,
+        razorpayPaymentId: checkout.razorpay_payment_id,
+        razorpaySignature: checkout.razorpay_signature,
+      })
+      celebrate({ title: 'Payment successful', message: `${inr(order.amount)} paid online for ${label}.` })
+    } catch {
+      // Razorpay took the money; our confirmation call failed (network, timeout). Razorpay's
+      // webhook settles it server-side, and the watcher celebrates when it lands.
+      rememberPayment(user.userId, { paymentId: order.paymentId, amount: order.amount, label })
+      celebrate({ tone: 'calm', title: 'Payment received', message: "We're confirming it with Razorpay. You'll see it here in a moment." })
+    }
+    load()
+    return true
+  }
+
   return (
     <DashboardLayout navItems={navItems} role="ROLE_USER">
       {reviewBooking && <ReviewModal booking={reviewBooking} onClose={() => setReviewBooking(null)} onSubmit={handleReview} />}
-      {payBooking && <PaymentModal booking={payBooking} onClose={() => setPayBooking(null)} onPay={handlePayment} onPaid={handlePaid} />}
+      {payBooking && <PaymentModal booking={payBooking} onClose={() => setPayBooking(null)} onPay={handlePayment} onPaid={handlePaid} onPayOnline={handleOnlinePayment} />}
       {summaryBooking && <TripSummaryModal booking={summaryBooking} userId={user.userId} onClose={() => setSummaryBooking(null)} />}
       {trackingBooking && (
         <div className="modal-overlay" style={overlayStyle}>

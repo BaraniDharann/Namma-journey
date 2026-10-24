@@ -24,6 +24,7 @@ public class UserController {
     private final UserService userService;
     private final ReviewService reviewService;
     private final PaymentService paymentService;
+    private final com.travelplatform.service.RazorpayPaymentService razorpayPaymentService;
     private final TripSummaryService tripSummaryService;
     private final RoutingService routingService;
     private final com.travelplatform.service.CityFareService cityFareService;
@@ -95,6 +96,25 @@ public class UserController {
             @Valid @RequestBody PaymentRequest request) {
         PaymentResponse response = paymentService.initiatePayment(userId, bookingId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /** Opens online payment: creates (or reuses) the Razorpay order the checkout popup pays. */
+    @PostMapping("/{userId}/bookings/{bookingId}/payment/razorpay/order")
+    @PreAuthorize(SAME_USER)
+    public ResponseEntity<RazorpayOrderResponse> createRazorpayOrder(
+            @PathVariable UUID userId,
+            @PathVariable UUID bookingId) {
+        return ResponseEntity.ok(razorpayPaymentService.createOrder(userId, bookingId));
+    }
+
+    /** Checkout's success callback: a valid signature settles the fare immediately. */
+    @PostMapping("/{userId}/bookings/{bookingId}/payment/razorpay/verify")
+    @PreAuthorize(SAME_USER)
+    public ResponseEntity<PaymentResponse> verifyRazorpayPayment(
+            @PathVariable UUID userId,
+            @PathVariable UUID bookingId,
+            @Valid @RequestBody RazorpayVerifyRequest request) {
+        return ResponseEntity.ok(razorpayPaymentService.verifyCheckout(userId, bookingId, request));
     }
 
     @GetMapping("/{userId}/payments")

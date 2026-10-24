@@ -102,7 +102,9 @@ public class RateLimitingFilter implements Filter {
         // backing off - delaying exactly the notifications this channel exists to make fast.
         // Safe to exempt because the endpoint authenticates every call against the shared
         // webhook secret and rejects unknown callers before doing any work.
-        if (path.equals("/api/telegram/webhook")) {
+        // Razorpay's webhook is exempt on the same grounds: a few Razorpay IPs carry every
+        // passenger's payment events, and each call is signature-checked before any work.
+        if (path.equals("/api/telegram/webhook") || path.equals("/api/payments/razorpay/webhook")) {
             chain.doFilter(request, response);
             return;
         }
@@ -188,6 +190,8 @@ public class RateLimitingFilter implements Filter {
      */
     private boolean isPaymentPath(String path) {
         return path.endsWith("/payment")
+                || path.endsWith("/razorpay/order")
+                || path.endsWith("/razorpay/verify")
                 || path.endsWith("/cash-payment")
                 || path.endsWith("/end-trip")
                 || path.contains("/payments/");

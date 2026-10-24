@@ -285,9 +285,22 @@ public class PaymentService {
             throw new RuntimeException("This booking is " + booking.getStatus() + "; its payment cannot be verified");
         }
 
+        return settle(payment, booking, "owner:" + verifiedBy);
+    }
+
+    /**
+     * Marks a payment received and moves the trip on: shared by the owner's manual UPI check and
+     * Razorpay's signed confirmation, so both settle a fare identically. Callers have already
+     * checked the payment is not VERIFIED and the booking is CONFIRMED or STARTED, and carry the
+     * revenue cache evictions themselves.
+     */
+    PaymentResponse settle(Payment payment, TravelBooking booking, String actor) {
         payment.setStatus(Payment.PaymentStatus.VERIFIED);
         payment.setVerifiedDate(LocalDateTime.now());
-        payment.setVerifiedBy("owner:" + verifiedBy);
+        if (payment.getPaymentDate() == null) {
+            payment.setPaymentDate(LocalDateTime.now());
+        }
+        payment.setVerifiedBy(actor);
         Payment verified = paymentRepository.save(payment);
 
         // Paying settles the money, not the trip. A started trip being paid for is over; a
@@ -315,8 +328,11 @@ public class PaymentService {
     }
     
     public List<PaymentResponse> getPendingPayments() {
+        // Online payments confirm themselves by signature; they never wait on the owner, and the
+        // owner's verify refuses them anyway.
         return paymentRepository.findByStatus(Payment.PaymentStatus.PENDING)
                 .stream()
+                .filter(p -> p.getPaymentMethod() != Payment.PaymentMethod.RAZORPAY)
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -369,6 +385,13 @@ public class PaymentService {
             p.setCreatedAt(LocalDateTime.now());
             return p;
         });
+        // The driver is showing a UPI QR, so this is a UPI payment now - otherwise a passenger who
+        // had opened online checkout earlier would scan, and the owner's UPI verify would refuse
+        // it. The Razorpay order id stays: if that earlier checkout completes after all, its
+        // webhook still finds and settles this row.
+        if (payment.getPaymentMethod() == Payment.PaymentMethod.RAZORPAY) {
+            payment.setPaymentMethod(Payment.PaymentMethod.UPI);
+        }
         payment.setUpiLinkExpiresAt(LocalDateTime.now().plusMinutes(UPI_LINK_EXPIRY_MINUTES));
         payment.setStatus(Payment.PaymentStatus.PENDING);
         Payment saved = paymentRepository.save(payment);
@@ -429,11 +452,18 @@ public class PaymentService {
         if (raw == null || raw.isBlank()) {
             throw new IllegalArgumentException("Payment method is required (UPI or CASH)");
         }
+        Payment.PaymentMethod method;
         try {
-            return Payment.PaymentMethod.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+            method = Payment.PaymentMethod.valueOf(raw.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("Unsupported payment method. Use UPI or CASH");
         }
+        // Online payment has its own order/verify endpoints (RazorpayPaymentService). Accepting it
+        // here would make a RAZORPAY row with no order and hand it a UPI QR.
+        if (method == Payment.PaymentMethod.RAZORPAY) {
+            throw new IllegalArgumentException("Unsupported payment method. Use UPI or CASH");
+        }
+        return method;
     }
 
     private String generateUpiDeepLink(BigDecimal amount, String bookingRef) {

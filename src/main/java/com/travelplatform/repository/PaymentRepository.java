@@ -13,4 +13,5 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByBookingId(UUID bookingId);
     List<Payment> findByStatus(Payment.PaymentStatus status);
     List<Payment> findByUserId(UUID userId);
+    Optional<Payment> findByRazorpayOrderId(String razorpayOrderId);
 }

@@ -64,7 +64,7 @@ export default function UserPayments() {
                         <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--pc-muted)' }}>{String(p.paymentId).slice(0,12)}...</td>
                         <td style={{ fontWeight: 800, color: 'var(--pc-ink)' }}>{inr(p.amount)}</td>
                         <td>
-                          <span className="pc-chip"><Icon name={p.paymentMethod === 'UPI' ? 'qr' : 'wallet'} size={14} />{p.paymentMethod}</span>
+                          <span className="pc-chip"><Icon name={p.paymentMethod === 'UPI' ? 'qr' : p.paymentMethod === 'RAZORPAY' ? 'card' : 'wallet'} size={14} />{p.paymentMethod === 'RAZORPAY' ? 'ONLINE' : p.paymentMethod}</span>
                         </td>
                         <td>
                           <StatusPill status={p.status === 'VERIFIED' || p.status === 'PENDING' ? p.status : 'FAILED'} label={p.status === 'VERIFIED' || p.status === 'PENDING' ? undefined : p.status} />

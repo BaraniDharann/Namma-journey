@@ -83,6 +83,9 @@ public class SecurityConfig {
                 // instead by the shared secret Telegram echoes in a request header - see
                 // TelegramWebhookController, which refuses outright if that secret is unset.
                 .requestMatchers("/api/telegram/webhook").permitAll()
+                // Called by Razorpay's servers. Authenticated by the HMAC signature over the body -
+                // see RazorpayWebhookController, which refuses outright if the secret is unset.
+                .requestMatchers("/api/payments/razorpay/webhook").permitAll()
                 .requestMatchers("/api/public/packages/**").permitAll()
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/api/v1/health").permitAll()

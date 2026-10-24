@@ -58,12 +58,22 @@ public class Payment {
 
     @Column
     private LocalDateTime upiLinkExpiresAt;
-    
+
+    /** Razorpay order this payment is collected against (order_...). Reused across retries (V17). */
+    @Column
+    private String razorpayOrderId;
+
+    /** Razorpay payment that settled the order (pay_...). Unique: one charge settles one fare. */
+    @Column
+    private String razorpayPaymentId;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
     
     public enum PaymentMethod {
-        UPI, CASH
+        UPI, CASH,
+        /** Paid online through Razorpay Checkout; confirmed by signature, never by hand. */
+        RAZORPAY
     }
     
     public enum PaymentStatus {

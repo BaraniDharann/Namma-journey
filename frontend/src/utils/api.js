@@ -173,6 +173,9 @@ export const updateBooking = (userId, bookingId, data) => api.put(`/user/${userI
 export const deleteBooking = (userId, bookingId) => api.delete(`/user/${userId}/bookings/${bookingId}`).then(res => { invalidateCache('bookings'); return res })
 export const submitReview = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/reviews`, data).then(res => { invalidateCache('reviews'); return res })
 export const initiatePayment = (userId, bookingId, data, idempotencyKey) => api.post(`/user/${userId}/bookings/${bookingId}/payment`, data, { headers: idempotencyHeaders(idempotencyKey) }).then(res => { invalidateCache('payments'); return res })
+/** Online (Razorpay) payment: the server creates the order for the booking's fare, then verifies Checkout's signature. */
+export const createRazorpayOrder = (userId, bookingId) => api.post(`/user/${userId}/bookings/${bookingId}/payment/razorpay/order`)
+export const verifyRazorpayPayment = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/payment/razorpay/verify`, data).then(res => { invalidateCache('payments'); invalidateCache('bookings'); return res })
 export const getUserPayments = (userId) => cachedGet(`/user/${userId}/payments`)
 /** Uncached and silent: for the background check that celebrates a verified payment. */
 export const pollUserPayments = (userId) => api.get(`/user/${userId}/payments`, { _silent: true })
