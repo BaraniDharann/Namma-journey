@@ -283,6 +283,10 @@ public class OwnerService {
                 && booking.getStatus() != TravelBooking.BookingStatus.CONFIRMED) {
             throw new RuntimeException("Cannot assign a driver to a " + booking.getStatus() + " booking");
         }
+        // Assigning confirms the trip, and an unpaid hold may still lapse (V20).
+        if (booking.isAdvanceDue()) {
+            throw new RuntimeException("Waiting for the passenger's advance payment");
+        }
 
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));

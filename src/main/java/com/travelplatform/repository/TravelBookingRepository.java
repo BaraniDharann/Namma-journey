@@ -30,8 +30,17 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
      * Half-open windows [start, end): a payment at exactly midnight on the 1st counts once.
      */
 
+    /**
+     * Trips are counted by their FARE payment only (V20): money sums every verified payment, but a
+     * Trip paid as advance + balance is still one trip, and a kept advance on a cancelled trip is
+     * revenue without being a trip.
+     */
+    String FARE_COUNT = "SUM(CASE WHEN p.purpose = com.travelplatform.entity.Payment.PaymentPurpose.FARE THEN 1 ELSE 0 END)";
+
     /** Totals for one period, summed by Postgres over NUMERIC money. */
-    @Query("SELECT new com.travelplatform.dto.RevenueTotals(COUNT(p), SUM(p.amount), SUM(b.distanceKm), SUM(b.travelDays)) " +
+    @Query("SELECT new com.travelplatform.dto.RevenueTotals(" + FARE_COUNT + ", SUM(p.amount), " +
+           "SUM(CASE WHEN p.purpose = com.travelplatform.entity.Payment.PaymentPurpose.FARE THEN b.distanceKm ELSE 0.0 END), " +
+           "SUM(CASE WHEN p.purpose = com.travelplatform.entity.Payment.PaymentPurpose.FARE THEN b.travelDays ELSE 0 END)) " +
            "FROM Payment p, TravelBooking b WHERE p.bookingId = b.id " +
            "AND p.status = com.travelplatform.entity.Payment.PaymentStatus.VERIFIED " +
            "AND p.verifiedDate >= :start AND p.verifiedDate < :end")
@@ -39,7 +48,8 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
 
     /** One row per month that received money, in month order. Months with none are absent. */
     @Query("SELECT new com.travelplatform.dto.MonthlyRevenue(CAST(EXTRACT(MONTH FROM p.verifiedDate) AS Integer), " +
-           "COUNT(p), SUM(p.amount), SUM(b.distanceKm)) " +
+           FARE_COUNT + ", SUM(p.amount), " +
+           "SUM(CASE WHEN p.purpose = com.travelplatform.entity.Payment.PaymentPurpose.FARE THEN b.distanceKm ELSE 0.0 END)) " +
            "FROM Payment p, TravelBooking b WHERE p.bookingId = b.id " +
            "AND p.status = com.travelplatform.entity.Payment.PaymentStatus.VERIFIED " +
            "AND p.verifiedDate >= :start AND p.verifiedDate < :end " +
@@ -54,6 +64,11 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
            "AND p.verifiedDate >= :start AND p.verifiedDate < :end " +
            "ORDER BY p.verifiedDate")
     List<RevenueTrip> revenueTrips(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /** Trips whose unpaid advance hold has run out (AdvanceHoldSweeper); uses idx_travel_bookings_advance_hold. */
+    @Query("SELECT b.id FROM TravelBooking b WHERE b.status = 'PENDING' AND b.advancePaidAt IS NULL " +
+           "AND b.holdExpiresAt IS NOT NULL AND b.holdExpiresAt < :now")
+    List<UUID> findExpiredAdvanceHolds(@Param("now") LocalDateTime now);
 
     /** Bookings a traveller still has open - the cap in TripRules stops one account tying up the fleet. */
     @Query("SELECT COUNT(b) FROM TravelBooking b WHERE b.userId = :userId " +

@@ -62,7 +62,7 @@ class RevenueQueriesTest {
     }
 
     /** A completed booking whose payment has the given status, amount and verification time. */
-    private void paidTrip(String amount, double km, int days, Payment.PaymentStatus status, LocalDateTime verifiedAt) {
+    private UUID paidTrip(String amount, double km, int days, Payment.PaymentStatus status, LocalDateTime verifiedAt) {
         TravelBooking b = new TravelBooking();
         b.setUserId(UUID.randomUUID());
         b.setUserName("Test");
@@ -91,6 +91,7 @@ class RevenueQueriesTest {
         p.setCreatedAt(LocalDateTime.of(2026, 1, 20, 9, 0));
         p.setVerifiedDate(verifiedAt);
         payments.save(p);
+        return b.getId();
     }
 
     private static LocalDateTime march(int day) {
@@ -118,6 +119,32 @@ class RevenueQueriesTest {
                 LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0));
         assertEquals(3, trips.size());
         assertEquals(new BigDecimal("0.10"), trips.get(0).totalAmount(), "the amount paid, not the booking total");
+    }
+
+    @Test
+    @DisplayName("a Trip paid as advance + balance is one trip, with both payments in the money")
+    void advanceAndBalanceAreOneTrip() {
+        UUID trip = paidTrip("800.00", 120, 2, Payment.PaymentStatus.VERIFIED, march(10));
+        Payment advance = new Payment();
+        advance.setBookingId(trip);
+        advance.setUserId(UUID.randomUUID());
+        advance.setAmount(new BigDecimal("200.00"));
+        advance.setPaymentMethod(Payment.PaymentMethod.RAZORPAY);
+        advance.setPurpose(Payment.PaymentPurpose.ADVANCE);
+        advance.setStatus(Payment.PaymentStatus.VERIFIED);
+        advance.setCreatedAt(march(1));
+        advance.setVerifiedDate(march(1));
+        payments.save(advance);
+
+        RevenueTotals totals = bookings.revenueTotals(
+                LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0));
+
+        assertEquals(1, totals.trips());
+        assertEquals(new BigDecimal("1000.00"), totals.revenue());
+        assertEquals(120.0, totals.distanceKm(), 1e-9);
+        assertEquals(2, totals.travelDays());
+        assertEquals(1, bookings.monthlyRevenue(
+                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2027, 1, 1, 0, 0)).get(0).trips());
     }
 
     @Test

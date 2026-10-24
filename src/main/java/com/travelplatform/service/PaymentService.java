@@ -49,6 +49,22 @@ public class PaymentService {
     
     private static final int UPI_LINK_EXPIRY_MINUTES = 5;
 
+    /**
+     * What the passenger still owes for the trip: the fare, less a paid advance (V20). Every fare
+     * payment - online, UPI QR or cash - is created for this amount, and cash collection is checked
+     * against it, so the advance is never charged twice.
+     */
+    public static BigDecimal amountDue(TravelBooking booking) {
+        BigDecimal total = booking.getTotalAmount();
+        if (total == null) {
+            return null;
+        }
+        if (booking.getAdvancePaidAt() != null && booking.getAdvanceAmount() != null) {
+            return total.subtract(booking.getAdvanceAmount()).max(BigDecimal.ZERO);
+        }
+        return total;
+    }
+
     // Field-injected so the tests that build PaymentService by hand are unaffected.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DriverPresenceService presenceService;
@@ -146,7 +162,7 @@ public class PaymentService {
         Payment payment = new Payment();
         payment.setBookingId(bookingId);
         payment.setUserId(userId);
-        payment.setAmount(booking.getTotalAmount());
+        payment.setAmount(amountDue(booking));
         payment.setPaymentMethod(method);
         payment.setStatus(Payment.PaymentStatus.PENDING);
         payment.setDriverId(booking.getDriverId());
@@ -378,7 +394,7 @@ public class PaymentService {
             Payment p = new Payment();
             p.setBookingId(bookingId);
             p.setUserId(booking.getUserId());
-            p.setAmount(booking.getTotalAmount());
+            p.setAmount(amountDue(booking));
             p.setPaymentMethod(Payment.PaymentMethod.UPI);
             p.setStatus(Payment.PaymentStatus.PENDING);
             p.setDriverId(driverId);
@@ -506,6 +522,7 @@ public class PaymentService {
         response.setUpiTransactionId(payment.getUpiTransactionId());
         response.setCreatedAt(payment.getCreatedAt());
         response.setUpiLinkExpiresAt(payment.getUpiLinkExpiresAt());
+        response.setPurpose(payment.getPurpose() == null ? "FARE" : payment.getPurpose().name());
         response.setUpiLinkExpired(
             payment.getUpiLinkExpiresAt() != null &&
             payment.getUpiLinkExpiresAt().isBefore(LocalDateTime.now())

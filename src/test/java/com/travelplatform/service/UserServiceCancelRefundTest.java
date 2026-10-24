@@ -110,6 +110,60 @@ class UserServiceCancelRefundTest {
         verify(outbox, never()).enqueue(any(), any());
     }
 
+    private Payment paidAdvance() {
+        ReflectionTestUtils.setField(service, "advancePolicy", new TripAdvancePolicy(20, 30, 24));
+        payment.setStatus(Payment.PaymentStatus.PENDING); // balance not paid yet
+        payment.setPaymentMethod(Payment.PaymentMethod.UPI);
+        Payment advance = new Payment();
+        advance.setId(UUID.randomUUID());
+        advance.setBookingId(booking.getId());
+        advance.setAmount(new BigDecimal("180.00"));
+        advance.setPurpose(Payment.PaymentPurpose.ADVANCE);
+        advance.setPaymentMethod(Payment.PaymentMethod.RAZORPAY);
+        advance.setStatus(Payment.PaymentStatus.VERIFIED);
+        when(payments.findAdvance(booking.getId())).thenReturn(Optional.of(advance));
+        return advance;
+    }
+
+    @Test
+    @DisplayName("advance: cancelled days ahead, the advance is refunded")
+    void advanceRefundedWellAhead() {
+        Payment advance = paidAdvance();
+        booking.setFromDate(java.time.LocalDate.now().plusDays(10));
+
+        service.deleteBooking(USER, booking.getId());
+
+        assertEquals(Payment.PaymentStatus.REFUND_PENDING, advance.getStatus());
+        verify(outbox).enqueue(RefundJobHandler.TYPE, new RefundJobHandler.RefundRequest(advance.getId()));
+        verify(email).sendRefundStartedEmail(eq("kavya@example.com"), eq("Kavya"), eq(booking), eq(new BigDecimal("180.00")));
+    }
+
+    @Test
+    @DisplayName("advance: a confirmed trip cancelled the day before keeps the advance")
+    void advanceKeptLate() {
+        Payment advance = paidAdvance();
+        booking.setFromDate(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).plusDays(1));
+
+        service.deleteBooking(USER, booking.getId());
+
+        assertEquals(TravelBooking.BookingStatus.CANCELLED, booking.getStatus());
+        assertEquals(Payment.PaymentStatus.VERIFIED, advance.getStatus(), "kept, and still revenue");
+        verify(outbox, never()).enqueue(any(), any());
+        verify(email, never()).sendRefundStartedEmail(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("advance: no driver ever confirmed it, so even a late cancel is refunded")
+    void advanceRefundedWhenNeverConfirmed() {
+        Payment advance = paidAdvance();
+        booking.setStatus(TravelBooking.BookingStatus.PENDING);
+        booking.setFromDate(java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata")).plusDays(1));
+
+        service.deleteBooking(USER, booking.getId());
+
+        assertEquals(Payment.PaymentStatus.REFUND_PENDING, advance.getStatus());
+    }
+
     @Test
     @DisplayName("unpaid booking: cancelled with no refund")
     void unpaidCancelsWithoutRefund() {

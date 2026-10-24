@@ -309,6 +309,11 @@ export default function DriverBookings() {
                   <div style={{ textAlign: 'right' }}>
                     <div className="pc-figure" style={{ fontSize: 28, color: 'var(--pc-ink)' }}>{inr(b.totalAmount)}</div>
                     <small style={{ color: 'var(--pc-muted)', fontWeight: 700 }}>fare</small>
+                    {b.advancePaid && (
+                      <div style={{ fontSize: 12, color: 'var(--pc-muted)', marginTop: 2 }}>
+                        {inr(b.advanceAmount)} paid in advance · <strong style={{ color: 'var(--pc-ink)' }}>collect {inr(b.amountDue)}</strong>
+                      </div>
+                    )}
                   </div>
                   <div className="pc-chips" style={{ justifyContent: 'flex-end' }}>
                     {b.status === 'PENDING' && (
@@ -338,7 +343,7 @@ export default function DriverBookings() {
                         <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => handleEndTrip(b.bookingId)} disabled={busy(b, 'END')}>
                           {busy(b, 'END') ? '...' : <><Icon name="camera" size={15} />End trip</>}
                         </button>
-                        <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => handleCash(b.bookingId, b.totalAmount)} disabled={busy(b, 'CASH')}>
+                        <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => handleCash(b.bookingId, b.amountDue ?? b.totalAmount)} disabled={busy(b, 'CASH')}>
                           {busy(b, 'CASH') ? '...' : <><Icon name="wallet" size={15} />Cash received</>}
                         </button>
                       </>

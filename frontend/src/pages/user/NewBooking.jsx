@@ -13,6 +13,7 @@ import { inr, shortPlace } from '../../dash/metrics'
 import { VEHICLES, VEHICLE_ORDER, vehicleLabel, modeLabel } from '../../dash/vehicles'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 import RideSearchStatus from '../../components/RideSearchStatus'
+import { useCollectAdvance } from '../../hooks/usePayOnline'
 
 const navItems = [
   { path: '/user/dashboard', icon: '', label: 'Dashboard' },
@@ -46,6 +47,7 @@ export default function NewBooking() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const celebrate = useCelebrate()
+  const collectAdvance = useCollectAdvance()
   const [searchParams] = useSearchParams()
   // One key per booking attempt, reused if the request is retried, so it can only book once.
   const bookingKey = useRef(actionKey())
@@ -150,6 +152,10 @@ export default function NewBooking() {
       setSuccess(res.data)
       // A City ride gets its own live "finding your driver" panel; the celebration is for planned trips.
       if (res.data?.serviceMode === 'CITY') return
+      if (res.data?.advanceDue) {
+        await collectAdvance(res.data)
+        return
+      }
       celebrate({
         title: 'Trip booked',
         message: `${shortPlace(res.data?.fromPlace || form.fromPlace)} → ${shortPlace(res.data?.toPlace || form.toPlace)}. A verified driver will be assigned shortly.`,

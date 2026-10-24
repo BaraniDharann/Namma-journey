@@ -67,6 +67,19 @@ public class RazorpayPaymentService {
         this.objectMapper = objectMapper;
     }
 
+    // Field-injected so the tests that build this service by hand are unaffected.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private NotificationService notificationService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.DriverRepository driverRepository;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.outbox.Outbox outbox;
+
+    /**
+     * Opens checkout for whatever the passenger owes next. While a Trip's advance is due that is
+     * the advance (and the booking is still PENDING); after it, the fare balance once the trip is
+     * confirmed. The browser never chooses: one "Pay" endpoint, the server decides.
+     */
     @Transactional
     public RazorpayOrderResponse createOrder(UUID userId, UUID bookingId) {
         if (!properties.isOperational()) {
@@ -77,24 +90,39 @@ public class RazorpayPaymentService {
         if (!booking.getUserId().equals(userId)) {
             throw new RuntimeException("Unauthorized access");
         }
-        requirePayable(booking);
 
-        BigDecimal amount = booking.getTotalAmount();
+        Payment.PaymentPurpose purpose;
+        BigDecimal amount;
+        if (booking.isAdvanceDue()) {
+            if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
+                throw new RuntimeException("This booking can no longer be paid");
+            }
+            if (booking.getHoldExpiresAt() != null && booking.getHoldExpiresAt().isBefore(LocalDateTime.now())) {
+                throw new RuntimeException("This booking's hold has expired. Please book again.");
+            }
+            purpose = Payment.PaymentPurpose.ADVANCE;
+            amount = booking.getAdvanceAmount();
+        } else {
+            requirePayable(booking);
+            purpose = Payment.PaymentPurpose.FARE;
+            amount = PaymentService.amountDue(booking);
+        }
         long paise = toPaise(amount);
 
-        Payment payment = paymentRepository.findByBookingId(bookingId).orElseGet(() -> {
+        Payment payment = paymentRepository.findByBookingIdAndPurpose(bookingId, purpose).orElseGet(() -> {
             Payment p = new Payment();
             p.setBookingId(bookingId);
             p.setUserId(userId);
             p.setDriverId(booking.getDriverId());
             p.setCreatedAt(LocalDateTime.now());
+            p.setPurpose(purpose);
             return p;
         });
         if (payment.getStatus() == Payment.PaymentStatus.VERIFIED) {
             throw new RuntimeException("Payment already completed");
         }
 
-        // Reuse the order while the fare is unchanged. Minting a new one on every "Pay online"
+        // Reuse the order while the amount is unchanged. Minting a new one on every "Pay online"
         // tap would orphan the old one: a passenger still paying it in another tab would be
         // charged, and the webhook would find no payment holding that order id.
         boolean reusable = payment.getRazorpayOrderId() != null
@@ -104,7 +132,8 @@ public class RazorpayPaymentService {
             Map<String, String> notes = new LinkedHashMap<>();
             notes.put("booking_id", bookingId.toString());
             notes.put("user_id", userId.toString());
-            payment.setRazorpayOrderId(gateway.createOrder(paise, receipt(bookingId), notes));
+            notes.put("purpose", purpose.name());
+            payment.setRazorpayOrderId(gateway.createOrder(paise, receipt(bookingId, purpose), notes));
         }
         payment.setAmount(amount);
         payment.setPaymentMethod(Payment.PaymentMethod.RAZORPAY);
@@ -121,7 +150,8 @@ public class RazorpayPaymentService {
         response.setAmountPaise(paise);
         response.setCurrency("INR");
         response.setMerchantName(properties.getMerchantName());
-        response.setDescription(describe(booking));
+        response.setPurpose(purpose.name());
+        response.setDescription((purpose == Payment.PaymentPurpose.ADVANCE ? "Advance: " : "") + describe(booking));
         return response;
     }
 
@@ -136,29 +166,27 @@ public class RazorpayPaymentService {
         if (!properties.isOperational()) {
             throw new RuntimeException("Online payment is not set up yet. Please pay by UPI or cash.");
         }
-        Payment payment = paymentRepository.findByBookingId(bookingId)
-                .orElseThrow(() -> new RuntimeException("Payment not found"));
+        // The order must be one this server created for this booking. Without this check a
+        // signature that is genuine - but for some other, cheaper order - would settle this one.
+        Payment payment = paymentRepository.findByRazorpayOrderId(request.getRazorpayOrderId())
+                .filter(p -> p.getBookingId().equals(bookingId))
+                .orElseThrow(() -> new IllegalArgumentException("This payment does not belong to this booking"));
         if (!payment.getUserId().equals(userId)) {
             throw new RuntimeException("Unauthorized access");
-        }
-        // The order must be the one this server created for this booking. Without this check a
-        // signature that is genuine - but for some other, cheaper order - would settle this fare.
-        if (payment.getRazorpayOrderId() == null
-                || !payment.getRazorpayOrderId().equals(request.getRazorpayOrderId())) {
-            throw new IllegalArgumentException("This payment does not belong to this booking");
         }
         if (!RazorpaySignatures.isValidCheckoutSignature(request.getRazorpayOrderId(),
                 request.getRazorpayPaymentId(), request.getRazorpaySignature(), properties.getKeySecret())) {
             log.warn("Rejected Razorpay checkout signature for booking {} order {}", bookingId, request.getRazorpayOrderId());
             throw new IllegalArgumentException("Payment could not be verified");
         }
-        if (payment.getStatus() == Payment.PaymentStatus.VERIFIED) {
-            // The webhook got here first. Same payment, nothing more to do.
-            return confirmed(payment, "Payment received.");
+        if (payment.getStatus() != Payment.PaymentStatus.PENDING) {
+            // The webhook got here first: settled it (VERIFIED) or already sent it back.
+            return confirmed(payment, payment.getStatus() == Payment.PaymentStatus.VERIFIED
+                    ? "Payment received." : "This booking was cancelled; your payment is being refunded.");
         }
         TravelBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
-        return settle(payment, booking, request.getRazorpayPaymentId());
+        return apply(payment, booking, request.getRazorpayPaymentId());
     }
 
     /**
@@ -217,8 +245,9 @@ public class RazorpayPaymentService {
             return;
         }
         Payment payment = found.get();
-        if (payment.getStatus() == Payment.PaymentStatus.VERIFIED) {
-            return; // the checkout callback, or an earlier delivery, already settled it
+        // PENDING, or FAILED when the hold sweeper gave up on it a moment before the money landed.
+        if (payment.getStatus() != Payment.PaymentStatus.PENDING && payment.getStatus() != Payment.PaymentStatus.FAILED) {
+            return; // the checkout callback, or an earlier delivery, already dealt with it
         }
         if (paidPaise != toPaise(payment.getAmount())) {
             log.error("Razorpay {} amount {} paise does not match payment {} due {}: not settling",
@@ -226,13 +255,11 @@ public class RazorpayPaymentService {
             return;
         }
         Optional<TravelBooking> booking = bookingRepository.findById(payment.getBookingId());
-        if (booking.isEmpty() || !isPayable(booking.get())) {
-            log.error("Razorpay {} paid order {} but booking {} is {}: refund needed",
-                    event, orderId, payment.getBookingId(),
-                    booking.map(b -> b.getStatus().name()).orElse("missing"));
+        if (booking.isEmpty()) {
+            log.error("Razorpay {} paid order {} for missing booking {}: refund needed", event, orderId, payment.getBookingId());
             return;
         }
-        settle(payment, booking.get(), razorpayPaymentId);
+        apply(payment, booking.get(), razorpayPaymentId);
     }
 
     /** The money is back with the passenger: close the payment out. Repeats are no-ops. */
@@ -270,13 +297,64 @@ public class RazorpayPaymentService {
         log.info("Refund {} processed for payment {}", payment.getRazorpayRefundId(), payment.getId());
     }
 
-    private PaymentResponse settle(Payment payment, TravelBooking booking, String razorpayPaymentId) {
+    /**
+     * Money has arrived for this payment. Settle it if the booking can still take it; otherwise -
+     * the hold lapsed and the booking was released while the passenger was paying, or it was
+     * cancelled - send it straight back rather than leave a person to notice.
+     */
+    private PaymentResponse apply(Payment payment, TravelBooking booking, String razorpayPaymentId) {
         // Money came through Razorpay, whatever the row said last (the driver may have shown a
         // UPI QR since checkout was opened).
         payment.setPaymentMethod(Payment.PaymentMethod.RAZORPAY);
         payment.setRazorpayPaymentId(razorpayPaymentId);
         payment.setUpiLinkExpiresAt(null);
-        return paymentService.settle(payment, booking, "razorpay:" + razorpayPaymentId);
+
+        boolean advance = payment.getPurpose() == Payment.PaymentPurpose.ADVANCE;
+        boolean takesIt = advance
+                ? booking.getStatus() == TravelBooking.BookingStatus.PENDING
+                        || booking.getStatus() == TravelBooking.BookingStatus.CONFIRMED
+                : isPayable(booking);
+        if (!takesIt) {
+            return refundUnwanted(payment, booking);
+        }
+        return advance ? settleAdvance(payment, booking, razorpayPaymentId)
+                : paymentService.settle(payment, booking, "razorpay:" + razorpayPaymentId);
+    }
+
+    /** The advance is in: the hold becomes a booking, and only now is the driver told about it. */
+    private PaymentResponse settleAdvance(Payment payment, TravelBooking booking, String razorpayPaymentId) {
+        LocalDateTime now = LocalDateTime.now();
+        payment.setStatus(Payment.PaymentStatus.VERIFIED);
+        payment.setPaymentDate(now);
+        payment.setVerifiedDate(now);
+        payment.setVerifiedBy("razorpay:" + razorpayPaymentId);
+        paymentRepository.save(payment);
+
+        booking.setAdvancePaidAt(now);
+        booking.setHoldExpiresAt(null);
+        bookingRepository.save(booking);
+
+        if (notificationService != null) {
+            notificationService.notifyAdvanceReceived(booking, payment.getAmount());
+            if (booking.getDriverId() != null && driverRepository != null) {
+                driverRepository.findById(booking.getDriverId())
+                        .ifPresent(driver -> notificationService.notifyDriverAssigned(booking, driver));
+            }
+        }
+        return confirmed(payment, "Advance received. Your trip is booked; the balance is paid at the end.");
+    }
+
+    private PaymentResponse refundUnwanted(Payment payment, TravelBooking booking) {
+        log.warn("Payment {} arrived for booking {} which is {}: refunding it", payment.getId(), booking.getId(), booking.getStatus());
+        if (outbox == null) {
+            log.error("No outbox to queue the refund of payment {}: refund it by hand", payment.getId());
+            paymentRepository.save(payment);
+            return confirmed(payment, "This booking can no longer be paid. Please contact us for a refund.");
+        }
+        payment.setStatus(Payment.PaymentStatus.REFUND_PENDING);
+        paymentRepository.save(payment);
+        outbox.enqueue(RefundJobHandler.TYPE, new RefundJobHandler.RefundRequest(payment.getId()));
+        return confirmed(payment, "This booking was released before your payment arrived, so it is being refunded in full.");
     }
 
     private static void requirePayable(TravelBooking booking) {
@@ -299,9 +377,9 @@ public class RazorpayPaymentService {
         return rupees.movePointRight(2).setScale(0, java.math.RoundingMode.UNNECESSARY).longValueExact();
     }
 
-    /** Razorpay caps receipts at 40 characters; "bk_" plus a dashless UUID is 35. */
-    private static String receipt(UUID bookingId) {
-        return "bk_" + bookingId.toString().replace("-", "");
+    /** Razorpay caps receipts at 40 characters; a 3-letter prefix plus a dashless UUID is 35. */
+    private static String receipt(UUID bookingId, Payment.PaymentPurpose purpose) {
+        return (purpose == Payment.PaymentPurpose.ADVANCE ? "ad_" : "bk_") + bookingId.toString().replace("-", "");
     }
 
     private static String describe(TravelBooking booking) {

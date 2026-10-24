@@ -346,6 +346,49 @@ public class NotificationService {
         log.info("Payment notifications sent for booking: {}", booking.getId());
     }
 
+    /** The Trip's advance is in, so the hold is now a real booking. */
+    public void notifyAdvanceReceived(TravelBooking booking, java.math.BigDecimal advance) {
+        String amount = String.format(java.util.Locale.ROOT, "%.2f", advance);
+        Notification owner = new Notification();
+        owner.setRecipientId("owner");
+        owner.setRecipientRole("ROLE_OWNER");
+        owner.setType("ADVANCE_RECEIVED");
+        owner.setTitle("Advance received");
+        owner.setMessage("Advance of ₹" + amount + " received for " + booking.getFromPlace() + " to "
+                + booking.getToPlace() + " by " + booking.getUserName());
+        owner.setBookingId(booking.getId().toString());
+        owner.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(owner);
+
+        Notification user = new Notification();
+        user.setRecipientId(booking.getUserId().toString());
+        user.setRecipientRole("ROLE_USER");
+        user.setType("ADVANCE_RECEIVED");
+        user.setTitle("Trip booked");
+        user.setMessage("We received your advance of ₹" + amount + ". Your trip from " + booking.getFromPlace()
+                + " to " + booking.getToPlace() + " is booked; the balance is paid at the end of the trip.");
+        user.setBookingId(booking.getId().toString());
+        user.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(user);
+
+        userRepository.findById(booking.getUserId()).ifPresent(u ->
+                emailService.sendAdvanceReceivedEmail(u.getEmail(), u.getName(), booking, advance));
+    }
+
+    /** An unpaid hold ran out and the car was released. In-app only: no email for a booking never paid. */
+    public void notifyHoldReleased(TravelBooking booking) {
+        Notification user = new Notification();
+        user.setRecipientId(booking.getUserId().toString());
+        user.setRecipientRole("ROLE_USER");
+        user.setType("HOLD_RELEASED");
+        user.setTitle("Booking released");
+        user.setMessage("Your trip from " + booking.getFromPlace() + " to " + booking.getToPlace()
+                + " was released because the advance was not paid in time. You can book it again.");
+        user.setBookingId(booking.getId().toString());
+        user.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(user);
+    }
+
     public List<Notification> getNotifications(String recipientId, String role) {
         return notificationRepository.findByRecipientIdAndRecipientRoleOrderByCreatedAtDesc(recipientId, role);
     }

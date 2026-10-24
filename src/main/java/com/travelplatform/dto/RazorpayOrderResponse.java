@@ -25,5 +25,7 @@ public class RazorpayOrderResponse {
     private long amountPaise;
     private String currency;
     private String merchantName;
+    /** ADVANCE (the 20 % that holds a Trip) or FARE (the fare, or its balance). */
+    private String purpose;
     private String description;
 }

@@ -233,11 +233,27 @@ public class EmailService {
                 HTML_FOOTER);
     }
 
+    public void sendAdvanceReceivedEmail(String email, String name, com.travelplatform.entity.TravelBooking booking, java.math.BigDecimal advance) {
+        queue(email, "Trip Booked - Advance Received - Namma Journey", HTML_HEADER +
+                "<h2 style='color:#667eea;'>Your trip is booked</h2>" +
+                "<p>Dear " + esc(name) + ",</p>" +
+                "<p>We received your advance, so your car is reserved.</p>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>Trip:</strong> " + esc(booking.getFromPlace()) + " to " + esc(booking.getToPlace()) + "</p>" +
+                "<p><strong>Date:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</p>" +
+                "<p><strong>Advance paid:</strong> ₹" + String.format(java.util.Locale.ROOT, "%.2f", advance) + "</p>" +
+                "<p><strong>Balance at trip end:</strong> ₹" + String.format(java.util.Locale.ROOT, "%.2f",
+                        booking.getTotalAmount().subtract(advance)) + "</p>" +
+                "</div>" +
+                "<p>Cancel more than 24 hours before the trip day and the advance is refunded in full.</p>" +
+                HTML_FOOTER);
+    }
+
     public void sendRefundStartedEmail(String email, String name, com.travelplatform.entity.TravelBooking booking, java.math.BigDecimal amount) {
         queue(email, "Refund Started - Namma Journey", HTML_HEADER +
                 "<h2 style='color:#667eea;'>Your refund is on its way</h2>" +
                 "<p>Dear " + esc(name) + ",</p>" +
-                "<p>You cancelled your trip before it started, so we are refunding the full fare.</p>" +
+                "<p>Your trip was cancelled before it started, so we are refunding what you paid online.</p>" +
                 "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
                 "<p><strong>Trip:</strong> " + esc(booking.getFromPlace()) + " to " + esc(booking.getToPlace()) + "</p>" +
                 "<p><strong>Refund:</strong> ₹" + String.format(java.util.Locale.ROOT, "%.2f", amount) + "</p>" +

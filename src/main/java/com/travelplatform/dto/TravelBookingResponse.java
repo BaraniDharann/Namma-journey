@@ -63,6 +63,21 @@ public class TravelBookingResponse {
         this.tripEndedAt = booking.getTripEndedAt();
         this.serviceMode = booking.getServiceMode() == null ? null : booking.getServiceMode().name();
         this.vehicleType = booking.getVehicleType() == null ? null : booking.getVehicleType().name();
+        this.advanceAmount = booking.getAdvanceAmount();
+        this.advancePaid = booking.getAdvancePaidAt() != null;
+        this.advanceDue = booking.isAdvanceDue();
+        this.holdSecondsLeft = booking.isAdvanceDue() && booking.getHoldExpiresAt() != null
+                ? Math.max(0, java.time.Duration.between(LocalDateTime.now(), booking.getHoldExpiresAt()).getSeconds())
+                : null;
+        this.amountDue = com.travelplatform.service.PaymentService.amountDue(booking);
         return this;
     }
+
+    /** Trip advance (null: none). The hold countdown is computed here, in the server's own clock. */
+    private java.math.BigDecimal advanceAmount;
+    private boolean advancePaid;
+    private boolean advanceDue;
+    private Long holdSecondsLeft;
+    /** What the passenger still owes for the trip: the fare minus any advance already paid. */
+    private java.math.BigDecimal amountDue;
 }

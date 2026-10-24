@@ -4,9 +4,8 @@ import DashboardLayout from '../../components/DashboardLayout'
 import Pagination, { usePagination } from '../../components/Pagination'
 import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
-import toast from 'react-hot-toast'
-import { getUserBookings, getUserPayments, deleteBooking, initiatePayment, submitReview, getTripSummary, createRazorpayOrder, verifyRazorpayPayment } from '../../utils/api'
-import { openRazorpayCheckout } from '../../utils/razorpay'
+import { getUserBookings, getUserPayments, deleteBooking, initiatePayment, submitReview, getTripSummary } from '../../utils/api'
+import { usePayOnline } from '../../hooks/usePayOnline'
 import { actionKey } from '../../utils/idempotency'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
@@ -33,6 +32,11 @@ const closeBtn = { background: 'rgba(255,255,255,0.1)', border: 'none', width: 3
 const fullBtn = { width: '100%' }
 
 const hm = (mins) => `${Math.round((mins || 0) / 60)}h ${(mins || 0) % 60}m`
+/** "for 23 more minutes", from the server's countdown at load time (a reload refreshes it). */
+const holdLeft = (secs) => {
+  const m = Math.max(0, Math.ceil((secs || 0) / 60))
+  return m <= 1 ? 'for about a minute more' : `for ${m} more minutes`
+}
 
 function ReviewModal({ booking, onClose, onSubmit }) {
   const [rating, setRating] = useState(5)
@@ -223,7 +227,8 @@ function PaymentModal({ booking, onClose, onPay, onPaid, onPayOnline }) {
           </div>
         </div>
         <div style={{ padding: 24 }}>
-          <div className="pc-figure" style={{ fontSize: 36, color: 'var(--pc-brand-deep)', marginBottom: 20, textAlign: 'center' }}>{inr(booking.totalAmount)}</div>
+          <div className="pc-figure" style={{ fontSize: 36, color: 'var(--pc-brand-deep)', marginBottom: booking.advancePaid ? 4 : 20, textAlign: 'center' }}>{inr(booking.amountDue ?? booking.totalAmount)}</div>
+          {booking.advancePaid && <p style={{ fontSize: 12, color: 'var(--pc-muted)', textAlign: 'center', margin: '0 0 20px' }}>Balance after your {inr(booking.advanceAmount)} advance</p>}
           <div role="radiogroup" aria-label="Payment method" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
             {PAY_METHODS.map(({ id: m, label, icon }) => (
               <button key={m} type="button" role="radio" aria-checked={method === m} onClick={() => setMethod(m)}
@@ -252,6 +257,7 @@ function PaymentModal({ booking, onClose, onPay, onPaid, onPayOnline }) {
 export default function UserBookings() {
   const { user } = useAuth()
   const celebrate = useCelebrate()
+  const payOnline = usePayOnline()
   // Guards "Pay" against a double tap or a retried request creating two payment attempts.
   const paymentKey = useRef(actionKey())
   const [bookings, setBookings] = useState([])
@@ -272,7 +278,7 @@ export default function UserBookings() {
         getUserPayments(user.userId).catch(() => ({ data: [] })),
       ])
       setBookings(res.data || [])
-      setPaymentsByBooking(Object.fromEntries((pay.data || []).map(p => [p.bookingId, p])))
+      setPaymentsByBooking(Object.fromEntries((pay.data || []).filter(p => p.purpose !== 'ADVANCE').map(p => [p.bookingId, p])))
     } catch { /* ignore */ }
     setLoading(false)
   }
@@ -284,14 +290,24 @@ export default function UserBookings() {
 
   const handleDelete = async (booking) => {
     const paid = paymentsByBooking[booking.bookingId]
-    const question = paid?.status === 'VERIFIED' && paid.paymentMethod === 'RAZORPAY'
-      ? `Cancel this trip? The full ${inr(paid.amount)} goes back to how you paid, usually within 5-7 working days.`
-      : 'Cancel this booking?'
+    const fareBack = paid?.status === 'VERIFIED' && paid.paymentMethod === 'RAZORPAY' ? Number(paid.amount) || 0 : 0
+    // Mirrors TripAdvancePolicy: the advance comes back unless the trip was confirmed and it is
+    // now within 24 h of the first day (IST). The server decides; this only words the question.
+    const tripStarts = new Date(`${booking.fromDate}T00:00:00+05:30`).getTime()
+    const advanceBack = booking.advancePaid
+      && (booking.status !== 'CONFIRMED' || Date.now() < tripStarts - 24 * 3600 * 1000)
+    const advanceKept = booking.advancePaid && !advanceBack
+    const refund = fareBack + (advanceBack ? Number(booking.advanceAmount) || 0 : 0)
+    const question = [
+      'Cancel this trip?',
+      refund > 0 && `${inr(refund)} goes back to how you paid, usually within 5-7 working days.`,
+      advanceKept && `It is less than 24 hours before the trip, so the ${inr(booking.advanceAmount)} advance is not refunded.`,
+    ].filter(Boolean).join(' ')
     if (!confirm(question)) return
     try {
       await deleteBooking(user.userId, booking.bookingId)
-      if (paid?.status === 'VERIFIED') {
-        celebrate({ tone: 'calm', title: 'Trip cancelled', message: `Your refund of ${inr(paid.amount)} has started.` })
+      if (refund > 0) {
+        celebrate({ tone: 'calm', title: 'Trip cancelled', message: `Your refund of ${inr(refund)} has started.` })
       }
       load()
     } catch { /* the API layer toasted the reason */ }
@@ -329,33 +345,19 @@ export default function UserBookings() {
   }
 
   // Resolves true once paid (or handed to the watcher), false if the popup was closed or failed.
+  // Resolves true once paid (or handed to the watcher), false if the popup was closed or failed.
   const handleOnlinePayment = async (booking) => {
-    let order
-    try {
-      order = (await createRazorpayOrder(user.userId, booking.bookingId)).data
-    } catch { return false } // the API layer already toasted the reason
-
-    let checkout
-    try {
-      checkout = await openRazorpayCheckout(order, { name: user.name, email: user.email, contact: user.mobile })
-    } catch (e) {
-      toast.error(e?.message || 'Payment failed. You have not been charged.')
-      return false
-    }
-    if (!checkout) return false
-
     const label = `${shortPlace(booking.fromPlace)} → ${shortPlace(booking.toPlace)}`
-    try {
-      await verifyRazorpayPayment(user.userId, booking.bookingId, {
-        razorpayOrderId: checkout.razorpay_order_id,
-        razorpayPaymentId: checkout.razorpay_payment_id,
-        razorpaySignature: checkout.razorpay_signature,
-      })
-      celebrate({ title: 'Payment successful', message: `${inr(order.amount)} paid online for ${label}.` })
-    } catch {
+    const { status, order } = await payOnline(booking, label)
+    if (status === 'closed') return false
+    const advance = order?.purpose === 'ADVANCE'
+    if (status === 'paid') {
+      celebrate(advance
+        ? { title: 'Trip booked', message: `${inr(order.amount)} advance paid for ${label}. The balance is paid at the end of the trip.` }
+        : { title: 'Payment successful', message: `${inr(order.amount)} paid online for ${label}.` })
+    } else {
       // Razorpay took the money; our confirmation call failed (network, timeout). Razorpay's
       // webhook settles it server-side, and the watcher celebrates when it lands.
-      rememberPayment(user.userId, { paymentId: order.paymentId, amount: order.amount, label })
       celebrate({ tone: 'calm', title: 'Payment received', message: "We're confirming it with Razorpay. You'll see it here in a moment." })
     }
     load()
@@ -429,7 +431,17 @@ export default function UserBookings() {
                   <span className="pc-chip"><Icon name="clock" size={15} />{hm(b.estimatedTimeMinutes)}</span>
                   {b.bookingType === 'HOUR_BASED' && <span className="pc-chip"><Icon name="clock" size={15} />{b.bookingHours}h @ {inr(b.pricePerHourAtBooking)}/hr</span>}
                   <span className="pc-chip" style={{ color: 'var(--pc-brand-deep)' }}><Icon name="wallet" size={15} />{inr(b.totalAmount)}</span>
+                  {b.advancePaid && <span className="pc-chip"><Icon name="check" size={15} />{inr(b.advanceAmount)} advance paid</span>}
                 </div>
+                {b.status === 'PENDING' && b.advanceDue && (
+                  <div role="status" style={{ marginTop: 14, padding: '12px 14px', borderRadius: 14, background: 'var(--pc-brand-soft)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ flex: '1 1 180px', fontSize: 13, color: 'var(--pc-ink-2)' }}>
+                      <strong style={{ color: 'var(--pc-brand-deep)' }}>Pay {inr(b.advanceAmount)} advance to book this trip.</strong>
+                      <br />Held for you {holdLeft(b.holdSecondsLeft)}. The rest is paid at the end of the trip.
+                    </div>
+                    <button type="button" onClick={() => handleOnlinePayment(b)} className="pc-btn pc-btn-sm"><Icon name="card" size={15} />Pay advance</button>
+                  </div>
+                )}
                 {['CONFIRMED', 'STARTED', 'COMPLETED', 'PENDING'].includes(b.status) && (
                   <div className="pc-chips" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--pc-line)' }}>
                     {(b.status === 'CONFIRMED' || b.status === 'STARTED') && <button type="button" onClick={() => setTrackingBooking(b)} className="pc-btn pc-btn-teal pc-btn-sm"><Icon name="pin" size={15} />Track</button>}

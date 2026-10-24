@@ -145,7 +145,11 @@ public class DriverService {
 
     public List<TravelBookingResponse> getAssignedBookings(Long driverId) {
         // Indexed lookup; avoids a full table scan that previously degraded as the bookings table grew.
-        List<TravelBooking> trips = bookingRepository.findByDriverId(driverId);
+        // A Trip whose advance is unpaid is only a hold that may lapse; the driver sees it (and is
+        // notified) once the passenger pays.
+        List<TravelBooking> trips = bookingRepository.findByDriverId(driverId).stream()
+                .filter(t -> !(t.getStatus() == TravelBooking.BookingStatus.PENDING && t.isAdvanceDue()))
+                .toList();
         if (trips.isEmpty()) {
             return List.of();
         }
@@ -178,6 +182,10 @@ public class DriverService {
         // or completed trip back to CONFIRMED.
         if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
             throw new RuntimeException("Only pending bookings can be accepted");
+        }
+        // Until the passenger pays the advance this is only a hold that may lapse (V20).
+        if (booking.isAdvanceDue()) {
+            throw new RuntimeException("Waiting for the passenger's advance payment");
         }
         // A Ride Now offer is only theirs until its deadline; after that it is on its way to the
         // next driver, and a late tap must not snatch it back.

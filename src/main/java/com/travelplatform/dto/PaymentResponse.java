@@ -22,4 +22,6 @@ public class PaymentResponse {
     private LocalDateTime upiLinkExpiresAt;
     private boolean upiLinkExpired;
     private String message;
+    /** FARE or ADVANCE (V20). */
+    private String purpose;
 }

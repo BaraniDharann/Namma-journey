@@ -77,7 +77,18 @@ public class Payment {
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
-    
+
+    /** FARE (the fare, or its balance after an advance) or ADVANCE (V20). One of each per booking. */
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private PaymentPurpose purpose = PaymentPurpose.FARE;
+
+    public enum PaymentPurpose {
+        FARE,
+        /** The 20 % that holds a Trip for the passenger. */
+        ADVANCE
+    }
+
     public enum PaymentMethod {
         UPI, CASH,
         /** Paid online through Razorpay Checkout; confirmed by signature, never by hand. */

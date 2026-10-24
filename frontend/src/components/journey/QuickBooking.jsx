@@ -8,6 +8,7 @@ import PlaceAutocomplete from '../PlaceAutocomplete'
 import { EASE } from '../motion/primitives'
 import Icon from '../dash/Icon'
 import { useCelebrate } from '../celebrate/Celebration'
+import { useCollectAdvance } from '../../hooks/usePayOnline'
 
 // Shortcuts carry their coordinates, so picking one is a complete destination.
 const TEMPLES = [
@@ -49,6 +50,7 @@ export default function QuickBooking() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const celebrate = useCelebrate()
+  const collectAdvance = useCollectAdvance()
   // One key per booking attempt, reused if the request is retried, so it can only book once.
   const bookingKey = useRef(actionKey())
   const [qb, setQb] = useState(EMPTY)
@@ -105,6 +107,10 @@ export default function QuickBooking() {
       // Done: the next booking is a new action and needs its own key.
       bookingKey.current.reset()
       setSuccess(res.data)
+      if (res.data?.advanceDue) {
+        await collectAdvance(res.data)
+        return
+      }
       celebrate({
         title: 'Your ride is booked',
         message: `${res.data?.fromPlace || qb.fromPlace} → ${res.data?.toPlace || qb.toPlace} · ${qb.bookingHours}h. A verified driver will be assigned shortly.`,

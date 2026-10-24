@@ -222,7 +222,9 @@ export default function OwnerBookings() {
                           <button type="button" onClick={() => setPhotoBookingId(b.bookingId || b.id)} className="pc-btn pc-btn-ghost pc-btn-sm"><Icon name="camera" size={14} />View</button>
                         ) : <span style={{ color: 'var(--pc-muted)' }}>—</span>}</td>
                         <td><StatusPill status={b.status} /></td>
-                        <td>{b.status === 'PENDING' && !b.driverId && (
+                        <td>{b.status === 'PENDING' && b.advanceDue ? (
+                          <span style={{ fontSize: 12, color: 'var(--pc-muted)', whiteSpace: 'nowrap' }}>Awaiting advance</span>
+                        ) : b.status === 'PENDING' && !b.driverId && (
                           <button type="button" onClick={() => setAssignBooking(b)} className="pc-btn pc-btn-sm">Assign</button>
                         )}</td>
                       </tr>

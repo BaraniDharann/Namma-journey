@@ -77,6 +77,8 @@ public class UserService {
     private com.travelplatform.outbox.Outbox outbox;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private EmailService emailService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripAdvancePolicy advancePolicy;
 
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -235,7 +237,9 @@ public class UserService {
             }
 
             notificationService.notifyBookingCreated(savedBooking);
-            if (driver != null) {
+            // A Trip with an advance due is only a hold: the driver hears about it once it is paid
+            // (RazorpayPaymentService.settleAdvance), not about every hold that lapses unpaid.
+            if (driver != null && !savedBooking.isAdvanceDue()) {
                 notificationService.notifyDriverAssigned(savedBooking, driver);
             }
             if (savedBooking.getDispatchMode() == TravelBooking.DispatchMode.RIDE_NOW) {
@@ -303,6 +307,10 @@ public class UserService {
             booking.setDispatchMode(TravelBooking.DispatchMode.RIDE_NOW);
             booking.setDispatchState(TravelBooking.DispatchState.SEARCHING);
             booking.setDispatchStartedAt(dispatchService.now());
+        }
+        if (advancePolicy != null && advancePolicy.applies(booking)) {
+            booking.setAdvanceAmount(advancePolicy.advanceFor(totalAmount));
+            booking.setHoldExpiresAt(advancePolicy.holdUntil(LocalDateTime.now()));
         }
         return booking;
     }
@@ -399,7 +407,7 @@ public class UserService {
         if (booking.getServiceMode() == TravelBooking.ServiceMode.CITY) {
             throw new RuntimeException("A city ride can't be changed. Cancel it and book again instead.");
         }
-        if (paymentRepository.findByBookingId(bookingId).isPresent()) {
+        if (paymentRepository.findByBookingId(bookingId).isPresent() || booking.getAdvancePaidAt() != null) {
             throw new RuntimeException("A payment has been started for this booking, so it can no longer be changed.");
         }
         if (tripRules != null) {
@@ -460,6 +468,10 @@ public class UserService {
         booking.setBookingType(bookingType);
         booking.setBookingHours(bookingHours);
         booking.setPricePerHourAtBooking(pricePerHourAtBooking);
+        // Still unpaid (checked above), so the advance follows the new fare.
+        if (booking.getAdvanceAmount() != null && advancePolicy != null) {
+            booking.setAdvanceAmount(advancePolicy.advanceFor(totalAmount));
+        }
 
         TravelBooking updatedBooking = bookingRepository.save(booking);
         return mapToResponse(updatedBooking);
@@ -487,37 +499,63 @@ public class UserService {
                 && booking.getStatus() != TravelBooking.BookingStatus.CONFIRMED) {
             throw new RuntimeException("Only a booking that has not started can be cancelled");
         }
-        java.util.Optional<com.travelplatform.entity.Payment> payment = paymentRepository.findByBookingId(bookingId);
-        boolean refunding = false;
-        if (payment.filter(p -> p.getStatus() == com.travelplatform.entity.Payment.PaymentStatus.VERIFIED).isPresent()) {
-            com.travelplatform.entity.Payment paid = payment.get();
+        java.util.Optional<com.travelplatform.entity.Payment> fare = paymentRepository.findByBookingId(bookingId);
+        java.util.Optional<com.travelplatform.entity.Payment> advance = paymentRepository.findAdvance(bookingId);
+
+        BigDecimal refunded = BigDecimal.ZERO;
+        if (fare.filter(this::isPaid).isPresent()) {
             // Paid online: the full fare goes back automatically, since the trip never started.
             // Paid by UPI transfer there is no payment id to refund against, so that stays a
             // conversation with the owner.
-            if (paid.getPaymentMethod() != com.travelplatform.entity.Payment.PaymentMethod.RAZORPAY || outbox == null) {
+            if (fare.get().getPaymentMethod() != com.travelplatform.entity.Payment.PaymentMethod.RAZORPAY || outbox == null) {
                 throw new RuntimeException("This booking is already paid for. Please contact us to cancel it and arrange a refund.");
             }
-            paid.setStatus(com.travelplatform.entity.Payment.PaymentStatus.REFUND_PENDING);
-            paymentRepository.save(paid);
-            // Same transaction as the cancellation: the refund is requested if and only if the
-            // cancellation commits, and retried until Razorpay accepts it.
-            outbox.enqueue(RefundJobHandler.TYPE, new RefundJobHandler.RefundRequest(paid.getId()));
-            refunding = true;
+            refunded = refunded.add(refund(fare.get()));
         } else {
-            payment.ifPresent(p -> {
-                p.setStatus(com.travelplatform.entity.Payment.PaymentStatus.FAILED);
-                paymentRepository.save(p);
-            });
+            fare.ifPresent(this::abandon);
+        }
+
+        if (advance.filter(this::isPaid).isPresent()) {
+            // Refunded unless the car was committed and it is now too close to the trip
+            // (TripAdvancePolicy). A kept advance stays VERIFIED: it is the owner's money now.
+            if (outbox != null && (advancePolicy == null
+                    || advancePolicy.refundsAdvanceOnCancel(booking, TripAdvancePolicy.nowInTripZone()))) {
+                refunded = refunded.add(refund(advance.get()));
+            }
+        } else {
+            advance.ifPresent(this::abandon);
         }
 
         booking.setStatus(TravelBooking.BookingStatus.CANCELLED);
+        booking.setHoldExpiresAt(null);
         bookingRepository.save(booking);
         notificationService.notifyBookingCancelled(booking);
-        if (refunding && emailService != null) {
-            java.math.BigDecimal amount = payment.get().getAmount();
+        if (refunded.signum() > 0 && emailService != null) {
+            BigDecimal amount = refunded;
             userRepository.findById(userId).ifPresent(u ->
                     emailService.sendRefundStartedEmail(u.getEmail(), u.getName(), booking, amount));
         }
+    }
+
+    private boolean isPaid(com.travelplatform.entity.Payment p) {
+        return p.getStatus() == com.travelplatform.entity.Payment.PaymentStatus.VERIFIED;
+    }
+
+    /**
+     * Marks a settled online payment for refund and queues the Razorpay call in this same
+     * transaction: the refund is requested if and only if the cancellation commits, and retried
+     * until Razorpay accepts it.
+     */
+    private BigDecimal refund(com.travelplatform.entity.Payment paid) {
+        paid.setStatus(com.travelplatform.entity.Payment.PaymentStatus.REFUND_PENDING);
+        paymentRepository.save(paid);
+        outbox.enqueue(RefundJobHandler.TYPE, new RefundJobHandler.RefundRequest(paid.getId()));
+        return paid.getAmount();
+    }
+
+    private void abandon(com.travelplatform.entity.Payment unpaid) {
+        unpaid.setStatus(com.travelplatform.entity.Payment.PaymentStatus.FAILED);
+        paymentRepository.save(unpaid);
     }
     
     /** One booking: looks up its own photo and driver. Lists use the batched getAllBookings path. */

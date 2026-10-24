@@ -166,6 +166,21 @@ class OutboxStoreTest {
         assertEquals("23505", sqlState(dup), "unique_violation");
     }
 
+    @Test
+    @DisplayName("V20: a booking takes one advance and one fare payment, never two of either")
+    void onePaymentPerPurpose() {
+        UUID booking = UUID.randomUUID();
+        String sql = """
+                INSERT INTO payments (id, amount, booking_id, created_at, payment_method, status, user_id, purpose)
+                VALUES (?, 100, ?, now(), 'RAZORPAY', 'PENDING', ?, ?)
+                """;
+        jdbc.update(sql, UUID.randomUUID(), booking, UUID.randomUUID(), "ADVANCE");
+        jdbc.update(sql, UUID.randomUUID(), booking, UUID.randomUUID(), "FARE");
+        Exception dup = assertThrows(Exception.class,
+                () -> jdbc.update(sql, UUID.randomUUID(), booking, UUID.randomUUID(), "FARE"));
+        assertEquals("23505", sqlState(dup), "unique_violation");
+    }
+
     private static String sqlState(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             if (t instanceof SQLException sql) {

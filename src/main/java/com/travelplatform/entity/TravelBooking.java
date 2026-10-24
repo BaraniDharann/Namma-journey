@@ -133,6 +133,22 @@ public class TravelBooking {
     @Column(name = "city_id")
     private Long cityId;
 
+    /** The advance a Trip needs before it goes to a driver (V20). Null: none required. */
+    @Column(name = "advance_amount", precision = 12, scale = 2)
+    private java.math.BigDecimal advanceAmount;
+
+    @Column(name = "advance_paid_at")
+    private LocalDateTime advancePaidAt;
+
+    /** An unpaid advance holds the booking (and its driver's dates) until then; then it is released. */
+    @Column(name = "hold_expires_at")
+    private LocalDateTime holdExpiresAt;
+
+    /** True while the passenger still owes the advance: no driver may accept or be assigned yet. */
+    public boolean isAdvanceDue() {
+        return advanceAmount != null && advancePaidAt == null;
+    }
+
     public enum ServiceMode {
         CITY, TRIP
     }

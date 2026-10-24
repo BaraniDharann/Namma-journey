@@ -88,6 +88,7 @@ class RazorpayPaymentServiceTest {
         p.setRazorpayOrderId("order_1");
         p.setCreatedAt(LocalDateTime.now());
         when(payments.findByBookingId(BOOKING)).thenReturn(Optional.of(p));
+        when(payments.findByBookingIdAndPurpose(BOOKING, Payment.PaymentPurpose.FARE)).thenReturn(Optional.of(p));
         when(payments.findByRazorpayOrderId("order_1")).thenReturn(Optional.of(p));
         return p;
     }
