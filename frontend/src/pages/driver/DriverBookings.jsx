@@ -8,6 +8,7 @@ import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { inr, shortPlace } from '../../dash/metrics'
 import { useCelebrate } from '../../components/celebrate/Celebration'
+import { announceTripState } from '../../hooks/useDriverDispatch'
 
 const navItems = [
   { path: '/driver/dashboard', icon: '', label: 'Dashboard' },
@@ -160,6 +161,8 @@ export default function DriverBookings() {
   }
 
   useEffect(() => { load() }, [user.userId])
+  // Starting or ending a trip here changes whether presence reports should pause.
+  useEffect(() => { if (!loading) announceTripState(bookings) }, [bookings, loading])
 
   const filtered = filter === 'ALL' ? bookings : bookings.filter(b => b.status === filter)
   const { paginatedItems, currentPage, totalPages, setCurrentPage } = usePagination(filtered, 6)

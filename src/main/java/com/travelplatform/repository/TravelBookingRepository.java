@@ -23,6 +23,13 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
 
     Page<TravelBooking> findByUserId(UUID userId, Pageable pageable);
 
+    /**
+     * The open offer a driver is holding, if any. Served by the {@code driver_id} index and at
+     * most one row: dispatch never offers a driver two rides at once ({@code no_driver_overlap}).
+     */
+    java.util.Optional<TravelBooking> findFirstByDriverIdAndDispatchStateAndStatus(
+            Long driverId, TravelBooking.DispatchState dispatchState, TravelBooking.BookingStatus status);
+
     /*
      * Revenue = money actually received: VERIFIED payments, on the day they were verified, at the
      * amount collected. These used to add up booked fares of COMPLETED bookings by booking date -

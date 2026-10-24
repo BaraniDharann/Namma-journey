@@ -88,6 +88,18 @@ public class DriverController {
         return ResponseEntity.ok(driverVerificationService.status(driverId));
     }
 
+    /**
+     * The ride this driver is being offered, if any: 200 with it, 204 without. Online phones poll
+     * this as the safety net under the socket push, so it is one row, not the trip list.
+     */
+    @GetMapping("/{driverId}/offer")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<com.travelplatform.dto.DriverOfferView> currentOffer(@PathVariable Long driverId) {
+        return driverService.currentOffer(driverId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
     @GetMapping("/{driverId}/bookings")
     @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<List<TravelBookingResponse>> getAssignedBookings(@PathVariable Long driverId) {

@@ -6,7 +6,7 @@ import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
 import { getDriverBookings, getDriverProfile, toggleDriverAvailability, driverBookingAction, invalidateCache, updateDriverModes } from '../../utils/api'
 import { vehicleIcon, vehicleLabel, modeLabel } from '../../dash/vehicles'
-import { DRIVER_STATUS_EVENT, DRIVER_TRIPS_EVENT } from '../../hooks/useDriverDispatch'
+import { DRIVER_STATUS_EVENT, DRIVER_TRIPS_EVENT, announceTripState } from '../../hooks/useDriverDispatch'
 import Icon from '../../components/dash/Icon'
 import { Panel, PanelLink, PageHead, StatusPill, Empty, Skeleton, ErrorNote } from '../../components/dash/ui'
 import { Gauge } from '../../components/dash/charts'
@@ -61,7 +61,7 @@ export default function DriverDashboard() {
   const load = useCallback(() => {
     setState((s) => ({ ...s, loading: true }))
     getDriverBookings(user.userId)
-      .then((r) => { setBookings(r.data || []); setState({ loading: false, ok: true }) })
+      .then((r) => { setBookings(r.data || []); setState({ loading: false, ok: true }); announceTripState(r.data) })
       .catch(() => setState({ loading: false, ok: false }))
   }, [user.userId])
 

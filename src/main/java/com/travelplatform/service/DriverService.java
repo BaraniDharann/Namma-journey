@@ -143,6 +143,32 @@ public class DriverService {
                 path -> signedUploadUrls == null ? path : signedUploadUrls.signIfSensitive(path));
     }
 
+    /**
+     * The City ride this driver is being offered right now, with the seconds left to take it.
+     * What an online phone polls, so it reads one indexed row instead of the trip list. An offer
+     * whose time is up is not shown: the next dispatch step is about to move it on, and accepting
+     * it would be refused anyway.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<com.travelplatform.dto.DriverOfferView> currentOffer(Long driverId) {
+        return bookingRepository.findFirstByDriverIdAndDispatchStateAndStatus(
+                        driverId, TravelBooking.DispatchState.OFFERED, TravelBooking.BookingStatus.PENDING)
+                .filter(b -> b.getOfferExpiresAt() != null)
+                .flatMap(b -> {
+                    long left = java.time.Duration.between(java.time.LocalDateTime.now(clock), b.getOfferExpiresAt()).getSeconds();
+                    if (left <= 0) {
+                        return java.util.Optional.empty();
+                    }
+                    return java.util.Optional.of(new com.travelplatform.dto.DriverOfferView(
+                            b.getId(), left, b.getFromPlace(), b.getToPlace(),
+                            b.getFromLat(), b.getFromLon(), b.getToLat(), b.getToLon(),
+                            b.getTotalAmount(),
+                            b.getVehicleType() == null ? null : b.getVehicleType().name(),
+                            b.getServiceMode() == null ? null : b.getServiceMode().name(),
+                            b.getOfferDistanceKm(), b.getUserName(), b.getTravelMembers(), b.getDistanceKm()));
+                });
+    }
+
     public List<TravelBookingResponse> getAssignedBookings(Long driverId) {
         // Indexed lookup; avoids a full table scan that previously degraded as the bookings table grew.
         // A Trip whose advance is unpaid is only a hold that may lapse; the driver sees it (and is

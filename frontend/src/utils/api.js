@@ -183,8 +183,9 @@ export const getTripSummary = (userId, bookingId) => api.get(`/user/${userId}/bo
 
 // Driver APIs
 export const getDriverBookings = (driverId) => cachedGet(`/driver/${driverId}/bookings`)
-// Ride Now: uncached, because an offer lives for seconds, and silent, because it runs in the background.
-export const getDriverBookingsFresh = (driverId) => api.get(`/driver/${driverId}/bookings`, { _silent: true })
+// Ride Now: the one ride offered right now (204 when none). Uncached, because an offer lives for
+// seconds, and silent, because it runs in the background on every online phone.
+export const getDriverOffer = (driverId) => api.get(`/driver/${driverId}/offer`, { _silent: true })
 export const reportDriverPresence = (driverId, latitude, longitude) => api.put(`/driver/${driverId}/presence`, { latitude, longitude }, { _silent: true })
 export const updateDriverModes = (driverId, modes) => api.put(`/driver/${driverId}/modes`, modes).then(res => { invalidateCache('driver'); return res })
 // City mode: fares for bike, auto and car over one route, and the owner's fare settings.
