@@ -9,7 +9,7 @@ import org.springframework.transaction.support.DefaultTransactionStatus;
  * the real synchronization lifecycle - afterCommit on commit, nothing on rollback - which is
  * exactly what after-commit dispatch tests need, without a database.
  */
-class NoOpTransactionManager extends AbstractPlatformTransactionManager {
+public class NoOpTransactionManager extends AbstractPlatformTransactionManager {
 
     @Override
     protected Object doGetTransaction() {

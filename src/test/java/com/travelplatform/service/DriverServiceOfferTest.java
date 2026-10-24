@@ -105,4 +105,21 @@ class DriverServiceOfferTest {
         offerExpiringAt(NOW.minusSeconds(3));
         assertTrue(service.currentOffer(DRIVER_ID).isEmpty());
     }
+
+    @Test
+    @DisplayName("with the ride queue wired, the offer comes from it, and the booking row still has the last word")
+    void offerReadFromTheRideQueue() {
+        com.travelplatform.service.dispatch.RideQueue queue = new com.travelplatform.service.dispatch.LocalRideQueue(
+                () -> NOW.atZone(IST).toInstant().toEpochMilli());
+        ReflectionTestUtils.setField(service, "rideQueue", queue);
+        TravelBooking b = offerExpiringAt(NOW.plusSeconds(12));
+        when(bookingRepository.findById(b.getId())).thenReturn(Optional.of(b));
+        assertTrue(service.currentOffer(DRIVER_ID).isEmpty(), "no offer in the queue, no row read");
+
+        queue.markOffered(1L, b.getId(), DRIVER_ID, NOW.plusSeconds(12).atZone(IST).toInstant().toEpochMilli());
+        assertEquals(12, service.currentOffer(DRIVER_ID).orElseThrow().secondsLeft());
+
+        b.setDispatchState(DispatchState.MATCHED); // accepted a moment ago; the queue has not caught up
+        assertTrue(service.currentOffer(DRIVER_ID).isEmpty());
+    }
 }

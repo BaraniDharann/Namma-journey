@@ -57,8 +57,8 @@ public class DriverPresenceService {
     static final long MIN_REPORT_GAP_MS = 5_000L;
     private static final long REDIS_COOLDOWN_MS = 60_000L;
 
-    /** A driver found near a pickup, and how far away. */
-    public record Nearby(long driverId, double distanceKm) {
+    /** A driver found near a pickup, how far away, and where they are (the matching round's ETA input). */
+    public record Nearby(long driverId, double distanceKm, double lat, double lon) {
     }
 
     private record Fix(double lat, double lon, long seenAtMillis) {
@@ -233,7 +233,7 @@ public class DriverPresenceService {
                 GeoReference.fromCoordinate(lon, lat),
                 new Distance(radiusKm, Metrics.KILOMETERS),
                 RedisGeoCommands.GeoSearchCommandArgs.newGeoSearchArgs()
-                        .includeDistance().sortAscending().limit(limit));
+                        .includeDistance().includeCoordinates().sortAscending().limit(limit));
         if (results == null || results.getContent().isEmpty()) {
             return List.of();
         }
@@ -256,8 +256,10 @@ public class DriverPresenceService {
                 continue;
             }
             try {
-                nearby.add(new Nearby(Long.parseLong(member),
-                        results.getContent().get(i).getDistance().getValue()));
+                GeoResult<RedisGeoCommands.GeoLocation<String>> r = results.getContent().get(i);
+                Point at = r.getContent().getPoint();
+                nearby.add(new Nearby(Long.parseLong(member), r.getDistance().getValue(),
+                        at == null ? lat : at.getY(), at == null ? lon : at.getX()));
             } catch (NumberFormatException ignored) {
                 stale.add(member);
             }
@@ -282,7 +284,7 @@ public class DriverPresenceService {
             }
             double km = TripRules.distanceKm(lat, lon, fix.lat(), fix.lon());
             if (km <= radiusKm) {
-                nearby.add(new Nearby(driverId, km));
+                nearby.add(new Nearby(driverId, km, fix.lat(), fix.lon()));
             }
         });
         nearby.sort(Comparator.comparingDouble(Nearby::distanceKm));

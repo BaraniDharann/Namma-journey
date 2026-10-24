@@ -244,7 +244,8 @@ public class UserService {
                 driverStates.took(savedBooking); // a Trip for today holds the car, paid or not (no_driver_overlap)
             }
             if (savedBooking.getDispatchMode() == TravelBooking.DispatchMode.RIDE_NOW) {
-                dispatchService.dispatchAfterCommit(savedBooking.getId());
+                // Into its city's queue once this commits; the next matching round (~2 s) offers it.
+                dispatchService.enqueueAfterCommit(savedBooking);
             }
             Metrics.counter("namma.bookings.placed", "assigned", String.valueOf(driver != null)).increment();
             return mapToResponse(savedBooking);
@@ -322,7 +323,7 @@ public class UserService {
     }
 
     /** True when Postgres refused the insert because the driver already has an overlapping trip. */
-    static boolean isDriverOverlap(DataIntegrityViolationException ex) {
+    public static boolean isDriverOverlap(DataIntegrityViolationException ex) {
         for (Throwable t = ex; t != null && t.getCause() != t; t = t.getCause()) {
             if (t instanceof SQLException sql && EXCLUSION_VIOLATION.equals(sql.getSQLState())) {
                 return true;
@@ -533,6 +534,9 @@ public class UserService {
         notificationService.notifyBookingCancelled(booking);
         if (driverStates != null) {
             driverStates.freed(booking.getDriverId(), booking);
+        }
+        if (dispatchService != null) {
+            dispatchService.cancelled(booking); // out of the matching queue; a held offer is withdrawn
         }
         if (refunded.signum() > 0 && emailService != null) {
             BigDecimal amount = refunded;

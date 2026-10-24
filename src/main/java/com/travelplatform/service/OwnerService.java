@@ -50,6 +50,9 @@ public class OwnerService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DispatchService dispatchService;
+
     public List<TravelBooking> getAllBookings() {
         return travelBookingRepository.findAll();
     }
@@ -323,15 +326,20 @@ public class OwnerService {
         Long previousDriverId = booking.getDriverId();
         booking.setDriverId(driverId);
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
-        // The owner's choice ends a Ride Now search; the sweep leaves MATCHED bookings alone.
-        DispatchService.markMatched(booking);
-        TravelBooking updatedBooking = travelBookingRepository.save(booking);
-        if (driverStates != null) {
-            if (previousDriverId != null && !previousDriverId.equals(driverId)) {
-                driverStates.freed(previousDriverId, updatedBooking);
+        // The owner's choice ends a Ride Now search: out of the matching queue, the new driver
+        // busy, and a different driver who held its offer freed and told it is gone.
+        if (dispatchService != null) {
+            dispatchService.ownerAssigned(booking, previousDriverId);
+        } else {
+            DispatchService.settle(booking);
+            if (driverStates != null) {
+                if (previousDriverId != null && !previousDriverId.equals(driverId)) {
+                    driverStates.freed(previousDriverId, booking);
+                }
+                driverStates.took(booking);
             }
-            driverStates.took(updatedBooking);
         }
+        TravelBooking updatedBooking = travelBookingRepository.save(booking);
 
         // An unpaid payment follows the trip to its new driver, so the payment record and the
         // booking never name different drivers.

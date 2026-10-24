@@ -58,6 +58,10 @@ public class DriverService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
 
+    // Where the open offers are; null in hand-built tests, which then read the booking table.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.dispatch.RideQueue rideQueue;
+
     /**
      * Only APPROVED is remembered, for a minute, so location reports (every few seconds) do not hit
      * the database. Approve and reject evict the entry so a decision shows at once.
@@ -155,14 +159,21 @@ public class DriverService {
 
     /**
      * The City ride this driver is being offered right now, with the seconds left to take it.
-     * What an online phone polls, so it reads one indexed row instead of the trip list. An offer
-     * whose time is up is not shown: the next dispatch step is about to move it on, and accepting
-     * it would be refused anyway.
+     * What an online phone polls, so it asks the ride queue (one Redis read) whether there is an
+     * offer at all, and loads that one booking only when there is. The booking row has the last
+     * word: an offer it no longer shows - accepted, cancelled, or whose time is up - is not shown,
+     * since accepting it would be refused anyway.
      */
     @Transactional(readOnly = true)
     public java.util.Optional<com.travelplatform.dto.DriverOfferView> currentOffer(Long driverId) {
-        return bookingRepository.findFirstByDriverIdAndDispatchStateAndStatus(
+        java.util.Optional<TravelBooking> held = rideQueue == null
+                ? bookingRepository.findFirstByDriverIdAndDispatchStateAndStatus(
                         driverId, TravelBooking.DispatchState.OFFERED, TravelBooking.BookingStatus.PENDING)
+                : rideQueue.currentOffer(driverId).flatMap(ref -> bookingRepository.findById(ref.bookingId()));
+        return held
+                .filter(b -> driverId.equals(b.getDriverId())
+                        && b.getStatus() == TravelBooking.BookingStatus.PENDING
+                        && b.getDispatchState() == TravelBooking.DispatchState.OFFERED)
                 .filter(b -> b.getOfferExpiresAt() != null)
                 .flatMap(b -> {
                     long left = java.time.Duration.between(java.time.LocalDateTime.now(clock), b.getOfferExpiresAt()).getSeconds();
@@ -230,11 +241,15 @@ public class DriverService {
         }
 
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
-        DispatchService.markMatched(booking);
-        TravelBooking updated = bookingRepository.save(booking);
-        if (driverStates != null) {
-            driverStates.took(updated);
+        if (dispatchService != null) {
+            dispatchService.markMatched(booking); // out of the queue, driver busy, once this commits
+        } else {
+            DispatchService.settle(booking);
+            if (driverStates != null) {
+                driverStates.took(booking);
+            }
         }
+        TravelBooking updated = bookingRepository.save(booking);
 
         Driver driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new RuntimeException("Driver not found"));

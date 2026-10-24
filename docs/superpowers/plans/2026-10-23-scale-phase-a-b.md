@@ -571,7 +571,7 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
   others
 
 **Tests:**
-- [ ] **Step 1: Write the failing tests** in `MatchingWorkerTest`:
+- [x] **Step 1: Write the failing tests** in `MatchingWorkerTest`:
   - `rideOfferedToNearestFreeDriver`
   - `contestedDriverGoesToLongerWaitingRide`: rides A (waited 30 s) and B (waited 0 s) are both
     1 km from driver X, and driver Y is 4 km from both; A gets X
@@ -587,16 +587,16 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
   - `rebuildsQueuesFromDatabaseAfterRedisLoss`: empty stores, plus a SEARCHING and an OFFERED
     booking in the mocked repository; after `tick`, both are back in the queue
   - `onlyLockHolderRunsTheCity`: two workers share local stores; only one sends offers
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement `MatchingWorker`, and slim `DispatchService` down** to accept, decline,
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement `MatchingWorker`, and slim `DispatchService` down** to accept, decline,
   cancel, owner override and `enqueueAfterCommit`.
-- [ ] **Step 4: Switch the offer source.** `DriverService.currentOffer` (Task 3) now reads
+- [x] **Step 4: Switch the offer source.** `DriverService.currentOffer` (Task 3) now reads
   `RideQueue.currentOffer`, then loads that one booking.
-- [ ] **Step 5: Update the frontend.** `DriverDispatch` shows "15s to accept" from `secondsLeft`;
+- [x] **Step 5: Update the frontend.** `DriverDispatch` shows "15s to accept" from `secondsLeft`;
   no logic change.
-- [ ] **Step 6: Run** the full suite, `mvn -o test`, then `npm run build`, `npm test` and lint.
+- [x] **Step 6: Run** the full suite, `mvn -o test`, then `npm run build`, `npm test` and lint.
   Expected: 0 failures, with only Docker tests skipped; build `✓ built`; lint has no errors.
-- [ ] **Step 7: Commit** `feat(dispatch): batch matching per city every 2 s (Hungarian/greedy over road ETA)`.
+- [x] **Step 7: Commit** `feat(dispatch): batch matching per city every 2 s (Hungarian/greedy over road ETA)`.
 
 ### Task 10: Docs and settings check
 

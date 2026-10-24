@@ -108,9 +108,13 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
            "AND b.dispatchState = com.travelplatform.entity.TravelBooking.DispatchState.OFFERED")
     List<Long> findOfferedDriverIds(@Param("driverIds") java.util.Collection<Long> driverIds);
 
-    /** Ride Now bookings the dispatch sweep has to act on: offers past their deadline, and searches still running. */
-    @Query("SELECT b.id FROM TravelBooking b WHERE b.status = 'PENDING' AND (" +
-           "(b.dispatchState = com.travelplatform.entity.TravelBooking.DispatchState.OFFERED AND b.offerExpiresAt < :now) " +
-           "OR b.dispatchState = com.travelplatform.entity.TravelBooking.DispatchState.SEARCHING)")
-    List<UUID> findDispatchWork(@Param("now") LocalDateTime now);
+    /**
+     * A city's City rides still searching or holding an offer: what MatchingWorker rebuilds a lost
+     * queue from. The dispatch_state predicate matches the V13 partial index, which stays small
+     * because only open searches are in it.
+     */
+    @Query("SELECT b FROM TravelBooking b WHERE b.cityId = :cityId AND b.status = 'PENDING' AND b.dispatchState IN (" +
+           "com.travelplatform.entity.TravelBooking.DispatchState.SEARCHING, " +
+           "com.travelplatform.entity.TravelBooking.DispatchState.OFFERED)")
+    List<TravelBooking> findOpenDispatchInCity(@Param("cityId") Long cityId);
 }

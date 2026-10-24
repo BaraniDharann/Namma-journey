@@ -153,7 +153,7 @@ class UserServiceCityTripTest {
         assertEquals(new BigDecimal("87.50"), b.getTotalAmount());
         assertNull(b.getDriverId());
         verify(cityFareService).fare(VehicleType.BIKE, 12.0, 35L);
-        verify(dispatchService).dispatchAfterCommit(b.getId());
+        verify(dispatchService).enqueueAfterCommit(b);
         verify(driverRepository, never()).findFirstFreeTripDriver(any(), any(), anyBoolean(), any());
     }
 
@@ -219,7 +219,7 @@ class UserServiceCityTripTest {
         assertEquals(VehicleType.CAR, b.getVehicleType());
         assertEquals(TravelBooking.DispatchMode.SCHEDULED, b.getDispatchMode());
         assertEquals(2L, b.getDriverId());
-        verify(dispatchService, never()).dispatchAfterCommit(any());
+        verify(dispatchService, never()).enqueueAfterCommit(any());
     }
 
     @Test
