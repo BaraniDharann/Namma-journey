@@ -170,10 +170,20 @@ class DriverOverlapConstraintTest {
     @Test
     @DisplayName("V16: existing drivers stay owner-fleet and approved; independents take no trips; a plate is unique in any case")
     void driverSelfSignupColumns() throws Exception {
+        // A driver the owner created before V16: the migration has to grandfather them in.
+        flyway("15").migrate();
+        try (Connection c = connect()) {
+            c.createStatement().executeUpdate("""
+                    INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
+                        first_login, email_verified, token_version, created_at)
+                    VALUES ('Old Hand', '9000000000', 'x', 'L-0', '111122220000', 'ROLE_DRIVER', 'ACTIVE',
+                        false, true, 0, now())
+                    """);
+        }
         flyway(null).migrate();
         try (Connection c = connect()) {
             try (ResultSet rs = c.createStatement().executeQuery(
-                    "SELECT fleet, verification_status FROM drivers WHERE id = " + DRIVER)) {
+                    "SELECT fleet, verification_status FROM drivers WHERE mobile = '9000000000'")) {
                 rs.next();
                 assertEquals("OWNER_FLEET", rs.getString(1));
                 assertEquals("APPROVED", rs.getString(2));
