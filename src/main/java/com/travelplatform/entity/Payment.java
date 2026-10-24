@@ -67,6 +67,14 @@ public class Payment {
     @Column
     private String razorpayPaymentId;
 
+    /** Razorpay refund (rfnd_...) once one is requested for a cancelled prepaid trip (V18). */
+    @Column
+    private String razorpayRefundId;
+
+    /** When Razorpay confirmed the refund (refund.processed). */
+    @Column
+    private LocalDateTime refundedAt;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
     
@@ -77,6 +85,10 @@ public class Payment {
     }
     
     public enum PaymentStatus {
-        PENDING, VERIFIED, FAILED
+        PENDING, VERIFIED, FAILED,
+        /** Cancelled before the trip; refund requested from Razorpay, money not back yet. */
+        REFUND_PENDING,
+        /** Razorpay confirmed the money went back. */
+        REFUNDED
     }
 }

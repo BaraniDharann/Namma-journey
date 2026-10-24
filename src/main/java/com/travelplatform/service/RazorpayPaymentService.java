@@ -188,6 +188,12 @@ public class RazorpayPaymentService {
 
         switch (event) {
             case "payment.captured", "order.paid" -> settleFromWebhook(event, entity);
+            case "refund.processed" -> refundProcessed(root.path("payload").path("refund").path("entity"));
+            case "refund.failed" -> {
+                JsonNode refund = root.path("payload").path("refund").path("entity");
+                log.error("Razorpay refund {} for payment {} FAILED: refund it by hand from the dashboard",
+                        refund.path("id").asText(), refund.path("payment_id").asText());
+            }
             case "payment.failed" -> log.info("Razorpay payment {} failed for order {}: {}",
                     entity.path("id").asText(), entity.path("order_id").asText(),
                     entity.path("error_description").asText(""));
@@ -227,6 +233,41 @@ public class RazorpayPaymentService {
             return;
         }
         settle(payment, booking.get(), razorpayPaymentId);
+    }
+
+    /** The money is back with the passenger: close the payment out. Repeats are no-ops. */
+    private void refundProcessed(JsonNode refund) {
+        String razorpayPaymentId = refund.path("payment_id").asText(null);
+        if (razorpayPaymentId == null) {
+            return;
+        }
+        Optional<Payment> found = paymentRepository.findByRazorpayPaymentId(razorpayPaymentId);
+        if (found.isEmpty()) {
+            // Refunded from the dashboard for a payment we never settled - nothing to update.
+            log.warn("Razorpay refund {} for unknown payment {}", refund.path("id").asText(), razorpayPaymentId);
+            return;
+        }
+        Payment payment = found.get();
+        if (payment.getStatus() == Payment.PaymentStatus.REFUNDED) {
+            return;
+        }
+        long refundedPaise = refund.path("amount").asLong(-1);
+        if (refundedPaise != toPaise(payment.getAmount())) {
+            // A partial refund from the dashboard: the fare is not fully returned, so keep the
+            // payment's status and leave the difference to whoever issued it.
+            log.warn("Partial refund {} ({} paise) on payment {}; status unchanged",
+                    refund.path("id").asText(), refundedPaise, payment.getId());
+            return;
+        }
+        if (payment.getStatus() == Payment.PaymentStatus.VERIFIED) {
+            // Refunded by hand in the dashboard without cancelling here: revenue must drop anyway.
+            log.warn("Payment {} refunded outside the app; marking it REFUNDED", payment.getId());
+        }
+        payment.setStatus(Payment.PaymentStatus.REFUNDED);
+        payment.setRazorpayRefundId(refund.path("id").asText(payment.getRazorpayRefundId()));
+        payment.setRefundedAt(LocalDateTime.now());
+        paymentRepository.save(payment);
+        log.info("Refund {} processed for payment {}", payment.getRazorpayRefundId(), payment.getId());
     }
 
     private PaymentResponse settle(Payment payment, TravelBooking booking, String razorpayPaymentId) {

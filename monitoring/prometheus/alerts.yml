@@ -48,6 +48,23 @@ groups:
         annotations:
           summary: "Telegram or email notifications are failing - drivers may not hear about trips"
 
+      - alert: OutboxJobsDead
+        # A queued email or refund gave up after every retry. A refund here means a passenger
+        # is owed money: check outbox_events WHERE status = 'DEAD' (or the SQS dead-letter queue).
+        expr: sum(increase(namma_outbox_jobs_total{outcome="dead"}[1h])) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations:
+          summary: "A background job (email or Razorpay refund) failed permanently"
+
+      - alert: OutboxJobsFailing
+        # Jobs are failing and being retried - SMTP or Razorpay is probably down.
+        expr: sum(increase(namma_outbox_jobs_total{outcome="failed"}[15m])) > 10
+        for: 0m
+        labels: { severity: warning }
+        annotations:
+          summary: "Background jobs keep failing and retrying"
+
       - alert: HeavyRateLimiting
         # Sustained 429s: either an attack, or limits set too tight for real traffic.
         expr: sum(rate(http_server_requests_seconds_count{status="429"}[5m])) > 1

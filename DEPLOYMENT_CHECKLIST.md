@@ -47,6 +47,42 @@ refuses to start rather than run on a value baked into the source.
 - [ ] `REDIS_HOST` / `REDIS_PORT`, or `APP_CACHE_TYPE=caffeine` to run without Redis
 - [ ] `OSRM_BASE_URL` / `PHOTON_BASE_URL` — **the defaults are public demo servers.** They are rate
       limited and not licensed for production traffic. Self-host or buy a provider before launch.
+- [ ] `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET` — online payments. Without
+      them the "Online" option refuses politely and UPI QR + cash work as before. See *Razorpay* below.
+- [ ] `OUTBOX_TRANSPORT` — `in-process` (default, no extra infrastructure) or `sqs`. See *AWS SQS*
+      below.
+- [ ] `STORAGE_TYPE=s3` + `S3_*` — **required on any host without a persistent disk** (Render's free
+      plan has none: every deploy deletes uploaded driver documents and trip photos). An S3 bucket
+      in `ap-south-1` with Block Public Access on; the app serves files through short-lived signed
+      URLs.
+
+### Razorpay
+
+1. Dashboard → **Account & Settings → API keys** → generate keys (Test mode first).
+2. Dashboard → **Webhooks → Add New Webhook**:
+   - URL: `https://api.nammajourneys.site/api/payments/razorpay/webhook`
+   - Secret: the value of `RAZORPAY_WEBHOOK_SECRET` (`openssl rand -hex 32`)
+   - Events: `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`, `refund.failed`
+3. **Payments and refunds → Capture settings**: automatic capture on.
+4. Going live: finish KYC, switch the dashboard to Live, generate live keys, **add the webhook
+   again in Live mode** (test and live webhooks are separate), and swap the three variables. No
+   code change.
+
+### AWS SQS (when `OUTBOX_TRANSPORT=sqs`)
+
+Jobs (notification emails, Razorpay refunds) are always written to the `outbox_events` table
+first; SQS only replaces the in-process runner, so several backend instances share the work.
+
+1. Create a standard queue `namma-jobs-dlq` (retention 14 days).
+2. Create a standard queue `namma-jobs` with **visibility timeout 120 s**, receive wait time 20 s,
+   and a redrive policy to `namma-jobs-dlq` with **maxReceiveCount 5**.
+3. Create an IAM user (or role, on AWS hosting) allowed only `sqs:SendMessage`,
+   `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:ChangeMessageVisibility`,
+   `sqs:GetQueueAttributes` on `namma-jobs`.
+4. Set `OUTBOX_TRANSPORT=sqs`, `OUTBOX_SQS_QUEUE_URL`, `OUTBOX_SQS_REGION=ap-south-1`, and either
+   `OUTBOX_SQS_ACCESS_KEY` / `OUTBOX_SQS_SECRET_KEY` or the standard AWS credential variables.
+5. Add a CloudWatch alarm on `ApproximateNumberOfMessagesVisible > 0` for `namma-jobs-dlq`: a
+   message there is an email that never went out, or a refund a passenger is still owed.
 
 ---
 
@@ -104,6 +140,11 @@ curl -X POST http://<host>:8080/api/auth/owner/create-admin \
       exercises the WebSocket path, which is the piece most likely to be broken by a proxy that
       does not forward `Upgrade` headers
 - [ ] Complete a payment end to end and confirm it appears in owner revenue exactly once
+- [ ] Pay a confirmed trip **online** (test UPI `success@razorpay`), then check the Razorpay
+      dashboard's webhook log shows a `200` for `payment.captured`
+- [ ] Cancel that trip and confirm the payment goes `REFUND_PENDING` → `REFUNDED` and the refund
+      shows in the Razorpay dashboard
+- [ ] `SELECT status, count(*) FROM outbox_events GROUP BY status;` — no `DEAD` rows
 
 ---
 
@@ -133,9 +174,11 @@ curl -X POST http://<host>:8080/api/auth/owner/create-admin \
 
 These are documented in [SECURITY.md](SECURITY.md); they are design decisions, not oversights.
 
-- **Payment verification is manual.** Nothing in this codebase observes the actual UPI transfer.
-  An owner confirms it from their own bank app. This is fine when the person clicking verify owns
-  the receiving account, and not fine otherwise.
+- **UPI QR payment verification is manual.** Nothing in this codebase observes a direct UPI
+  transfer. An owner confirms it from their own bank app. This is fine when the person clicking
+  verify owns the receiving account, and not fine otherwise. Online (Razorpay) payments are
+  verified automatically by signature and refunded automatically on cancellation; UPI QR
+  payments are refunded by the owner by hand.
 - **Single-instance WebSocket.** Live tracking uses an in-memory STOMP broker, so running more
   than one backend replica requires an external broker relay first.
 - **`xlsx` carries an unpatched advisory.** It is used write-only for the revenue export and no

@@ -71,7 +71,13 @@ public class UserService {
     private CityFareService cityFareService;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private CityService cityService;
-    
+
+    // Refunds for cancelled prepaid trips. Null only in unit tests that build UserService by hand.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.outbox.Outbox outbox;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private EmailService emailService;
+
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
      * always say the same thing. The frontend matches on it to route them to the profile page.
@@ -460,6 +466,12 @@ public class UserService {
     }
     
     @Transactional
+    @org.springframework.cache.annotation.Caching(evict = {
+            @org.springframework.cache.annotation.CacheEvict(value = "dailyRevenue",   allEntries = true),
+            @org.springframework.cache.annotation.CacheEvict(value = "monthlyRevenue", allEntries = true),
+            @org.springframework.cache.annotation.CacheEvict(value = "yearlyRevenue",  allEntries = true),
+            @org.springframework.cache.annotation.CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
+    })
     public void deleteBooking(UUID userId, UUID bookingId) {
         TravelBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
@@ -476,17 +488,36 @@ public class UserService {
             throw new RuntimeException("Only a booking that has not started can be cancelled");
         }
         java.util.Optional<com.travelplatform.entity.Payment> payment = paymentRepository.findByBookingId(bookingId);
+        boolean refunding = false;
         if (payment.filter(p -> p.getStatus() == com.travelplatform.entity.Payment.PaymentStatus.VERIFIED).isPresent()) {
-            throw new RuntimeException("This booking is already paid for. Please contact us to cancel it and arrange a refund.");
+            com.travelplatform.entity.Payment paid = payment.get();
+            // Paid online: the full fare goes back automatically, since the trip never started.
+            // Paid by UPI transfer there is no payment id to refund against, so that stays a
+            // conversation with the owner.
+            if (paid.getPaymentMethod() != com.travelplatform.entity.Payment.PaymentMethod.RAZORPAY || outbox == null) {
+                throw new RuntimeException("This booking is already paid for. Please contact us to cancel it and arrange a refund.");
+            }
+            paid.setStatus(com.travelplatform.entity.Payment.PaymentStatus.REFUND_PENDING);
+            paymentRepository.save(paid);
+            // Same transaction as the cancellation: the refund is requested if and only if the
+            // cancellation commits, and retried until Razorpay accepts it.
+            outbox.enqueue(RefundJobHandler.TYPE, new RefundJobHandler.RefundRequest(paid.getId()));
+            refunding = true;
+        } else {
+            payment.ifPresent(p -> {
+                p.setStatus(com.travelplatform.entity.Payment.PaymentStatus.FAILED);
+                paymentRepository.save(p);
+            });
         }
-        payment.ifPresent(p -> {
-            p.setStatus(com.travelplatform.entity.Payment.PaymentStatus.FAILED);
-            paymentRepository.save(p);
-        });
 
         booking.setStatus(TravelBooking.BookingStatus.CANCELLED);
         bookingRepository.save(booking);
         notificationService.notifyBookingCancelled(booking);
+        if (refunding && emailService != null) {
+            java.math.BigDecimal amount = payment.get().getAmount();
+            userRepository.findById(userId).ifPresent(u ->
+                    emailService.sendRefundStartedEmail(u.getEmail(), u.getName(), booking, amount));
+        }
     }
     
     /** One booking: looks up its own photo and driver. Lists use the batched getAllBookings path. */

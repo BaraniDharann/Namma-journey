@@ -67,4 +67,41 @@ public class RazorpayGateway {
             throw new RuntimeException("Online payment is unavailable right now. Please try again, or pay by UPI or cash.");
         }
     }
+
+    /**
+     * Refunds {@code amountPaise} of a captured payment and returns the refund id ({@code rfnd_...}),
+     * or {@code null} when Razorpay says the payment is already fully refunded - a repeat of a
+     * job that succeeded before, which counts as done.
+     *
+     * <p>Unlike {@link #createOrder} this runs from a background job, so failures propagate as
+     * they are: the outbox retries them.
+     */
+    public String refund(String razorpayPaymentId, long amountPaise, Map<String, String> notes) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBasicAuth(properties.getKeyId(), properties.getKeySecret());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount", amountPaise);
+        body.put("speed", "normal");
+        body.put("notes", notes);
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> refund = http.postForObject(
+                    properties.getApiBaseUrl() + "/v1/payments/" + razorpayPaymentId + "/refund",
+                    new HttpEntity<>(body, headers), Map.class);
+            Object id = refund == null ? null : refund.get("id");
+            if (id == null) {
+                throw new IllegalStateException("Razorpay returned a refund without an id");
+            }
+            return id.toString();
+        } catch (org.springframework.web.client.HttpClientErrorException.BadRequest e) {
+            if (e.getResponseBodyAsString().toLowerCase(java.util.Locale.ROOT).contains("fully refunded")) {
+                log.info("Razorpay payment {} is already fully refunded", razorpayPaymentId);
+                return null;
+            }
+            throw e;
+        }
+    }
 }

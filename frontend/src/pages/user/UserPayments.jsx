@@ -67,7 +67,7 @@ export default function UserPayments() {
                           <span className="pc-chip"><Icon name={p.paymentMethod === 'UPI' ? 'qr' : p.paymentMethod === 'RAZORPAY' ? 'card' : 'wallet'} size={14} />{p.paymentMethod === 'RAZORPAY' ? 'ONLINE' : p.paymentMethod}</span>
                         </td>
                         <td>
-                          <StatusPill status={p.status === 'VERIFIED' || p.status === 'PENDING' ? p.status : 'FAILED'} label={p.status === 'VERIFIED' || p.status === 'PENDING' ? undefined : p.status} />
+                          <StatusPill status={p.status} />
                         </td>
                         <td>{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '-'}</td>
                       </tr>

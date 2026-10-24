@@ -229,6 +229,39 @@ class RazorpayPaymentServiceTest {
         verify(notifications, never()).notifyPaymentReceived(any());
     }
 
+    private static byte[] refundEvent(String paymentId, long paise) {
+        return ("{\"event\":\"refund.processed\",\"payload\":{\"refund\":{\"entity\":"
+                + "{\"id\":\"rfnd_1\",\"payment_id\":\"" + paymentId + "\",\"amount\":" + paise + "}}}}")
+                .getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Test
+    @DisplayName("refund.processed closes a pending refund")
+    void refundProcessed() {
+        Payment p = pendingOnline();
+        p.setStatus(Payment.PaymentStatus.REFUND_PENDING);
+        p.setRazorpayPaymentId("pay_1");
+        when(payments.findByRazorpayPaymentId("pay_1")).thenReturn(Optional.of(p));
+
+        service.handleWebhook(refundEvent("pay_1", 250050L));
+
+        assertEquals(Payment.PaymentStatus.REFUNDED, p.getStatus());
+        assertEquals("rfnd_1", p.getRazorpayRefundId());
+    }
+
+    @Test
+    @DisplayName("a partial refund from the dashboard leaves the payment as it was")
+    void partialRefundIgnored() {
+        Payment p = pendingOnline();
+        p.setStatus(Payment.PaymentStatus.VERIFIED);
+        p.setRazorpayPaymentId("pay_1");
+        when(payments.findByRazorpayPaymentId("pay_1")).thenReturn(Optional.of(p));
+
+        service.handleWebhook(refundEvent("pay_1", 100L));
+
+        assertEquals(Payment.PaymentStatus.VERIFIED, p.getStatus());
+    }
+
     @Test
     @DisplayName("an unconfigured deployment refuses online payment")
     void refusesWithoutKeys() {

@@ -98,6 +98,10 @@ services:
         sync: false
       - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
+      # Emails and refunds run from the outbox table on this instance. Switch to "sqs" and add
+      # OUTBOX_SQS_QUEUE_URL / OUTBOX_SQS_ACCESS_KEY / OUTBOX_SQS_SECRET_KEY to use AWS SQS.
+      - key: OUTBOX_TRANSPORT
+        value: in-process
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

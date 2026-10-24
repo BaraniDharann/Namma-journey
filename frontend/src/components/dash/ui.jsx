@@ -89,6 +89,8 @@ const PILL = {
   SUCCESS: ['ok', 'Paid'],
   PAID: ['ok', 'Paid'],
   FAILED: ['stop', 'Failed'],
+  REFUND_PENDING: ['wait', 'Refund started'],
+  REFUNDED: ['ok', 'Refunded'],
   ACTIVE: ['ok', 'Active'],
   INACTIVE: ['stop', 'Inactive'],
 }

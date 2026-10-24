@@ -61,7 +61,7 @@ public class NotificationService {
         notificationRepository.save(driverNotice(d, "DRIVER_APPROVED", "Account approved",
                 "Your account has been approved. You can go online and take rides now."));
         if (d.getEmail() != null) {
-            dispatcher.dispatch("email", () -> emailService.sendDriverApprovedEmail(d.getEmail(), d.getName()));
+            emailService.sendDriverApprovedEmail(d.getEmail(), d.getName());
         }
     }
 
@@ -70,8 +70,7 @@ public class NotificationService {
                 "Your application was not approved: " + d.getRejectionReason()
                         + " Please upload the corrected documents."));
         if (d.getEmail() != null) {
-            dispatcher.dispatch("email", () ->
-                    emailService.sendDriverRejectedEmail(d.getEmail(), d.getName(), d.getRejectionReason()));
+            emailService.sendDriverRejectedEmail(d.getEmail(), d.getName(), d.getRejectionReason());
         }
     }
 
@@ -100,8 +99,7 @@ public class NotificationService {
         notificationRepository.save(notification);
 
         if (driver.getEmail() != null) {
-            dispatcher.dispatch("email", () ->
-                    emailService.sendTripAssignedEmail(driver.getEmail(), driver.getName(), booking));
+            emailService.sendTripAssignedEmail(driver.getEmail(), driver.getName(), booking);
         }
 
         // The point of the whole Telegram channel: a driver at the wheel will not read an
@@ -186,8 +184,7 @@ public class NotificationService {
         notificationRepository.save(notification);
 
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
-            dispatcher.dispatch("email", () ->
-                    emailService.sendTripAcceptedEmail(user.getEmail(), user.getName(), booking, driver));
+            emailService.sendTripAcceptedEmail(user.getEmail(), user.getName(), booking, driver);
         });
         log.info("Notification sent to user {} for trip accepted: {}", booking.getUserId(), booking.getId());
     }
@@ -217,8 +214,7 @@ public class NotificationService {
         notificationRepository.save(userNotification);
 
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
-            dispatcher.dispatch("email", () ->
-                    emailService.sendTripRejectedEmail(user.getEmail(), user.getName(), booking));
+            emailService.sendTripRejectedEmail(user.getEmail(), user.getName(), booking);
         });
 
         // Notify owner
@@ -273,8 +269,7 @@ public class NotificationService {
         notificationRepository.save(userNotification);
 
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
-            dispatcher.dispatch("email", () ->
-                    emailService.sendTripEndedEmail(user.getEmail(), user.getName(), booking));
+            emailService.sendTripEndedEmail(user.getEmail(), user.getName(), booking);
         });
 
         // Notify owner
@@ -345,8 +340,7 @@ public class NotificationService {
         notificationRepository.save(userNotification);
 
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
-            dispatcher.dispatch("email", () ->
-                    emailService.sendPaymentConfirmationEmail(user.getEmail(), user.getName(), booking));
+            emailService.sendPaymentConfirmationEmail(user.getEmail(), user.getName(), booking);
         });
 
         log.info("Payment notifications sent for booking: {}", booking.getId());

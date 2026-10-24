@@ -8,6 +8,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Online payments with Razorpay** — card, UPI and netbanking through Razorpay Checkout. The
+  server creates the order from the booking's fare, settles it on a valid checkout signature,
+  and Razorpay's signed webhook settles any payment whose tab closed first. Each fare is booked
+  into revenue exactly once
+- **Automatic refunds** — cancelling a trip paid online, before it starts, refunds the full fare
+  through Razorpay; `refund.processed` marks it `REFUNDED` and it leaves owner revenue
+- **Transactional outbox for background jobs** — notification emails and refunds are written to
+  `outbox_events` in the same transaction as the change they belong to and retried with backoff
+  until delivered. Runs in-process by default; `OUTBOX_TRANSPORT=sqs` delivers through AWS SQS
+  with a dead-letter queue. Previously these emails were fire-and-forget from an in-memory pool
+  and were lost on any restart or SMTP failure
 - Telegram driver dispatch — trip cards pushed to drivers in Telegram with inline accept/reject,
   webhook signature verification, and account linking (`TELEGRAM_ENABLED=false` disables it)
 - Per-driver booking rejection tracking, so a rejected trip is not re-offered to the same driver

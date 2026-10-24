@@ -132,6 +132,12 @@
             <artifactId>s3</artifactId>
             <version>2.28.16</version>
         </dependency>
+        <!-- Background jobs over SQS (app.outbox.transport=sqs). Same SDK line as S3. -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>sqs</artifactId>
+            <version>2.28.16</version>
+        </dependency>
 
         <!-- Shared Redis-backed token buckets, so rate limits hold across every instance -->
         <dependency>

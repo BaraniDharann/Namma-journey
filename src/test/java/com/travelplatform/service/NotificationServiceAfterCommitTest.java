@@ -25,7 +25,9 @@ import static org.mockito.Mockito.when;
 
 /**
  * The in-app notification row belongs to the transaction - it commits or rolls back with the
- * booking. Email and Telegram leave the building, so they must wait for the commit.
+ * booking. Telegram leaves the building, so it waits for the commit. Email is queued through the
+ * outbox inside the transaction (EmailService writes an outbox row that commits or rolls back
+ * with the booking), so it is called during the transaction, not after.
  */
 class NotificationServiceAfterCommitTest {
 
@@ -69,45 +71,42 @@ class NotificationServiceAfterCommitTest {
     }
 
     @Test
-    @DisplayName("driver assignment: the row is written in the transaction, email and Telegram only after commit")
+    @DisplayName("driver assignment: row and email job in the transaction, Telegram only after commit")
     void driverAssignedWaitsForCommit() {
         tx.executeWithoutResult(status -> {
             service.notifyDriverAssigned(booking, driver);
             verify(notificationRepository).save(any());
+            verify(emailService).sendTripAssignedEmail("murugan@example.com", "Murugan", booking);
             verify(telegram, never()).sendTripAssigned(any(), any());
-            verify(emailService, never()).sendTripAssignedEmail(anyString(), anyString(), any());
         });
 
         verify(telegram).sendTripAssigned(booking, driver);
-        verify(emailService).sendTripAssignedEmail("murugan@example.com", "Murugan", booking);
     }
 
     @Test
-    @DisplayName("a rolled-back booking never reaches the driver's phone or inbox")
+    @DisplayName("a rolled-back booking never reaches the driver's phone")
     void rollbackSendsNothing() {
         assertThrows(IllegalStateException.class, () -> tx.executeWithoutResult(status -> {
             service.notifyDriverAssigned(booking, driver);
             throw new IllegalStateException("insert refused");
         }));
 
+        // The queued email rolled back with the outbox row (OutboxStore.append is MANDATORY).
         verifyNoInteractions(telegram);
-        verifyNoInteractions(emailService);
     }
 
     @Test
-    @DisplayName("every passenger email waits for commit too")
+    @DisplayName("every passenger email is queued inside the transaction")
     void passengerEmailsWaitForCommit() {
         tx.executeWithoutResult(status -> {
             service.notifyTripAccepted(booking, driver);
             service.notifyTripRejected(booking, driver, null);
             service.notifyTripEnded(booking, driver);
             service.notifyPaymentReceived(booking);
-            verifyNoInteractions(emailService);
+            verify(emailService).sendTripAcceptedEmail(anyString(), anyString(), any(), any());
+            verify(emailService).sendTripRejectedEmail(anyString(), anyString(), any());
+            verify(emailService).sendTripEndedEmail(anyString(), anyString(), any());
+            verify(emailService).sendPaymentConfirmationEmail(anyString(), anyString(), any());
         });
-
-        verify(emailService).sendTripAcceptedEmail(anyString(), anyString(), any(), any());
-        verify(emailService).sendTripRejectedEmail(anyString(), anyString(), any());
-        verify(emailService).sendTripEndedEmail(anyString(), anyString(), any());
-        verify(emailService).sendPaymentConfirmationEmail(anyString(), anyString(), any());
     }
 }

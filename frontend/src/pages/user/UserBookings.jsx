@@ -5,7 +5,7 @@ import Pagination, { usePagination } from '../../components/Pagination'
 import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
 import toast from 'react-hot-toast'
-import { getUserBookings, deleteBooking, initiatePayment, submitReview, getTripSummary, createRazorpayOrder, verifyRazorpayPayment } from '../../utils/api'
+import { getUserBookings, getUserPayments, deleteBooking, initiatePayment, submitReview, getTripSummary, createRazorpayOrder, verifyRazorpayPayment } from '../../utils/api'
 import { openRazorpayCheckout } from '../../utils/razorpay'
 import { actionKey } from '../../utils/idempotency'
 import Icon from '../../components/dash/Icon'
@@ -262,10 +262,17 @@ export default function UserBookings() {
   const [summaryBooking, setSummaryBooking] = useState(null)
   const [trackingBooking, setTrackingBooking] = useState(null)
 
+  // bookingId -> payment, so a card knows whether it is paid (hide Pay) and how a cancel is refunded.
+  const [paymentsByBooking, setPaymentsByBooking] = useState({})
+
   const load = async () => {
     try {
-      const res = await getUserBookings(user.userId)
+      const [res, pay] = await Promise.all([
+        getUserBookings(user.userId),
+        getUserPayments(user.userId).catch(() => ({ data: [] })),
+      ])
       setBookings(res.data || [])
+      setPaymentsByBooking(Object.fromEntries((pay.data || []).map(p => [p.bookingId, p])))
     } catch { /* ignore */ }
     setLoading(false)
   }
@@ -275,9 +282,19 @@ export default function UserBookings() {
   const filtered = filter === 'ALL' ? bookings : bookings.filter(b => b.status === filter)
   const { currentPage, totalPages, paginatedItems, setCurrentPage } = usePagination(filtered, 6)
 
-  const handleDelete = async (bookingId) => {
-    if (!confirm('Cancel this booking?')) return
-    try { await deleteBooking(user.userId, bookingId); load() } catch { /* ignore */ }
+  const handleDelete = async (booking) => {
+    const paid = paymentsByBooking[booking.bookingId]
+    const question = paid?.status === 'VERIFIED' && paid.paymentMethod === 'RAZORPAY'
+      ? `Cancel this trip? The full ${inr(paid.amount)} goes back to how you paid, usually within 5-7 working days.`
+      : 'Cancel this booking?'
+    if (!confirm(question)) return
+    try {
+      await deleteBooking(user.userId, booking.bookingId)
+      if (paid?.status === 'VERIFIED') {
+        celebrate({ tone: 'calm', title: 'Trip cancelled', message: `Your refund of ${inr(paid.amount)} has started.` })
+      }
+      load()
+    } catch { /* the API layer toasted the reason */ }
   }
 
   const handleReview = async (bookingId, data) => {
@@ -416,10 +433,11 @@ export default function UserBookings() {
                 {['CONFIRMED', 'STARTED', 'COMPLETED', 'PENDING'].includes(b.status) && (
                   <div className="pc-chips" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--pc-line)' }}>
                     {(b.status === 'CONFIRMED' || b.status === 'STARTED') && <button type="button" onClick={() => setTrackingBooking(b)} className="pc-btn pc-btn-teal pc-btn-sm"><Icon name="pin" size={15} />Track</button>}
-                    {b.status === 'CONFIRMED' && <button type="button" onClick={() => setPayBooking(b)} className="pc-btn pc-btn-sm"><Icon name="card" size={15} />Pay</button>}
+                    {b.status === 'CONFIRMED' && paymentsByBooking[b.bookingId]?.status !== 'VERIFIED' && <button type="button" onClick={() => setPayBooking(b)} className="pc-btn pc-btn-sm"><Icon name="card" size={15} />Pay</button>}
+                    {b.status === 'CONFIRMED' && paymentsByBooking[b.bookingId]?.status === 'VERIFIED' && <StatusPill status="PAID" />}
                     {b.status === 'COMPLETED' && <button type="button" onClick={() => setSummaryBooking(b)} className="pc-btn pc-btn-ghost pc-btn-sm"><Icon name="eye" size={15} />Details</button>}
                     {b.status === 'COMPLETED' && <button type="button" onClick={() => setReviewBooking(b)} className="pc-btn pc-btn-ghost pc-btn-sm"><Icon name="star" size={15} />Review</button>}
-                    {b.status === 'PENDING' && <button type="button" onClick={() => handleDelete(b.bookingId)} className="pc-btn pc-btn-ghost pc-btn-sm" style={{ color: 'var(--pc-bad)' }}><Icon name="x" size={15} />Cancel</button>}
+                    {(b.status === 'PENDING' || b.status === 'CONFIRMED') && <button type="button" onClick={() => handleDelete(b)} className="pc-btn pc-btn-ghost pc-btn-sm" style={{ color: 'var(--pc-bad)' }}><Icon name="x" size={15} />Cancel</button>}
                   </div>
                 )}
               </div>

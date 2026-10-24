@@ -37,6 +37,12 @@ public class EmailService {
     @Value("${mail.delivery.enabled:true}")
     private boolean deliveryEnabled;
 
+    /** Outbox job type for queued notification emails; handled by EmailJobHandler. */
+    public static final String EMAIL_JOB = "email";
+
+    @Autowired
+    private com.travelplatform.outbox.Outbox outbox;
+
     /**
      * Hand a prepared message to the mail server, unless delivery is switched off. Callers use
      * this instead of {@code mailSender.send} directly.
@@ -117,17 +123,28 @@ public class EmailService {
         }
     }
 
-    @Async("emailExecutor")
+
+    // ---- Notifications that must arrive: queued through the outbox --------------------------
+    //
+    // These used to be @Async sends that swallowed every error, run after commit from an
+    // in-memory pool: a restart or an SMTP hiccup lost them silently. Now each composes its
+    // message and writes it to the outbox in the caller's transaction; EmailJobHandler sends it
+    // and a failure is retried with backoff. OTP and credential mails above stay direct - the
+    // person is waiting on the screen for them, and a late OTP is worse than a failed one.
+
+    /** A composed email, as stored in the outbox. */
+    public record EmailMessage(String to, String subject, String html) {
+    }
+
     public void sendDriverApprovedEmail(String toEmail, String name) {
-        sendSimple(toEmail, "Your Namma Journey driver account is approved",
+        queue(toEmail, "Your Namma Journey driver account is approved",
                 "<html><body><h2>You are approved</h2><p>Hi " + HtmlUtils.htmlEscape(name == null ? "" : name)
                 + ", the owner has approved your documents. You can go online and take rides now.</p>"
                 + "<br><p>Best regards,<br>Namma Journey Team</p></body></html>");
     }
 
-    @Async("emailExecutor")
     public void sendDriverRejectedEmail(String toEmail, String name, String reason) {
-        sendSimple(toEmail, "Your Namma Journey application needs changes",
+        queue(toEmail, "Your Namma Journey application needs changes",
                 "<html><body><h2>Application not approved</h2><p>Hi " + HtmlUtils.htmlEscape(name == null ? "" : name)
                 + ", the owner could not approve your documents.</p><p><strong>Reason:</strong> "
                 + HtmlUtils.htmlEscape(reason == null ? "" : reason)
@@ -135,165 +152,121 @@ public class EmailService {
                 + "<br><p>Best regards,<br>Namma Journey Team</p></body></html>");
     }
 
-    private void sendSimple(String toEmail, String subject, String html) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(toEmail);
-            helper.setSubject(subject);
-            helper.setText(html, true);
-            if (deliver(message)) {
-                log.info("Email '{}' sent to: {}", subject, toEmail);
-            }
-        } catch (Exception e) {
-            log.error("Failed to send '{}' to {}: {}", subject, toEmail, e.getMessage());
-        }
-    }
-
-    @Async("emailExecutor")
     public void sendTripAssignedEmail(String driverEmail, String driverName, com.travelplatform.entity.TravelBooking booking) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(driverEmail);
-            helper.setSubject("New Trip Assigned - Namma Journey");
-            helper.setText(HTML_HEADER +
-                    "<h2 style='color:#667eea;'>New Trip Assigned!</h2>" +
-                    "<p>Dear " + driverName + ",</p>" +
-                    "<p>You have been assigned a new trip. Here are the details:</p>" +
-                    "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
-                    "<p><strong>From:</strong> " + booking.getFromPlace() + "</p>" +
-                    "<p><strong>To:</strong> " + booking.getToPlace() + "</p>" +
-                    "<p><strong>Date:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</p>" +
-                    "<p><strong>Passenger:</strong> " + booking.getUserName() + "</p>" +
-                    "<p><strong>Contact:</strong> " + booking.getUserPhone() + "</p>" +
-                    "<p><strong>Distance:</strong> " + String.format("%.1f", booking.getDistanceKm()) + " km</p>" +
-                    "</div>" +
-                    "<p>Please log in to your account to accept or reject this trip.</p>" +
-                    HTML_FOOTER, true);
-            if (deliver(message)) {
-                log.info("Trip assigned email sent to driver: {}", driverEmail);
-            }
-        } catch (Exception e) {
-            log.error("Failed to send trip assigned email: {}", e.getMessage());
-        }
+        queue(driverEmail, "New Trip Assigned - Namma Journey", HTML_HEADER +
+                "<h2 style='color:#667eea;'>New Trip Assigned!</h2>" +
+                "<p>Dear " + esc(driverName) + ",</p>" +
+                "<p>You have been assigned a new trip. Here are the details:</p>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>From:</strong> " + esc(booking.getFromPlace()) + "</p>" +
+                "<p><strong>To:</strong> " + esc(booking.getToPlace()) + "</p>" +
+                "<p><strong>Date:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</p>" +
+                "<p><strong>Passenger:</strong> " + esc(booking.getUserName()) + "</p>" +
+                "<p><strong>Contact:</strong> " + esc(booking.getUserPhone()) + "</p>" +
+                "<p><strong>Distance:</strong> " + String.format(java.util.Locale.ROOT, "%.1f", booking.getDistanceKm()) + " km</p>" +
+                "</div>" +
+                "<p>Please log in to your account to accept or reject this trip.</p>" +
+                HTML_FOOTER);
     }
 
-    @Async("emailExecutor")
     public void sendTripAcceptedEmail(String userEmail, String userName, com.travelplatform.entity.TravelBooking booking, com.travelplatform.entity.Driver driver) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(userEmail);
-            helper.setSubject("Driver Confirmed Your Trip - Namma Journey");
-            helper.setText(HTML_HEADER +
-                    "<h2 style='color:#667eea;'>Your Trip is Confirmed!</h2>" +
-                    "<p>Dear " + userName + ",</p>" +
-                    "<p>Great news! A driver has accepted your trip.</p>" +
-                    "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
-                    "<p><strong>Driver:</strong> " + driver.getName() + "</p>" +
-                    "<p><strong>Contact:</strong> " + driver.getMobile() + "</p>" +
-                    "<p><strong>From:</strong> " + booking.getFromPlace() + "</p>" +
-                    "<p><strong>To:</strong> " + booking.getToPlace() + "</p>" +
-                    "<p><strong>Date:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</p>" +
-                    "</div>" +
-                    "<p>Have a safe and pleasant journey!</p>" +
-                    HTML_FOOTER, true);
-            if (deliver(message)) {
-                log.info("Trip accepted email sent to user: {}", userEmail);
-            }
-        } catch (Exception e) {
-            log.error("Failed to send trip accepted email: {}", e.getMessage());
-        }
+        queue(userEmail, "Driver Confirmed Your Trip - Namma Journey", HTML_HEADER +
+                "<h2 style='color:#667eea;'>Your Trip is Confirmed!</h2>" +
+                "<p>Dear " + esc(userName) + ",</p>" +
+                "<p>Great news! A driver has accepted your trip.</p>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>Driver:</strong> " + esc(driver.getName()) + "</p>" +
+                "<p><strong>Contact:</strong> " + esc(driver.getMobile()) + "</p>" +
+                "<p><strong>From:</strong> " + esc(booking.getFromPlace()) + "</p>" +
+                "<p><strong>To:</strong> " + esc(booking.getToPlace()) + "</p>" +
+                "<p><strong>Date:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</p>" +
+                "</div>" +
+                "<p>Have a safe and pleasant journey!</p>" +
+                HTML_FOOTER);
     }
 
-    @Async("emailExecutor")
     public void sendTripRejectedEmail(String userEmail, String userName, com.travelplatform.entity.TravelBooking booking) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(userEmail);
-            helper.setSubject("Trip Update - Driver Reassignment - Namma Journey");
-            helper.setText(HTML_HEADER +
-                    "<h2 style='color:#667eea;'>Trip Update</h2>" +
-                    "<p>Dear " + userName + ",</p>" +
-                    "<p>The previously assigned driver was unable to take your trip. We are working on assigning a new driver.</p>" +
-                    "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
-                    "<p><strong>From:</strong> " + booking.getFromPlace() + "</p>" +
-                    "<p><strong>To:</strong> " + booking.getToPlace() + "</p>" +
-                    "<p><strong>Date:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</p>" +
-                    "</div>" +
-                    "<p>We apologize for the inconvenience and will update you shortly.</p>" +
-                    HTML_FOOTER, true);
-            if (deliver(message)) {
-                log.info("Trip rejected email sent to user: {}", userEmail);
-            }
-        } catch (Exception e) {
-            log.error("Failed to send trip rejected email: {}", e.getMessage());
-        }
+        queue(userEmail, "Trip Update - Driver Reassignment - Namma Journey", HTML_HEADER +
+                "<h2 style='color:#667eea;'>Trip Update</h2>" +
+                "<p>Dear " + esc(userName) + ",</p>" +
+                "<p>The previously assigned driver was unable to take your trip. We are working on assigning a new driver.</p>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>From:</strong> " + esc(booking.getFromPlace()) + "</p>" +
+                "<p><strong>To:</strong> " + esc(booking.getToPlace()) + "</p>" +
+                "<p><strong>Date:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</p>" +
+                "</div>" +
+                "<p>We apologize for the inconvenience and will update you shortly.</p>" +
+                HTML_FOOTER);
     }
 
-    @Async("emailExecutor")
     public void sendTripEndedEmail(String userEmail, String userName, com.travelplatform.entity.TravelBooking booking) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(userEmail);
-            // Sent when the driver ends the trip, which is before the fare is settled — so this
-            // asks for payment rather than declaring the booking finished. The "all done"
-            // message is sendPaymentConfirmationEmail, which goes out once the money is in.
-            helper.setSubject("Trip Ended - Payment Due - Namma Journey");
-            helper.setText(HTML_HEADER +
-                    "<h2 style='color:#667eea;'>Your trip has ended</h2>" +
-                    "<p>Dear " + userName + ",</p>" +
-                    "<p>Your driver has ended the trip. Please complete the payment to close this booking.</p>" +
-                    "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
-                    "<p><strong>From:</strong> " + booking.getFromPlace() + "</p>" +
-                    "<p><strong>To:</strong> " + booking.getToPlace() + "</p>" +
-                    "<p><strong>Distance:</strong> " + String.format("%.1f", booking.getDistanceKm()) + " km</p>" +
-                    "<p><strong>Amount payable:</strong> ₹" + String.format("%.2f", booking.getTotalAmount()) + "</p>" +
-                    "</div>" +
-                    "<p>Pay by scanning the driver's QR code, or hand the fare over in cash. " +
-                    "You will get a confirmation email once the payment is recorded.</p>" +
-                    "<p>Thank you for choosing Namma Journey. We hope you had a great experience!</p>" +
-                    HTML_FOOTER, true);
-            if (deliver(message)) {
-                log.info("Trip ended email sent to user: {}", userEmail);
-            }
-        } catch (Exception e) {
-            log.error("Failed to send trip ended email: {}", e.getMessage());
+        // Sent when the driver ends the trip, which is before the fare is settled - so this asks
+        // for payment rather than declaring the booking finished. The "all done" message is
+        // sendPaymentConfirmationEmail, which goes out once the money is in.
+        queue(userEmail, "Trip Ended - Payment Due - Namma Journey", HTML_HEADER +
+                "<h2 style='color:#667eea;'>Your trip has ended</h2>" +
+                "<p>Dear " + esc(userName) + ",</p>" +
+                "<p>Your driver has ended the trip. Please complete the payment to close this booking.</p>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>From:</strong> " + esc(booking.getFromPlace()) + "</p>" +
+                "<p><strong>To:</strong> " + esc(booking.getToPlace()) + "</p>" +
+                "<p><strong>Distance:</strong> " + String.format(java.util.Locale.ROOT, "%.1f", booking.getDistanceKm()) + " km</p>" +
+                "<p><strong>Amount payable:</strong> ₹" + String.format(java.util.Locale.ROOT, "%.2f", booking.getTotalAmount()) + "</p>" +
+                "</div>" +
+                "<p>Pay online, scan the driver's QR code, or hand the fare over in cash. " +
+                "You will get a confirmation email once the payment is recorded.</p>" +
+                "<p>Thank you for choosing Namma Journey. We hope you had a great experience!</p>" +
+                HTML_FOOTER);
+    }
+
+    public void sendPaymentConfirmationEmail(String email, String name, com.travelplatform.entity.TravelBooking booking) {
+        queue(email, "Payment Confirmed - Namma Journey", HTML_HEADER +
+                "<h2 style='color:#667eea;'>Payment Confirmed!</h2>" +
+                "<p>Dear " + esc(name) + ",</p>" +
+                "<p>Your payment has been confirmed successfully.</p>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>Trip:</strong> " + esc(booking.getFromPlace()) + " to " + esc(booking.getToPlace()) + "</p>" +
+                "<p><strong>Amount:</strong> ₹" + String.format(java.util.Locale.ROOT, "%.2f", booking.getTotalAmount()) + "</p>" +
+                "<p><strong>Status:</strong> Verified</p>" +
+                "</div>" +
+                "<p>Thank you for your payment!</p>" +
+                HTML_FOOTER);
+    }
+
+    public void sendRefundStartedEmail(String email, String name, com.travelplatform.entity.TravelBooking booking, java.math.BigDecimal amount) {
+        queue(email, "Refund Started - Namma Journey", HTML_HEADER +
+                "<h2 style='color:#667eea;'>Your refund is on its way</h2>" +
+                "<p>Dear " + esc(name) + ",</p>" +
+                "<p>You cancelled your trip before it started, so we are refunding the full fare.</p>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>Trip:</strong> " + esc(booking.getFromPlace()) + " to " + esc(booking.getToPlace()) + "</p>" +
+                "<p><strong>Refund:</strong> ₹" + String.format(java.util.Locale.ROOT, "%.2f", amount) + "</p>" +
+                "</div>" +
+                "<p>It goes back to the card, UPI account or bank you paid with, usually within 5-7 working days.</p>" +
+                HTML_FOOTER);
+    }
+
+    private void queue(String to, String subject, String html) {
+        if (to == null || to.isBlank()) {
+            return;
+        }
+        outbox.enqueue(EMAIL_JOB, new EmailMessage(to, subject, html));
+    }
+
+    /** Sends a queued message now. Throws so the outbox retries a failed send. */
+    public void sendNow(EmailMessage email) throws Exception {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+        helper.setFrom(fromEmail, fromName);
+        helper.setTo(email.to());
+        helper.setSubject(email.subject());
+        helper.setText(email.html(), true);
+        if (deliver(message)) {
+            log.info("Email '{}' sent to: {}", email.subject(), email.to());
         }
     }
 
-    @Async("emailExecutor")
-    public void sendPaymentConfirmationEmail(String email, String name, com.travelplatform.entity.TravelBooking booking) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom(fromEmail, fromName);
-            helper.setTo(email);
-            helper.setSubject("Payment Confirmed - Namma Journey");
-            helper.setText(HTML_HEADER +
-                    "<h2 style='color:#667eea;'>Payment Confirmed!</h2>" +
-                    "<p>Dear " + name + ",</p>" +
-                    "<p>Your payment has been confirmed successfully.</p>" +
-                    "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
-                    "<p><strong>Trip:</strong> " + booking.getFromPlace() + " to " + booking.getToPlace() + "</p>" +
-                    "<p><strong>Amount:</strong> ₹" + String.format("%.2f", booking.getTotalAmount()) + "</p>" +
-                    "<p><strong>Status:</strong> Verified</p>" +
-                    "</div>" +
-                    "<p>Thank you for your payment!</p>" +
-                    HTML_FOOTER, true);
-            if (deliver(message)) {
-                log.info("Payment confirmation email sent to: {}", email);
-            }
-        } catch (Exception e) {
-            log.error("Failed to send payment confirmation email: {}", e.getMessage());
-        }
+    private static String esc(String s) {
+        return s == null ? "" : HtmlUtils.htmlEscape(s);
     }
 }

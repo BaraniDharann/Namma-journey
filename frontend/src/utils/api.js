@@ -170,7 +170,7 @@ export const createBooking = (userId, data, idempotencyKey) => api.post(`/user/$
 export const getUserBookings = (userId) => cachedGet(`/user/${userId}/bookings`)
 export const getBookingById = (userId, bookingId) => api.get(`/user/${userId}/bookings/${bookingId}`)
 export const updateBooking = (userId, bookingId, data) => api.put(`/user/${userId}/bookings/${bookingId}`, data).then(res => { invalidateCache('bookings'); return res })
-export const deleteBooking = (userId, bookingId) => api.delete(`/user/${userId}/bookings/${bookingId}`).then(res => { invalidateCache('bookings'); return res })
+export const deleteBooking = (userId, bookingId) => api.delete(`/user/${userId}/bookings/${bookingId}`).then(res => { invalidateCache('bookings'); invalidateCache('payments'); invalidateCache('revenue'); return res })
 export const submitReview = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/reviews`, data).then(res => { invalidateCache('reviews'); return res })
 export const initiatePayment = (userId, bookingId, data, idempotencyKey) => api.post(`/user/${userId}/bookings/${bookingId}/payment`, data, { headers: idempotencyHeaders(idempotencyKey) }).then(res => { invalidateCache('payments'); return res })
 /** Online (Razorpay) payment: the server creates the order for the booking's fare, then verifies Checkout's signature. */
