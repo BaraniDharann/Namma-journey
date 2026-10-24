@@ -1,6 +1,7 @@
 # Scaling to 100k+: batch matching
 
-**Status:** draft for review, 2026-10-23.
+**Status:** phases A and B implemented, 2026-10-24 (see "Phases A and B: as built" at the end).
+Phases C and D to follow. Drafted 2026-10-23.
 **Builds on:** [Ride Now dispatch](2026-10-23-ride-now-dispatch-design.md) and
 [City and Trip modes](2026-10-23-city-trip-modes-design.md).
 
@@ -242,3 +243,39 @@ not claimed until this passes.
 - Pooling or shared rides.
 - Geofences drawn as polygons (cities are circles for now).
 - Razorpay comes after phase B unless you reprioritise.
+
+## Phases A and B: as built
+
+Done as designed, with these differences (2026-10-24):
+
+- **No migration.** Phase B needed no schema change; queue recovery uses the V13 partial index.
+- **Hungarian.** The matrix is rectangular, the smaller side as rows (O(rows² × columns)), so a
+  ride with ten candidates does not inflate a 300-ride group to a 3,000-square. A missing pair is
+  priced just above the widest possible spread of real totals rather than `Long.MAX_VALUE / 4`:
+  potentials grow by that price per augmentation and overflowed. "Most rides matched, then least
+  cost" is unchanged and is tested against brute force.
+- **Live servers** are a sorted set, `match:servers`, scored by heartbeat, instead of one expiring
+  key per server: counting those needs a SCAN of the whole keyspace on every tick.
+- **Driver card.** The hash holds `state`, `vehicle`, `seats`, `servesCity` and `active` (online
+  and approved); the city stays in the presence keys. Cards expire 15 minutes after their last
+  write and are reloaded from Postgres on the next read.
+- **BUSY** also covers a PENDING booking in the driver's name for today that is not an offer (a
+  Trip awaiting their accept or the passenger's advance), because `no_driver_overlap` counts it.
+  Only bookings that occupy the driver *today* move their state: accepting or cancelling next
+  month's Trip leaves today's City rides alone.
+- **A pair refused by `no_driver_overlap`** marks that driver BUSY (until reconcile) rather than
+  IDLE: the database knows of a booking the store missed, and IDLE would retry them every round.
+- **Recovery** also merges each held city's open bookings into its queue about once a minute, not
+  only on a take-over that finds the queue empty, so a single lost queue write never strands a ride.
+  Rebuilt rides get their declined drivers back from `booking_driver_rejections`.
+- **The offer push** is sent after the offer is in the queue (still through
+  `AfterCommitDispatcher`), so the poll it triggers always finds it.
+- **DispatchService** keeps `markMatched` as an instance method (it now updates the stores) and
+  adds `ownerAssigned` and `cancelled`; a static `settle` serves callers built without it. The rules
+  for store writes after commit live in `DriverStateUpdates`; `DriverCardLoader` builds cards for
+  both store twins.
+- **Metrics** per round: `namma.match.round.duration`, `namma.match.rides.waiting`,
+  `namma.match.drivers.candidate` (per city) and `namma.match.offers`. Pairs considered, match rate
+  and average ETA are not exported yet.
+- **ETA** is straight-line at `city-speed-kmh` (`HaversineEtaService`) until `OsrmEtaService`.
+- **Driver app:** it already counted down from `secondsLeft`, so "15s to accept" needed no change.

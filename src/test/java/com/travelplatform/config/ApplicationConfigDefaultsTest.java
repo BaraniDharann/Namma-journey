@@ -125,6 +125,18 @@ class ApplicationConfigDefaultsTest {
     }
 
     @Test
+    @DisplayName("City matching defaults: a 15 s offer window, a round every 2 s")
+    void dispatchDefaults() {
+        Map<String, Object> root = load();
+        // A longer window leaves a passenger staring at "finding your driver" while one driver
+        // ignores the card; a slower round adds its whole interval to every booking's first offer.
+        assertEquals("${DISPATCH_OFFER_SECONDS:15}", at(root, "app.dispatch.offer-seconds"));
+        assertEquals("${DISPATCH_ROUND_INTERVAL_MS:2000}", at(root, "app.dispatch.round-interval-ms"));
+        assertEquals(15, new DispatchProperties().getOfferSeconds(), "the Java default must match the YAML");
+        assertEquals(2000, new DispatchProperties().getRoundIntervalMs(), "the Java default must match the YAML");
+    }
+
+    @Test
     @DisplayName("shutdown drains in-flight requests")
     void shutdownIsGraceful() {
         Map<String, Object> root = load();

@@ -608,7 +608,7 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
 - Test: `config/ApplicationConfigDefaultsTest.java`. Add assertions that `app.dispatch.offer-seconds`
   defaults to 15 and `round-interval-ms` to 2000.
 
-- [ ] **Step 1: Add the assertions and run** `mvn -o -q test -Dtest=ApplicationConfigDefaultsTest`.
+- [x] **Step 1: Add the assertions and run** `mvn -o -q test -Dtest=ApplicationConfigDefaultsTest`.
   Expected: PASS.
-- [ ] **Step 2: Update the docs.**
-- [ ] **Step 3: Commit** `docs: dispatch architecture after batch matching`.
+- [x] **Step 2: Update the docs.**
+- [x] **Step 3: Commit** `docs: dispatch architecture after batch matching`.

@@ -454,4 +454,55 @@ External Services:
 
 ---
 
+## City Ride Dispatch (Batch Matching)
+
+City rides (Ride Now) are not offered one at a time to whoever is nearest. Every 2 seconds
+(`app.dispatch.round-interval-ms`), each city's waiting rides and free drivers are paired in one
+batch so that total pickup time is least. Trips (booked for dates) keep date-based assignment
+(`DriverRepository.findFirstFreeTripDriver`).
+
+```
+ booking committed ──► RideQueue.enqueue ──┐
+                                           ▼
+ MatchingWorker.tick (every 2 s, per city this server holds the lock of)
+   1. expire offers past their 15 s deadline ──► ride back to waiting, driver IDLE, declined
+   2. read waiting rides (oldest first); > 2 min ──► NO_DRIVER, owner notified
+   3. per ride: radius 1 / 3 / 5 km after 0 / 20 / 40 s waited
+        DriverPresenceService.findWithin (nearest 30) ─► minus declined
+        DriverStateStore.cards (one batched read) ─► IDLE, active, City, vehicle, seats
+        first 10 ─► EtaService ─► cost = ETA − 2 × seconds waited (ETA > 15 min dropped)
+   4. AssignmentSolver: union-find groups; Hungarian ≤ 300 rides, greedy above
+   5. per pair: CAS driver IDLE→OFFERED ─► booking OFFERED (one short transaction)
+        ─► RideQueue.markOffered ─► push OFFER to the driver
+```
+
+**State.** Postgres stays the record; `no_driver_overlap` and the booking's `@Version` still guard
+every write, so a stale working copy costs at most a round, never a double booking. Redis holds the
+working copy a round needs (all keys prefixed `travelplatform::`): per-city location sets
+(`geo:city:{id}`), driver cards (`driver:{id}`: IDLE / OFFERED / BUSY, vehicle, seats, switches),
+waiting rides (`city:{id}:waiting`, `ride:{id}`), declined drivers (`ride:{id}:declined`), offers
+by deadline (`city:{id}:offers`, `driver:{id}:offer`) and city locks (`lock:match:city:{id}`).
+With `app.cache.type` other than `redis`, in-memory twins of every store take over
+(`DispatchStoresConfig`), which is correct for a single instance.
+
+**Keeping the copy right.** Store writes happen after the database change commits
+(`DriverStateUpdates`, `DispatchService`). The driver cards are rebuilt from Postgres every minute
+for every driver seen in the last ten (`reconcile`). A server that takes a city whose queue is empty
+rebuilds it from the city's SEARCHING and OFFERED bookings, and every held city is merged from them
+about once a minute, so a lost queue write never strands a ride.
+
+**Spreading cities.** Each city is run by one server at a time (`SET NX PX 5000`, renewed every
+round, renew and release checked in Lua). A server takes at most `ceil(active cities / live
+servers) + 1` cities, live servers being those that heartbeat in the last 10 s. A dead server's
+cities are taken over when its locks expire, within 5 s.
+
+**Driver answers.** Accept (`DriverService.acceptBooking`) settles the search through
+`DispatchService.markMatched`: the ride leaves the queue and the driver is BUSY. Decline
+(`DispatchService.release`) records the rejection, frees the driver and re-queues the ride for the
+next round. A traveller's cancel removes the ride and withdraws a held offer. The driver app learns
+of an offer by a STOMP push and, as a fallback, polls `GET /api/driver/{id}/offer` every 20 s,
+which reads the queue and then that one booking.
+
+---
+
 **End of Visual Architecture Document**
