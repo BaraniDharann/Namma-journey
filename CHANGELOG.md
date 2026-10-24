@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Batch matching for City rides (scale phases A–B)** — one location set per city, a one-row
+  offer poll, `NOT EXISTS` + `LIMIT 1` availability queries and a route cache (phase A); every
+  2 s each city's waiting rides and free drivers are paired at minimum total pickup time
+  (Hungarian, greedy for very large groups), with per-city locks so one server runs each city
+  (phase B). See `docs/superpowers/specs/2026-10-23-scale-batch-matching-design.md`
+- **Multi-server deployment (phase C)** — `WEBSOCKET_BROKER=rabbitmq` relays live tracking and
+  ride offers through RabbitMQ so any number of backend replicas share sockets;
+  `docker-compose.prod.yml` runs replicas, RabbitMQ and a self-hosted OSRM; `DISPATCH_ETA=osrm`
+  matches on road ETAs (falls back to straight-line if OSRM fails). WebSocket topics are now
+  dot-separated (`/topic/booking.{id}.location`, `/topic/driver.{id}.offers`)
 - **Trip advances** — a Trip is held until 20 % of the fare is paid online; unpaid holds are
   released after 30 minutes. The balance is paid at the end of the trip (online, UPI or cash).
   Cancelling refunds the advance unless the trip was confirmed and it is within 24 h of the

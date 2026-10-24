@@ -28,6 +28,7 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
       STORAGE_TYPE: ${STORAGE_TYPE:?Set STORAGE_TYPE=s3 and the S3_* variables in .env - replicas cannot share a local uploads volume}
       OSRM_BASE_URL: ${OSRM_BASE_URL:-http://osrm:5000}
+      DISPATCH_ETA: osrm
     depends_on:
       rabbitmq:
         condition: service_healthy

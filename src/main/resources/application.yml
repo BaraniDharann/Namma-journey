@@ -139,7 +139,10 @@ app:
     max-eta-seconds: ${DISPATCH_MAX_ETA_SECONDS:900}
     wait-weight: ${DISPATCH_WAIT_WEIGHT:2}
     max-rides-per-round: ${DISPATCH_MAX_RIDES_PER_ROUND:2000}
-    # Straight-line ETA speed until road ETAs (OSRM, phase C).
+    # haversine: straight-line ETAs at city-speed-kmh. osrm: road ETAs from routing.osrm.base-url
+    # (self-host it, docs/guides/OSRM_SETUP.md); falls back to straight-line if OSRM fails.
+    eta: ${DISPATCH_ETA:haversine}
+    # Straight-line ETA speed (and the fallback when OSRM is down).
     city-speed-kmh: ${DISPATCH_CITY_SPEED_KMH:20}
 
   # City mode: the longest City ride by road. Anything further is booked as a Trip.
