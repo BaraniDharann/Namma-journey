@@ -471,7 +471,7 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
   - `CityLock.tryAcquire(long cityId) -> boolean`, `CityLock.renew(long cityId) -> boolean`,
     `CityLock.release(long cityId)`, `CityLock.liveServers() -> int`
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `waitingReturnsOldestFirst`
   - `markOfferedMovesFromWaitingToOffers`
   - `expiredOffersOnlyPastDeadline`
@@ -480,8 +480,8 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
   - `secondHolderCannotTakeLock`: two `CityLock` instances share one backing store; the second
     `tryAcquire` returns false until the first releases or the lock expires
   - `lockExpiresWithoutRenewal`
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement.**
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement.**
   - Redis keys:
     - `travelplatform::city:{id}:waiting` (sorted set, scored by search start)
     - `travelplatform::ride:{bookingId}` (hash)
@@ -494,8 +494,8 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
     - `travelplatform::match:server:{instanceId}` (heartbeat, 10 s expiry)
   - Local twins use a `ConcurrentSkipListMap` per city for the sorted sets, and a
     `ConcurrentHashMap` for the rest.
-- [ ] **Step 4: Run** the tests. Expected: PASS.
-- [ ] **Step 5: Commit** `feat(dispatch): ride queue, offer deadlines and per-city locks`.
+- [x] **Step 4: Run** the tests. Expected: PASS.
+- [x] **Step 5: Commit** `feat(dispatch): ride queue, offer deadlines and per-city locks`.
 
 ### Task 9: Matching worker
 

@@ -27,4 +27,18 @@ public class DispatchStoresConfig {
         StringRedisTemplate redis = redis(redisTemplate, cacheType);
         return redis != null ? new RedisDriverStateStore(redis, loader) : new LocalDriverStateStore(loader);
     }
+
+    @Bean
+    public RideQueue rideQueue(ObjectProvider<StringRedisTemplate> redisTemplate,
+                               @Value("${app.cache.type:redis}") String cacheType) {
+        StringRedisTemplate redis = redis(redisTemplate, cacheType);
+        return redis != null ? new RedisRideQueue(redis) : new LocalRideQueue();
+    }
+
+    @Bean
+    public CityLock cityLock(ObjectProvider<StringRedisTemplate> redisTemplate,
+                             @Value("${app.cache.type:redis}") String cacheType) {
+        StringRedisTemplate redis = redis(redisTemplate, cacheType);
+        return redis != null ? new RedisCityLock(redis) : new LocalCityLock();
+    }
 }
