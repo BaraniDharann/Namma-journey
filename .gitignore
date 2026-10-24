@@ -67,3 +67,6 @@ scripts/db-backup-*.sql
 .superpowers/
 .impeccable/config.local.json
 .impeccable/hook.cache.json
+
+# Prepared OSRM map data (docs/guides/OSRM_SETUP.md) - hundreds of MB, regenerated from Geofabrik
+osrm-data/

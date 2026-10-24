@@ -191,7 +191,10 @@ makes no database reads.
    - Uses Spring's `enableStompBrokerRelay`, with RabbitMQ's STOMP plugin.
    - Every server then reaches every socket.
    - The Redis relays for offers and locations are removed.
-   - Destinations and permission checks are unchanged.
+   - Destinations become dot-separated (`/topic/booking.{id}.location`, `/topic/driver.{id}.offers`):
+     RabbitMQ's STOMP plugin rejects "/" inside a topic name. Permission checks keep the same
+     exact-match rules, which also refuse RabbitMQ's `*` and `#` wildcards. (Changed during
+     implementation, 2026-10-24.)
 2. **Self-hosted OSRM.**
    - A Docker `osrm-backend` server using Geofabrik's India map data (or one region), prepared with
      the MLD algorithm.

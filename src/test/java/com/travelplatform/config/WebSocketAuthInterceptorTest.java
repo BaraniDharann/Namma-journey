@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
 class WebSocketAuthInterceptorTest {
 
     private static final String BOOKING = "3f1c2a4e-1111-4222-8333-444455556666";
-    private static final String TOPIC = "/topic/booking/" + BOOKING + "/location";
+    private static final String TOPIC = "/topic/booking." + BOOKING + ".location";
 
     private final MessageChannel channel = mock(MessageChannel.class);
     private BookingAccessGuard guard;
@@ -84,7 +84,10 @@ class WebSocketAuthInterceptorTest {
         Authentication owner = new UsernamePasswordAuthenticationToken("1", null, List.of(new SimpleGrantedAuthority("ROLE_OWNER")));
         when(guard.canAccess(any(Authentication.class), any())).thenReturn(true);
         for (String dest : new String[] {"/topic/**", "/topic/*/*/location", "/topic/booking/**",
-                "/topic/booking/" + BOOKING + "/**", "/topic/booking/" + BOOKING, "/topic/other", "/user/queue/x"}) {
+                "/topic/booking/" + BOOKING + "/**", "/topic/booking/" + BOOKING, "/topic/other", "/user/queue/x",
+                // RabbitMQ topic wildcards: "*" one word, "#" any - each would receive every booking.
+                "/topic/booking.*.location", "/topic/booking.#", "/topic/#", "/topic/booking." + BOOKING + ".#",
+                "/topic/booking/" + BOOKING + "/location"}) {
             assertThrows(MessagingException.class,
                     () -> interceptor.preSend(frame(StompCommand.SUBSCRIBE, dest, owner, null), channel), dest);
         }

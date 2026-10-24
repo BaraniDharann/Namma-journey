@@ -77,7 +77,7 @@ export default function useDriverDispatch(driverId) {
     try { token = localStorage.getItem('nj_token') } catch { /* storage unavailable */ }
     const client = createStompClient(token)
     client.onConnect = () => {
-      client.subscribe(`/topic/driver/${driverId}/offers`, () => {
+      client.subscribe(`/topic/driver.${driverId}.offers`, () => {
         refresh()
         window.dispatchEvent(new Event(DRIVER_TRIPS_EVENT))
       })

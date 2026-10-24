@@ -163,6 +163,18 @@ app:
     # Empty = the endpoint refuses everyone.
     scrape-token: ${METRICS_SCRAPE_TOKEN:}
 
+  websocket:
+    # simple: in-memory STOMP broker per instance (plus the Redis relay across instances).
+    # rabbitmq: one RabbitMQ (STOMP plugin, port 61613) shared by every instance - use it once
+    # you run more than a couple of backend servers. See docker-compose.prod.yml.
+    broker: ${WEBSOCKET_BROKER:simple}
+    relay:
+      host: ${RABBITMQ_HOST:localhost}
+      port: ${RABBITMQ_STOMP_PORT:61613}
+      login: ${RABBITMQ_USERNAME:guest}
+      passcode: ${RABBITMQ_PASSWORD:guest}
+      virtual-host: ${RABBITMQ_VHOST:/}
+
   crypto:
     # AES-256 key for encrypted columns (driver payout UPI IDs): base64 of 32 random bytes,
     # `openssl rand -base64 32`. No default on purpose. Losing it makes stored UPI IDs unreadable

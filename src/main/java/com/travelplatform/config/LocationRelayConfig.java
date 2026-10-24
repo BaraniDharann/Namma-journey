@@ -24,7 +24,9 @@ import java.nio.charset.StandardCharsets;
  * it is being run as.
  */
 @Configuration
-@ConditionalOnProperty(name = "app.cache.type", havingValue = "redis", matchIfMissing = true)
+// Off with RabbitMQ as the broker (BrokerMode): it already reaches every instance.
+@org.springframework.boot.autoconfigure.condition.ConditionalOnExpression(
+        "'${app.cache.type:redis}' == 'redis' and '${app.websocket.broker:simple}' != 'rabbitmq'")
 public class LocationRelayConfig {
 
     @Bean

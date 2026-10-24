@@ -8,7 +8,7 @@ import { authedContext, watch, summarize, Session } from '../helpers/browser';
 /**
  * The live-tracking pipeline, end to end and through the real UI:
  *
- *   driver browser  --STOMP /app/location.update-->  backend  --/topic/booking/{id}/location-->  user browser
+ *   driver browser  --STOMP /app/location.update-->  backend  --/topic/booking.{id}.location-->  user browser
  *                   \--REST fallback POST /api/driver/location/update--/        \--REST poll GET /api/driver/location/{id}--/
  *
  * The assertions are chosen so a passing run really means "the car moves on the user's map":

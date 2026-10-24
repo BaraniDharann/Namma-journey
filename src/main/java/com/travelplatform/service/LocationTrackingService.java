@@ -1,5 +1,6 @@
 package com.travelplatform.service;
 
+import com.travelplatform.config.BrokerMode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.travelplatform.dto.DriverLocationDTO;
@@ -77,6 +78,10 @@ public class LocationTrackingService {
     private final String instanceId = UUID.randomUUID().toString();
 
     private final AtomicLong redisMutedUntil = new AtomicLong(0L);
+
+    // Field-injected so hand-built tests are unaffected; null reads as "simple".
+    @Value("${app.websocket.broker:simple}")
+    private String broker;
 
     public LocationTrackingService(SimpMessagingTemplate messagingTemplate,
                                    ObjectProvider<StringRedisTemplate> redisTemplateProvider,
@@ -165,11 +170,19 @@ public class LocationTrackingService {
     }
 
     private void broadcast(DriverLocationDTO dto) {
-        messagingTemplate.convertAndSend("/topic/booking/" + dto.getBookingId() + "/location", dto);
+        messagingTemplate.convertAndSend(topic(dto.getBookingId()), dto);
+    }
+
+    /**
+     * Dots, not slashes: RabbitMQ's STOMP plugin rejects "/" inside a topic name, and the in-memory
+     * broker accepts either, so one spelling works in both modes (app.websocket.broker).
+     */
+    public static String topic(Object bookingId) {
+        return "/topic/booking." + bookingId + ".location";
     }
 
     private void relay(DriverLocationDTO dto) {
-        if (!redisUsable()) {
+        if (!redisUsable() || !BrokerMode.relaysOverRedis(broker)) {
             return;
         }
         try {

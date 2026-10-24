@@ -37,10 +37,12 @@ import java.util.regex.Pattern;
 @Component
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
+    // Dot-separated (see LocationTrackingService.topic): RabbitMQ's STOMP plugin rejects "/" inside
+    // a topic name, and the patterns stay anchored and exact either way.
     private static final Pattern BOOKING_TOPIC = Pattern.compile(
-            "^/topic/booking/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/location$");
+            "^/topic/booking\\.([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\\.location$");
 
-    private static final Pattern DRIVER_OFFER_TOPIC = Pattern.compile("^/topic/driver/(\\d{1,18})/offers$");
+    private static final Pattern DRIVER_OFFER_TOPIC = Pattern.compile("^/topic/driver\\.(\\d{1,18})\\.offers$");
 
     @Autowired
     private JwtUtil jwtUtil;

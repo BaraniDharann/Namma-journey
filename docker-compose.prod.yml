@@ -1,0 +1,72 @@
+# Production overlay: several backend replicas behind nginx, sharing one RabbitMQ STOMP broker.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# What it changes from docker-compose.yml:
+#   - backend runs BACKEND_REPLICAS copies (default 2). They share Postgres, Redis and RabbitMQ,
+#     so any replica can serve any request. Uploads must be in S3 (STORAGE_TYPE=s3) because a
+#     local volume is per-replica - set the S3_* variables in .env.
+#   - WebSocket pushes (live tracking, ride offers) go through RabbitMQ, so a driver connected to
+#     replica A reaches a passenger on replica B. The Redis relay switches itself off.
+#   - nginx balances across the replicas with ip_hash (frontend/nginx.conf, upstream backend_pool).
+#   - Self-hosted OSRM routing: see the osrm service below and docs/guides/OSRM_SETUP.md.
+#
+# Managed Postgres / Redis instead of these containers: set DB_URL / REDIS_HOST in .env and
+# remove the postgres / redis services from the base file's depends_on.
+
+services:
+  backend:
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-2}
+    # Replicas cannot all bind one host port; nginx reaches them over travel-network.
+    ports: !reset []
+    environment:
+      WEBSOCKET_BROKER: rabbitmq
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_STOMP_PORT: 61613
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-namma}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      STORAGE_TYPE: ${STORAGE_TYPE:?Set STORAGE_TYPE=s3 and the S3_* variables in .env - replicas cannot share a local uploads volume}
+      OSRM_BASE_URL: ${OSRM_BASE_URL:-http://osrm:5000}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  frontend:
+    build:
+      args:
+        # The browser's route previews go to the self-hosted OSRM through nginx (/osrm/).
+        VITE_OSRM_BASE_URL: /osrm
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    # The STOMP plugin is what the backend's broker relay speaks (port 61613).
+    command: ["sh", "-c", "rabbitmq-plugins enable --offline rabbitmq_stomp && exec docker-entrypoint.sh rabbitmq-server"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-namma}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    # Management UI on loopback only (SSH tunnel to reach it); STOMP stays inside the network.
+    ports:
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - travel-network
+
+  # Self-hosted routing. The map data must be prepared once before this starts - see
+  # docs/guides/OSRM_SETUP.md (download a Geofabrik extract, osrm-extract/partition/customize).
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    command: ["osrm-routed", "--algorithm", "mld", "--max-table-size", "1000", "/data/region.osrm"]
+    volumes:
+      - ${OSRM_DATA_DIR:-./osrm-data}:/data:ro
+    networks:
+      - travel-network
+
+volumes:
+  rabbitmq-data:

@@ -51,7 +51,7 @@ export default function useLiveDriverLocation({ bookingId, active }) {
     clientRef.current = client
     client.onConnect = () => {
       setSocketLive(true)
-      client.subscribe(`/topic/booking/${bookingId}/location`, (message) => {
+      client.subscribe(`/topic/booking.${bookingId}.location`, (message) => {
         try { apply(JSON.parse(message.body)) } catch { /* ignore bad frame */ }
       })
     }

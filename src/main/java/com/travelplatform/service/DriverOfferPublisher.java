@@ -1,5 +1,6 @@
 package com.travelplatform.service;
 
+import com.travelplatform.config.BrokerMode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -15,7 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Pushes Ride Now offers to a driver's open dashboard over {@code /topic/driver/{id}/offers}.
+ * Pushes Ride Now offers to a driver's open dashboard over {@code /topic/driver.{id}.offers}.
  *
  * <p>An offer only lives for seconds, so it cannot wait for the dashboard's next poll. The push
  * is the fast path; the poll is the safety net. Like live tracking, the STOMP broker is
@@ -39,6 +40,10 @@ public class DriverOfferPublisher {
     private final ObjectMapper mapper = new ObjectMapper();
     private final String instanceId = UUID.randomUUID().toString();
 
+    // Field-injected so hand-built tests are unaffected; null reads as "simple".
+    @Value("${app.websocket.broker:simple}")
+    private String broker;
+
     public DriverOfferPublisher(SimpMessagingTemplate messagingTemplate,
                                 ObjectProvider<StringRedisTemplate> redisTemplateProvider,
                                 @Value("${app.cache.type:redis}") String cacheType) {
@@ -48,13 +53,13 @@ public class DriverOfferPublisher {
     }
 
     public static String topic(long driverId) {
-        return "/topic/driver/" + driverId + "/offers";
+        return "/topic/driver." + driverId + ".offers";
     }
 
     public void publish(long driverId, UUID bookingId, Event event) {
         Map<String, Object> payload = Map.of("type", event.name(), "bookingId", bookingId.toString());
         messagingTemplate.convertAndSend(topic(driverId), payload);
-        if (!redisConfigured) {
+        if (!redisConfigured || !BrokerMode.relaysOverRedis(broker)) {
             return;
         }
         try {
