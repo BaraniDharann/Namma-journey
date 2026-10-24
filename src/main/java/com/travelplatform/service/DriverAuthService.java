@@ -44,7 +44,7 @@ public class DriverAuthService {
         // No status check here on purpose: Driver.status is the driver's own online/offline switch.
         // Refusing INACTIVE drivers locked out anyone who had gone offline - they could never log
         // back in to go online again. Offline drivers are simply never offered trips
-        // (DriverRepository.findAvailableDrivers).
+        // (DriverRepository.findFirstFreeTripDriver).
         
         if (driver.getFleet() == Driver.Fleet.INDEPENDENT && !driver.isEmailVerified()) {
             // A self-signed-up driver who never entered the emailed code: send a fresh one

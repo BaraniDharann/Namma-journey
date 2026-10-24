@@ -21,7 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -94,8 +95,8 @@ class DriverServiceRejectionTest {
     @DisplayName("rejecting hands the trip to the next available driver, still awaiting their acceptance")
     void reassignsToNextAvailableDriver() {
         Driver replacement = driver(9L, "Selvi");
-        when(driverRepository.findAvailableDriversExcluding(any(), any(), anyList()))
-                .thenReturn(List.of(replacement));
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
+                .thenReturn(Optional.of(replacement));
 
         service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
 
@@ -112,15 +113,15 @@ class DriverServiceRejectionTest {
     @Test
     @DisplayName("the driver who just refused is excluded from the replacement search")
     void excludesTheRejectingDriver() {
-        when(driverRepository.findAvailableDriversExcluding(any(), any(), anyList()))
-                .thenReturn(List.of());
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
+                .thenReturn(Optional.empty());
 
         service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<Long>> excluded = ArgumentCaptor.forClass(List.class);
-        verify(driverRepository).findAvailableDriversExcluding(
-                eq(LocalDate.of(2026, 8, 1)), eq(LocalDate.of(2026, 8, 3)), excluded.capture());
+        ArgumentCaptor<java.util.Collection<Long>> excluded = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(driverRepository).findFirstFreeTripDriver(
+                eq(LocalDate.of(2026, 8, 1)), eq(LocalDate.of(2026, 8, 3)), anyBoolean(), excluded.capture());
         assertTrue(excluded.getValue().contains(REJECTING_DRIVER_ID),
                 "the refusal is worthless if the same driver can be picked again");
     }
@@ -130,8 +131,8 @@ class DriverServiceRejectionTest {
     void recordsTheRejection() {
         when(rejectionRepository.existsByBookingIdAndDriverId(BOOKING_ID, REJECTING_DRIVER_ID))
                 .thenReturn(false);
-        when(driverRepository.findAvailableDriversExcluding(any(), any(), anyList()))
-                .thenReturn(List.of());
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
+                .thenReturn(Optional.empty());
 
         service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
 
@@ -145,8 +146,8 @@ class DriverServiceRejectionTest {
     @Test
     @DisplayName("with nobody left to offer it to, the trip falls back to the owner unassigned")
     void fallsBackToTheOwnerWhenNobodyIsAvailable() {
-        when(driverRepository.findAvailableDriversExcluding(any(), any(), anyList()))
-                .thenReturn(List.of());
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
+                .thenReturn(Optional.empty());
 
         service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
 

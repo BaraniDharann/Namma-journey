@@ -284,10 +284,8 @@ public class DriverService {
         }
 
         Driver replacement = driverRepository
-                .findAvailableDriversExcluding(booking.getFromDate(), booking.getToDate(), declined)
-                .stream()
-                .filter(d -> UserService.suitsAc(d, booking.getAcType()))
-                .findFirst()
+                .findFirstFreeTripDriver(booking.getFromDate(), booking.getToDate(),
+                        "AC".equalsIgnoreCase(booking.getAcType()), UserService.excludedOrNobody(declined))
                 .orElse(null);
 
         booking.setDriverId(replacement != null ? replacement.getId() : null);

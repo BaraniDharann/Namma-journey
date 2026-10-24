@@ -51,33 +51,34 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     // "Busy" everywhere below means an active trip the driver has not ended yet: an ended trip
     // awaiting payment no longer occupies them, matching no_driver_overlap since V13.
 
-    /** Trips are driven by cars whose driver takes trips (V14). The AC match is applied by the caller. */
-    String TRIP_CAR = "d.vehicleType = com.travelplatform.entity.VehicleType.CAR AND d.servesTrip = true"
+    /**
+     * The first car free for a Trip on these dates. Native so it can stop at one row: the old
+     * query loaded every free driver to keep the first. Busy is a {@code NOT EXISTS} probe per
+     * driver on {@code idx_travel_bookings_driver_active} (V19) rather than a {@code NOT IN} over
+     * every active booking, and the AC match is here instead of in Java. Ordered by id so the
+     * same request picks the same car. Public so the Docker test runs this exact text.
+     */
+    String FREE_TRIP_DRIVER_SQL = "SELECT d.* FROM drivers d"
+            + " WHERE d.status = 'ACTIVE' AND d.vehicle_type = 'CAR' AND d.serves_trip = true"
             // Trips stay with the owner's own approved fleet; self-signed-up drivers take City rides only.
-            + " AND d.verificationStatus = com.travelplatform.entity.Driver.Verification.APPROVED"
-            + " AND d.fleet = com.travelplatform.entity.Driver.Fleet.OWNER_FLEET";
-
-    @Query("SELECT d FROM Driver d WHERE d.status = 'ACTIVE' AND " + TRIP_CAR + " AND d.id NOT IN " +
-           "(SELECT tb.driverId FROM TravelBooking tb WHERE tb.driverId IS NOT NULL " +
-           "AND ((tb.fromDate <= :toDate AND tb.toDate >= :fromDate) " +
-           "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL))")
-    List<Driver> findAvailableDrivers(@Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate);
+            + " AND d.verification_status = 'APPROVED' AND d.fleet = 'OWNER_FLEET'"
+            + " AND (:needAc = false OR d.vehicle_ac = true)"
+            + " AND d.id NOT IN (:excluded)"
+            + " AND NOT EXISTS (SELECT 1 FROM travel_bookings tb WHERE tb.driver_id = d.id"
+            + " AND tb.from_date <= :toDate AND tb.to_date >= :fromDate"
+            + " AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.trip_ended_at IS NULL)"
+            + " ORDER BY d.id LIMIT 1";
 
     /**
-     * Availability, minus a caller-supplied exclusion list - used when reassigning a trip
-     * that one or more drivers have already declined.
-     *
-     * <p>The exclusion list must never be empty: {@code NOT IN ()} is not valid SQL. Callers
-     * reach this method only after recording at least one rejection, so it always has a member.
+     * @param excluded drivers who lost a race for, or declined, this trip. Never empty:
+     *                 {@code NOT IN ()} is not valid SQL, so callers pass {@code List.of(-1L)}
+     *                 when nobody is excluded.
      */
-    @Query("SELECT d FROM Driver d WHERE d.status = 'ACTIVE' AND " + TRIP_CAR + " " +
-           "AND d.id NOT IN :excludedDriverIds AND d.id NOT IN " +
-           "(SELECT tb.driverId FROM TravelBooking tb WHERE tb.driverId IS NOT NULL " +
-           "AND ((tb.fromDate <= :toDate AND tb.toDate >= :fromDate) " +
-           "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL))")
-    List<Driver> findAvailableDriversExcluding(@Param("fromDate") LocalDate fromDate,
-                                               @Param("toDate") LocalDate toDate,
-                                               @Param("excludedDriverIds") List<Long> excludedDriverIds);
+    @Query(value = FREE_TRIP_DRIVER_SQL, nativeQuery = true)
+    Optional<Driver> findFirstFreeTripDriver(@Param("fromDate") LocalDate fromDate,
+                                             @Param("toDate") LocalDate toDate,
+                                             @Param("needAc") boolean needAc,
+                                             @Param("excluded") java.util.Collection<Long> excluded);
 
     @Query("SELECT COUNT(tb) FROM TravelBooking tb WHERE tb.driverId = :driverId " +
            "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL " +
@@ -97,8 +98,8 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     @Query("SELECT d.id FROM Driver d WHERE d.id IN :driverIds AND d.status = 'ACTIVE' " +
            "AND d.verificationStatus = com.travelplatform.entity.Driver.Verification.APPROVED " +
            "AND d.servesCity = true AND d.vehicleType = :vehicleType AND d.vehicleSeats >= :seats " +
-           "AND d.id NOT IN " +
-           "(SELECT tb.driverId FROM TravelBooking tb WHERE tb.driverId IS NOT NULL " +
+           "AND NOT EXISTS " +
+           "(SELECT 1 FROM TravelBooking tb WHERE tb.driverId = d.id " +
            "AND tb.fromDate <= :day AND tb.toDate >= :day " +
            "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL)")
     List<Long> findDispatchableAmong(@Param("driverIds") java.util.Collection<Long> driverIds,

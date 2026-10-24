@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -153,7 +154,7 @@ class UserServiceCityTripTest {
         assertNull(b.getDriverId());
         verify(cityFareService).fare(VehicleType.BIKE, 12.0, 35L);
         verify(dispatchService).dispatchAfterCommit(b.getId());
-        verify(driverRepository, never()).findAvailableDrivers(any(), any());
+        verify(driverRepository, never()).findFirstFreeTripDriver(any(), any(), anyBoolean(), any());
     }
 
     @Test
@@ -205,9 +206,11 @@ class UserServiceCityTripTest {
     @DisplayName("a Trip is by car, and an AC trip passes over a non-AC car")
     void acTripNeedsAcCar() {
         route(460.0, 480L);
-        Driver nonAc = driver(1L, false);
-        Driver ac = driver(2L, true);
-        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of(nonAc, ac));
+        // The AC match is in the query now: an AC trip asks only for AC cars, and car 1 is not one.
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), eq(true), eq(List.of(-1L))))
+                .thenReturn(Optional.of(driver(2L, true)));
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), eq(false), eq(List.of(-1L))))
+                .thenReturn(Optional.of(driver(1L, false)));
 
         service.createBooking(USER_ID, base());
 
@@ -223,7 +226,8 @@ class UserServiceCityTripTest {
     @DisplayName("a non-AC trip takes the first free car, AC or not")
     void nonAcTripTakesAnyCar() {
         route(460.0, 480L);
-        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of(driver(1L, false), driver(2L, true)));
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), eq(false), eq(List.of(-1L))))
+                .thenReturn(Optional.of(driver(1L, false)));
         TravelBookingRequest r = base();
         r.setAcType("NON_AC");
 
@@ -236,12 +240,12 @@ class UserServiceCityTripTest {
     @DisplayName("an AC trip with only non-AC cars free is left for the owner")
     void acTripWithNoAcCar() {
         route(460.0, 480L);
-        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of(driver(1L, false)));
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), eq(true), eq(List.of(-1L)))).thenReturn(Optional.empty());
 
         service.createBooking(USER_ID, base());
 
         assertNull(saved().getDriverId());
-        verify(driverRepository, never()).findAvailableDriversExcluding(any(), any(), eq(List.of(1L)));
+        verify(driverRepository, never()).findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(List.of(1L)));
     }
 
     private static Driver driver(long id, boolean ac) {

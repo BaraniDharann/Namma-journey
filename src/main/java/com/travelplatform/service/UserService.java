@@ -205,13 +205,8 @@ public class UserService {
         return transactionTemplate.execute(tx -> {
             Driver driver = null;
             if (assign) {
-                List<Driver> candidates = lostDrivers.isEmpty()
-                        ? driverRepository.findAvailableDrivers(request.getFromDate(), request.getToDate())
-                        : driverRepository.findAvailableDriversExcluding(
-                                request.getFromDate(), request.getToDate(), lostDrivers);
-                driver = candidates.stream()
-                        .filter(d -> suitsAc(d, request.getAcType()))
-                        .findFirst()
+                driver = driverRepository.findFirstFreeTripDriver(request.getFromDate(), request.getToDate(),
+                                "AC".equalsIgnoreCase(request.getAcType()), excludedOrNobody(lostDrivers))
                         .orElse(null);
             }
 
@@ -315,9 +310,9 @@ public class UserService {
         return booking;
     }
 
-    /** An AC trip needs an AC car; a non-AC trip takes any car. */
-    static boolean suitsAc(Driver driver, String acType) {
-        return !"AC".equalsIgnoreCase(acType) || driver.isVehicleAc();
+    /** {@code NOT IN ()} is not valid SQL, so "nobody excluded" is a list holding an id no driver has. */
+    static java.util.Collection<Long> excludedOrNobody(java.util.Collection<Long> excluded) {
+        return excluded == null || excluded.isEmpty() ? List.of(-1L) : excluded;
     }
 
     /** True when Postgres refused the insert because the driver already has an overlapping trip. */

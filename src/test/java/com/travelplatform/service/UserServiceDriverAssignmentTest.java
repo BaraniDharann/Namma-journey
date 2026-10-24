@@ -32,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
@@ -50,6 +52,8 @@ import static org.mockito.Mockito.when;
 class UserServiceDriverAssignmentTest {
 
     private static final UUID USER_ID = UUID.fromString("aaaaaaaa-1111-2222-3333-444444444444");
+    /** What the caller passes as the exclusion list when nobody is excluded: NOT IN () is not SQL. */
+    private static final List<Long> NOBODY = List.of(-1L);
 
     private TravelBookingRepository bookingRepository;
     private DriverRepository driverRepository;
@@ -135,9 +139,9 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("losing the race for a driver moves on to the next free one")
     void retriesWithNextDriverWhenTheFirstIsTaken() {
-        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of(driver(1)));
-        when(driverRepository.findAvailableDriversExcluding(any(), any(), eq(List.of(1L))))
-                .thenReturn(List.of(driver(2)));
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.of(driver(1)));
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(List.of(1L))))
+                .thenReturn(Optional.of(driver(2)));
         savesFailingForDrivers(1L);
 
         service.createBooking(USER_ID, request());
@@ -150,9 +154,9 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("a deadlock while racing for a driver is treated as losing the race, not as an error")
     void retriesWhenPostgresBreaksADeadlock() {
-        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of(driver(1)));
-        when(driverRepository.findAvailableDriversExcluding(any(), any(), eq(List.of(1L))))
-                .thenReturn(List.of(driver(2)));
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.of(driver(1)));
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(List.of(1L))))
+                .thenReturn(Optional.of(driver(2)));
         when(bookingRepository.saveAndFlush(any(TravelBooking.class))).thenAnswer(inv -> {
             TravelBooking b = inv.getArgument(0);
             driverIdsAtSave.add(b.getDriverId());
@@ -173,11 +177,10 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("when every candidate is taken the booking still goes through, unassigned for the owner")
     void fallsBackToUnassignedWhenEveryDriverIsTaken() {
-        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of(driver(1)));
-        when(driverRepository.findAvailableDriversExcluding(any(), any(), anyList()))
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
                 .thenAnswer(inv -> {
-                    List<Long> excluded = inv.getArgument(2);
-                    return List.of(driver(excluded.size() + 1L));
+                    java.util.Collection<Long> excluded = inv.getArgument(3);
+                    return Optional.of(driver(excluded.contains(-1L) ? 1L : excluded.size() + 1L));
                 });
         savesFailingForDrivers(1L, 2L, 3L, 4L, 5L);
 
@@ -210,7 +213,7 @@ class UserServiceDriverAssignmentTest {
         // money anyone can pay. It used to be stored as-is, while the UPI link showed 6457.32.
         when(routingService.calculateRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(new RouteInfo(461.237, 480L, "NH38"));
-        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of());
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.empty());
         savesFailingForDrivers();
 
         service.createBooking(USER_ID, request());
@@ -228,9 +231,9 @@ class UserServiceDriverAssignmentTest {
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
         io.micrometer.core.instrument.Metrics.addRegistry(registry);
         try {
-            when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of(driver(1)));
-            when(driverRepository.findAvailableDriversExcluding(any(), any(), eq(List.of(1L))))
-                    .thenReturn(List.of(driver(2)));
+            when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.of(driver(1)));
+            when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(List.of(1L))))
+                    .thenReturn(Optional.of(driver(2)));
             savesFailingForDrivers(1L);
 
             service.createBooking(USER_ID, request());
@@ -245,7 +248,7 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("an unrelated constraint failure is not mistaken for a driver clash")
     void unrelatedIntegrityErrorsPropagate() {
-        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of(driver(1)));
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.of(driver(1)));
         when(bookingRepository.saveAndFlush(any(TravelBooking.class)))
                 .thenThrow(new DataIntegrityViolationException("null value in column \"user_name\""));
 
@@ -255,7 +258,7 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("the route is fetched before the transaction opens, so a slow map API holds no DB connection")
     void routingHappensOutsideTheTransaction() {
-        when(driverRepository.findAvailableDrivers(any(), any())).thenReturn(List.of());
+        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.empty());
         savesFailingForDrivers();
 
         service.createBooking(USER_ID, request());

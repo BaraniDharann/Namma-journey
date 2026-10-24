@@ -17,8 +17,13 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -170,21 +175,24 @@ class DriverOverlapConstraintTest {
     @Test
     @DisplayName("V16: existing drivers stay owner-fleet and approved; independents take no trips; a plate is unique in any case")
     void driverSelfSignupColumns() throws Exception {
-        // A driver the owner created before V16: the migration has to grandfather them in.
+        // A driver who existed before V16, so there is someone for it to backfill.
         flyway("15").migrate();
-        try (Connection c = connect()) {
-            c.createStatement().executeUpdate("""
-                    INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
-                        first_login, email_verified, token_version, created_at)
-                    VALUES ('Old Hand', '9000000000', 'x', 'L-0', '111122220000', 'ROLE_DRIVER', 'ACTIVE',
-                        false, true, 0, now())
-                    """);
+        long existing;
+        try (Connection c = connect(); ResultSet rs = c.createStatement().executeQuery("""
+                INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
+                    first_login, email_verified, token_version, created_at)
+                VALUES ('Old', '9000000009', 'x', 'L-9', '111122229999', 'ROLE_DRIVER', 'ACTIVE',
+                    true, false, 0, now())
+                RETURNING id
+                """)) {
+            rs.next();
+            existing = rs.getLong(1);
         }
         flyway(null).migrate();
         try (Connection c = connect()) {
             try (ResultSet rs = c.createStatement().executeQuery(
-                    "SELECT fleet, verification_status FROM drivers WHERE mobile = '9000000000'")) {
-                rs.next();
+                    "SELECT fleet, verification_status FROM drivers WHERE id = " + existing)) {
+                assertTrue(rs.next(), "the pre-V16 driver is still there");
                 assertEquals("OWNER_FLEET", rs.getString(1));
                 assertEquals("APPROVED", rs.getString(2));
             }
@@ -282,6 +290,83 @@ class DriverOverlapConstraintTest {
                     "SELECT count(*) FROM travel_bookings WHERE driver_id = 2")) {
                 rs.next();
                 assertEquals(1, rs.getInt(1), "the confirmed trip clashing with a started one loses its driver");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("the free-trip-driver query skips busy cars, honours AC and exclusions, and its index exists")
+    void freeTripDriverQueryHonoursOverlapAcAndExclusions() throws Exception {
+        flyway(null).migrate();
+        LocalDate day = LocalDate.parse("2026-11-01");
+        try (Connection c = connect()) {
+            long busy = car(c, "9100000001", true);
+            long nonAc = car(c, "9100000002", false);
+            long freeAc = car(c, "9100000003", true);
+            insert(c, busy, "CONFIRMED", "2026-10-31", "2026-11-02");
+
+            assertEquals(freeAc, freeTripDriver(c, day, true, List.of(-1L)));
+            assertEquals(nonAc, freeTripDriver(c, day, false, List.of(-1L)), "lowest id first; a non-AC trip takes any car");
+            assertNull(freeTripDriver(c, day, true, List.of(freeAc)));
+
+            try (ResultSet rs = c.createStatement().executeQuery(
+                    "SELECT 1 FROM pg_indexes WHERE indexname = 'idx_travel_bookings_driver_active'")) {
+                assertTrue(rs.next(), "V19 adds the partial index the availability check reads");
+            }
+        }
+    }
+
+    private static long car(Connection c, String mobile, boolean ac) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
+                    first_login, email_verified, token_version, created_at, vehicle_type, serves_trip, vehicle_ac)
+                VALUES ('Car', ?, 'x', ?, ?, 'ROLE_DRIVER', 'ACTIVE', true, false, 0, now(), 'CAR', true, ?)
+                RETURNING id
+                """)) {
+            ps.setString(1, mobile);
+            ps.setString(2, "L-" + mobile);
+            ps.setString(3, "8" + mobile + "0");
+            ps.setBoolean(4, ac);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getLong(1);
+            }
+        }
+    }
+
+    /**
+     * Runs {@link com.travelplatform.repository.DriverRepository#FREE_TRIP_DRIVER_SQL} itself, with
+     * its named parameters turned into JDBC placeholders, so the text tested is the text shipped.
+     */
+    private static Long freeTripDriver(Connection c, LocalDate day, boolean needAc, List<Long> excluded)
+            throws SQLException {
+        Matcher m = Pattern.compile(":(\\w+)").matcher(com.travelplatform.repository.DriverRepository.FREE_TRIP_DRIVER_SQL);
+        List<Object> values = new ArrayList<>();
+        StringBuilder sql = new StringBuilder();
+        while (m.find()) {
+            switch (m.group(1)) {
+                case "fromDate", "toDate" -> {
+                    values.add(Date.valueOf(day));
+                    m.appendReplacement(sql, "?");
+                }
+                case "needAc" -> {
+                    values.add(needAc);
+                    m.appendReplacement(sql, "?");
+                }
+                case "excluded" -> {
+                    values.addAll(excluded);
+                    m.appendReplacement(sql, String.join(",", Collections.nCopies(excluded.size(), "?")));
+                }
+                default -> throw new IllegalStateException("unexpected parameter " + m.group());
+            }
+        }
+        m.appendTail(sql);
+        try (PreparedStatement ps = c.prepareStatement(sql.toString())) {
+            for (int i = 0; i < values.size(); i++) {
+                ps.setObject(i + 1, values.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getLong("id") : null;
             }
         }
     }
