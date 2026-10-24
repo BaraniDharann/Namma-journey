@@ -55,6 +55,13 @@ public class DispatchService {
     /** Drivers tried per step when each in turn is claimed by another booking in the same instant. */
     private static final int MAX_ATTEMPTS = 5;
 
+    /**
+     * Nearest drivers read from the location set per ring. Enough that a few busy, wrong-vehicle
+     * or already-declined drivers still leave someone to offer; few enough that the availability
+     * query stays one small IN list however many drivers a busy city has.
+     */
+    private static final int CANDIDATES = 30;
+
     private final TravelBookingRepository bookingRepository;
     private final DriverRepository driverRepository;
     private final BookingDriverRejectionRepository rejectionRepository;
@@ -213,7 +220,8 @@ public class DispatchService {
 
         LocalDateTime started = booking.getDispatchStartedAt() != null ? booking.getDispatchStartedAt() : now;
         boolean outOfTime = !started.plusSeconds(properties.getSearchTimeoutSeconds()).isAfter(now);
-        if (outOfTime || booking.getFromLat() == null || booking.getFromLon() == null) {
+        // No city: booked before cities existed (V15). No location set to search, so the owner takes it.
+        if (outOfTime || booking.getCityId() == null || booking.getFromLat() == null || booking.getFromLon() == null) {
             booking.setDispatchState(DispatchState.NO_DRIVER);
             bookingRepository.save(booking);
             notificationService.notifyNoDriverNearby(booking);
@@ -260,7 +268,7 @@ public class DispatchService {
      * out. Everyone who already declined it, or timed out on it, is skipped.
      */
     private Optional<DriverPresenceService.Nearby> chooseDriver(TravelBooking booking, List<Long> lost) {
-        if (booking.getFromLat() == null || booking.getFromLon() == null) {
+        if (booking.getCityId() == null || booking.getFromLat() == null || booking.getFromLon() == null) {
             return Optional.empty();
         }
         Set<Long> excluded = new HashSet<>(rejectionRepository.findDriverIdsByBookingId(booking.getId()));
@@ -271,7 +279,7 @@ public class DispatchService {
                 continue;
             }
             List<DriverPresenceService.Nearby> near = presence
-                    .findWithin(booking.getFromLat(), booking.getFromLon(), radius)
+                    .findWithin(booking.getCityId(), booking.getFromLat(), booking.getFromLon(), radius, CANDIDATES)
                     .stream()
                     .filter(n -> !excluded.contains(n.driverId()))
                     .toList();

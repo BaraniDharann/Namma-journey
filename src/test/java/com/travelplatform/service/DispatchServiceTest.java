@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -59,6 +61,7 @@ class DispatchServiceTest {
     // Chennai Central; one degree of latitude is about 111.2 km.
     private static final double PICKUP_LAT = 13.0827;
     private static final double PICKUP_LON = 80.2707;
+    private static final long CITY_ID = 1L;
 
     private final Map<UUID, TravelBooking> table = new HashMap<>();
     private final List<BookingDriverRejection> rejections = new ArrayList<>();
@@ -127,6 +130,12 @@ class DispatchServiceTest {
         @SuppressWarnings("unchecked")
         ObjectProvider<StringRedisTemplate> noRedis = mock(ObjectProvider.class);
         presence = new DriverPresenceService(noRedis, "caffeine", properties);
+        // Everything here is one city; set by reflection because production field-injects it.
+        CityService cities = mock(CityService.class);
+        com.travelplatform.entity.City chennai = new com.travelplatform.entity.City();
+        chennai.setId(CITY_ID);
+        when(cities.cityFor(anyDouble(), anyDouble())).thenReturn(Optional.of(chennai));
+        ReflectionTestUtils.setField(presence, "cityService", cities);
 
         dispatch = new DispatchService(bookingRepository, driverRepository, rejectionRepository, presence,
                 notificationService, offerPublisher, new AfterCommitDispatcher(Runnable::run),
@@ -149,6 +158,7 @@ class DispatchServiceTest {
         booking.setDispatchState(DispatchState.SEARCHING);
         booking.setDispatchStartedAt(T0);
         booking.setServiceMode(TravelBooking.ServiceMode.CITY);
+        booking.setCityId(CITY_ID);
         booking.setVehicleType(VehicleType.CAR);
         booking.setTravelMembers(1);
         bookingId = booking.getId();
@@ -324,6 +334,21 @@ class DispatchServiceTest {
     }
 
     @Test
+    @DisplayName("a ride with no city (booked before cities existed) is handed to the owner at once")
+    void rideWithoutCityGoesToOwner() {
+        driverAt(1L, 0.3);
+        TravelBooking b = booking();
+        b.setCityId(null);
+        store(b);
+
+        dispatch.dispatch(bookingId);
+
+        assertEquals(DispatchState.NO_DRIVER, booking().getDispatchState());
+        assertNull(booking().getDriverId());
+        verify(notificationService).notifyNoDriverNearby(any());
+    }
+
+    @Test
     @DisplayName("a driver who comes online during the search is found by the next sweep")
     void driverComingOnlineIsPickedUp() {
         dispatch.dispatch(bookingId);
@@ -406,6 +431,7 @@ class DispatchServiceTest {
         c.setOfferDistanceKm(b.getOfferDistanceKm());
         c.setVersion(b.getVersion());
         c.setServiceMode(b.getServiceMode());
+        c.setCityId(b.getCityId());
         c.setVehicleType(b.getVehicleType());
         c.setTravelMembers(b.getTravelMembers());
         return c;
