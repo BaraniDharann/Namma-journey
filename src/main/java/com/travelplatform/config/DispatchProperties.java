@@ -26,6 +26,20 @@ public class DispatchProperties {
     /** A driver whose phone has not reported a position for this long is treated as gone. */
     private int presenceTtlSeconds = 60;
 
+    /**
+     * Average city driving speed, for the straight-line ETA used until road ETAs (OSRM) exist.
+     * Only the ranking of drivers matters to the solver, so a rough figure is enough.
+     */
+    private int citySpeedKmh = 20;
+
+    public int getCitySpeedKmh() {
+        return citySpeedKmh;
+    }
+
+    public void setCitySpeedKmh(int citySpeedKmh) {
+        this.citySpeedKmh = citySpeedKmh;
+    }
+
     public List<Double> getRadiiKm() {
         return radiiKm;
     }

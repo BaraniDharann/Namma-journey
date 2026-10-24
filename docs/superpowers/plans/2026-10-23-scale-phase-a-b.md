@@ -371,7 +371,7 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
     of ≤ 300 rides
   - `AssignmentSolver.HUNGARIAN_MAX = 300`
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - `hungarianMatchesBruteForce`: 200 random cases, each with 2–6 rides, 2–6 drivers and random
     missing edges. The total cost equals the brute-force minimum, over all assignments that match
     the most rides possible.
@@ -380,16 +380,16 @@ Tests mirror them under `src/test/java/com/travelplatform/`.
   - `componentsSolvedIndependently`
   - `emptyInputGivesEmpty`
   - `noDriverSharedEverAcrossComponents`
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement.**
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement.**
   - **Grouping:** union-find over ride and driver nodes, with path compression and union by rank.
   - **Hungarian:** the O(n³) potentials/shortest-augmenting-path form (Kuhn–Munkres) on a square
     matrix, padded with `INF = Long.MAX_VALUE / 4`. Pairs that come out at INF are dropped.
   - **Greedy:** sort edges by cost, then id, and keep each one whose ride and driver are both
     still free.
-- [ ] **Step 4: Run** `mvn -o -q test -Dtest='AssignmentSolverTest,HaversineEtaServiceTest'`.
+- [x] **Step 4: Run** `mvn -o -q test -Dtest='AssignmentSolverTest,HaversineEtaServiceTest'`.
   Expected: PASS.
-- [ ] **Step 5: Commit** `feat(dispatch): ETA service and minimum-cost assignment solver`.
+- [x] **Step 5: Commit** `feat(dispatch): ETA service and minimum-cost assignment solver`.
 
 ### Task 7: Driver state store
 

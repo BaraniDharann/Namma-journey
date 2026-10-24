@@ -145,7 +145,8 @@ public class TripRules {
         return lat >= MIN_LAT && lat <= MAX_LAT && lon >= MIN_LON && lon <= MAX_LON;
     }
 
-    static double distanceKm(double lat1, double lon1, double lat2, double lon2) {
+    /** Great-circle distance; public so the matching engine (service.dispatch) measures the same way. */
+    public static double distanceKm(double lat1, double lon1, double lat2, double lon2) {
         double dLat = Math.toRadians(lat2 - lat1);
         double dLon = Math.toRadians(lon2 - lon1);
         double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
