@@ -65,7 +65,7 @@ refuses to start rather than run on a value baked into the source.
 
 1. Dashboard → **Account & Settings → API keys** → generate keys (Test mode first).
 2. Dashboard → **Webhooks → Add New Webhook**:
-   - URL: `https://api.nammajourneys.site/api/payments/razorpay/webhook`
+   - URL: `https://nammajourneys.site/api/payments/razorpay/webhook`
    - Secret: the value of `RAZORPAY_WEBHOOK_SECRET` (`openssl rand -hex 32`)
    - Events: `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`, `refund.failed`
 3. **Payments and refunds → Capture settings**: automatic capture on.

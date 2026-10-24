@@ -91,7 +91,7 @@ services:
       - key: OWNER_UPI_NAME
         value: Namma Journey
       # Razorpay online checkout. Webhook URL to register in the Razorpay dashboard:
-      # https://api.nammajourneys.site/api/payments/razorpay/webhook
+      # https://nammajourneys.site/api/payments/razorpay/webhook
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
@@ -121,17 +121,32 @@ services:
     buildCommand: cd frontend && npm ci && npm run build
     staticPublishPath: frontend/dist
     envVars:
-      # The backend's custom domain (Render: backend service -> Settings -> Custom Domains). Until
-      # it is attached, use https://namma-journey-backend.onrender.com/api instead.
+      # Website and API share one domain: the browser calls https://nammajourneys.site/api, and
+      # the rewrites below forward /api, /ws and uploads to the backend service.
       - key: VITE_API_BASE_URL
-        value: https://api.nammajourneys.site/api
+        value: https://nammajourneys.site/api
       - key: VITE_GOOGLE_CLIENT_ID
         sync: false
       - key: VITE_OSRM_BASE_URL
         value: https://router.project-osrm.org
       - key: VITE_PHOTON_BASE_URL
         value: https://photon.komoot.io
+    # Order matters: the first matching rule wins. The backend paths must come before the SPA
+    # fallback, or /api/... would be answered with index.html and a 200 - which Razorpay would
+    # count as a delivered webhook while the payment was never recorded.
     routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://namma-journey-backend.onrender.com/api/*
+      - type: rewrite
+        source: /ws/*
+        destination: https://namma-journey-backend.onrender.com/ws/*
+      - type: rewrite
+        source: /uploads/*
+        destination: https://namma-journey-backend.onrender.com/uploads/*
+      - type: rewrite
+        source: /driverphoto/*
+        destination: https://namma-journey-backend.onrender.com/driverphoto/*
       - type: rewrite
         source: /*
         destination: /index.html
@@ -141,7 +156,7 @@ services:
     headers:
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self' https://accounts.google.com https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://api.nammajourneys.site https://namma-journey-backend.onrender.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://unpkg.com https://raw.githubusercontent.com https://*.googleusercontent.com https://*.r2.cloudflarestorage.com https://*.amazonaws.com https://cdn.razorpay.com; connect-src 'self' https://api.nammajourneys.site wss://api.nammajourneys.site https://namma-journey-backend.onrender.com wss://namma-journey-backend.onrender.com https://router.project-osrm.org https://photon.komoot.io https://accounts.google.com https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://accounts.google.com https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        value: "default-src 'self'; script-src 'self' https://accounts.google.com https://checkout.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://nammajourneys.site https://namma-journey-backend.onrender.com https://*.tile.openstreetmap.org https://tile.openstreetmap.org https://unpkg.com https://raw.githubusercontent.com https://*.googleusercontent.com https://*.r2.cloudflarestorage.com https://*.amazonaws.com https://cdn.razorpay.com; connect-src 'self' https://nammajourneys.site wss://nammajourneys.site https://namma-journey-backend.onrender.com wss://namma-journey-backend.onrender.com https://router.project-osrm.org https://photon.komoot.io https://accounts.google.com https://api.razorpay.com https://lumberjack.razorpay.com; frame-src https://accounts.google.com https://api.razorpay.com https://checkout.razorpay.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
       - path: /*
         name: X-Frame-Options
         value: DENY
