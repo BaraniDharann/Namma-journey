@@ -64,12 +64,20 @@ public class FileStorageService {
             throw new IllegalArgumentException("The file is not a valid " + extension.substring(1).toUpperCase(Locale.ROOT) + " image");
         }
 
-        String key = "uploads/" + folder + "/" + namePrefix + "_" + UUID.randomUUID() + extension;
+        // Every upload is re-drawn as a compact JPEG (ImageCompressor): a 6 MB phone photo becomes a
+        // few hundred KB, upright, without its EXIF/GPS metadata - and what is stored is never the
+        // uploaded bytes themselves.
+        byte[] compressed;
         try (InputStream in = file.getInputStream()) {
-            fileStore.put(key, in, file.getSize(), contentType);
+            compressed = com.travelplatform.storage.ImageCompressor.toCompressedJpeg(in.readAllBytes());
+        } catch (com.travelplatform.storage.ImageCompressor.UnreadableImageException e) {
+            throw new IllegalArgumentException(e.getMessage());
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read the uploaded file", e);
         }
+
+        String key = "uploads/" + folder + "/" + namePrefix + "_" + UUID.randomUUID() + ".jpg";
+        fileStore.put(key, new java.io.ByteArrayInputStream(compressed), compressed.length, "image/jpeg");
         // Folder and kind only: the full key is the file's address, and logs are not access control.
         log.info("Stored upload in uploads/{} ({})", folder, namePrefix.replaceAll("_[0-9]+$", ""));
         return "/" + key;

@@ -102,6 +102,37 @@ public class FieldEncryption {
         }
     }
 
+    /** Binary format for files: version byte (1) ‖ 12-byte IV ‖ ciphertext ‖ 16-byte tag. */
+    private static final byte BINARY_V1 = 1;
+
+    public static byte[] encryptBytes(byte[] plain) {
+        SecretKeySpec k = requireKey();
+        try {
+            byte[] iv = new byte[IV_BYTES];
+            RANDOM.nextBytes(iv);
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, k, new GCMParameterSpec(TAG_BITS, iv));
+            byte[] ct = cipher.doFinal(plain);
+            return ByteBuffer.allocate(1 + iv.length + ct.length).put(BINARY_V1).put(iv).put(ct).array();
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("File encryption failed", e);
+        }
+    }
+
+    public static byte[] decryptBytes(byte[] stored) {
+        if (stored == null || stored.length < 1 + IV_BYTES + TAG_BITS / 8 || stored[0] != BINARY_V1) {
+            throw new IllegalStateException("Unrecognised encrypted file");
+        }
+        SecretKeySpec k = requireKey();
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, k, new GCMParameterSpec(TAG_BITS, stored, 1, IV_BYTES));
+            return cipher.doFinal(stored, 1 + IV_BYTES, stored.length - 1 - IV_BYTES);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Encrypted file could not be read (wrong key or tampered)", e);
+        }
+    }
+
     private static SecretKeySpec requireKey() {
         SecretKeySpec k = key;
         if (k == null) {

@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Uploads stored encrypted in the database** — `STORAGE_TYPE=db` keeps driver documents and trip
+  photos in Postgres (V22), AES-256-GCM encrypted, so they survive redeploys on hosts with no disk
+  and need no S3. Every upload (now up to 30 MB) is re-drawn as an upright JPEG of about 1 MB or
+  less, stripped of EXIF/GPS metadata
 - **Batch matching for City rides (scale phases A–B)** — one location set per city, a one-row
   offer poll, `NOT EXISTS` + `LIMIT 1` availability queries and a route cache (phase A); every
   2 s each city's waiting rides and free drivers are paired at minimum total pickup time

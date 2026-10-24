@@ -40,10 +40,22 @@ class FileStorageServiceTest {
     static final byte[] GIF = {0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0}; // "GIF89a"
     static final byte[] WEBP = {0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50}; // "RIFF" ... "WEBP" at 8-11
 
+    /** A real, decodable picture: uploads are now re-drawn as JPEG (ImageCompressor). */
+    private static byte[] real(String format) {
+        try {
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(30, 20, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(img, format, out);
+            return out.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static MockMultipartFile image(String filename, String contentType) {
         byte[] body = contentType == null ? new byte[] {1, 2, 3} : switch (contentType) {
-            case "image/jpeg", "image/jpg" -> JPEG;
-            case "image/png" -> PNG;
+            case "image/jpeg", "image/jpg" -> real("jpg");
+            case "image/png" -> real("png");
             case "image/gif" -> GIF;
             case "image/webp" -> WEBP;
             default -> new byte[] {1, 2, 3};
@@ -69,16 +81,16 @@ class FileStorageServiceTest {
     void tripPhotoGoesToTheStore() {
         String path = service.storeImage(image("p.png", "image/png"), "trips/trip_b-1", "driver_7");
 
-        assertTrue(path.matches("/uploads/trips/trip_b-1/driver_7_[0-9a-f-]{36}\\.png"), path);
+        assertTrue(path.matches("/uploads/trips/trip_b-1/driver_7_[0-9a-f-]{36}\\.jpg"), path);
         assertTrue(store.serve(key(path)).isPresent());
     }
 
     @Test
-    @DisplayName("the extension comes from the verified image type, never from the uploader's filename")
-    void extensionFollowsContentType() {
+    @DisplayName("every upload is stored as a re-drawn JPEG, whatever the uploader named or labelled it")
+    void storedAsCompressedJpeg() {
         String path = service.storeFile(image("evil.html", "image/png"), "photo");
 
-        assertTrue(path.endsWith(".png"), path);
+        assertTrue(path.endsWith(".jpg"), path);
     }
 
     @Test

@@ -43,10 +43,11 @@ services:
         value: validate
       - key: OTP_TEST_MODE
         value: "false"
-      # Render's free plan has no persistent disk: with local storage every deploy or restart
-      # DELETES uploaded driver documents and trip photos. Before real use, create a Cloudflare
-      # R2 bucket and add (in the dashboard): STORAGE_TYPE=s3, S3_BUCKET, S3_REGION=auto,
-      # S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com, S3_ACCESS_KEY, S3_SECRET_KEY.
+      # Render has no persistent disk, so uploads (driver documents, trip photos) are kept in
+      # Postgres: compressed to a JPEG of about 1 MB or less and encrypted with
+      # APP_ENCRYPTION_KEY. Uploads are refused until that key is set.
+      - key: STORAGE_TYPE
+        value: db
       - key: FILE_UPLOAD_DIR
         value: uploads
 

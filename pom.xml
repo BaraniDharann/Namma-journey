@@ -132,6 +132,12 @@
             <artifactId>s3</artifactId>
             <version>2.28.16</version>
         </dependency>
+        <!-- Reads a phone photo's EXIF orientation so compressed documents are stored upright. -->
+        <dependency>
+            <groupId>com.drewnoakes</groupId>
+            <artifactId>metadata-extractor</artifactId>
+            <version>2.19.0</version>
+        </dependency>
         <!-- TCP client for the RabbitMQ STOMP broker relay (app.websocket.broker=rabbitmq). Version from Boot. -->
         <dependency>
             <groupId>io.projectreactor.netty</groupId>

@@ -43,6 +43,17 @@ public class StorageConfig {
         return new LocalFileStore(roots);
     }
 
+    /**
+     * Uploads in Postgres, encrypted (V22): survives redeploys on hosts with no persistent disk and
+     * needs no object storage. Shared by every instance, since they share the database.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.storage.type", havingValue = "db")
+    public FileStore databaseFileStore(org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        log.info("Uploads stored encrypted in the database (stored_files)");
+        return new com.travelplatform.storage.DatabaseFileStore(jdbc);
+    }
+
     @Bean
     @ConditionalOnProperty(name = "app.storage.type", havingValue = "s3")
     public FileStore s3FileStore(@Value("${app.storage.s3.bucket}") String bucket,

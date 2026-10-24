@@ -4,8 +4,8 @@
 #
 # What it changes from docker-compose.yml:
 #   - backend runs BACKEND_REPLICAS copies (default 2). They share Postgres, Redis and RabbitMQ,
-#     so any replica can serve any request. Uploads must be in S3 (STORAGE_TYPE=s3) because a
-#     local volume is per-replica - set the S3_* variables in .env.
+#     so any replica can serve any request. Uploads go to the database (STORAGE_TYPE=db, default) or S3, because a
+#     local volume is per-replica.
 #   - WebSocket pushes (live tracking, ride offers) go through RabbitMQ, so a driver connected to
 #     replica A reaches a passenger on replica B. The Redis relay switches itself off.
 #   - nginx balances across the replicas with ip_hash (frontend/nginx.conf, upstream backend_pool).
@@ -26,7 +26,8 @@ services:
       RABBITMQ_STOMP_PORT: 61613
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-namma}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
-      STORAGE_TYPE: ${STORAGE_TYPE:?Set STORAGE_TYPE=s3 and the S3_* variables in .env - replicas cannot share a local uploads volume}
+      # db (encrypted in Postgres, no extra service) or s3 - replicas cannot share a local volume.
+      STORAGE_TYPE: ${STORAGE_TYPE:-db}
       OSRM_BASE_URL: ${OSRM_BASE_URL:-http://osrm:5000}
       DISPATCH_ETA: osrm
     depends_on:

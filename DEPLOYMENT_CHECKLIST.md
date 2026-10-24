@@ -56,10 +56,15 @@ refuses to start rather than run on a value baked into the source.
       (30), `TRIP_ADVANCE_REFUND_HOURS` (24)
 - [ ] `OUTBOX_TRANSPORT` — `in-process` (default, no extra infrastructure) or `sqs`. See *AWS SQS*
       below.
-- [ ] `STORAGE_TYPE=s3` + `S3_*` — **required on any host without a persistent disk** (Render's free
-      plan has none: every deploy deletes uploaded driver documents and trip photos). An S3 bucket
-      in `ap-south-1` with Block Public Access on; the app serves files through short-lived signed
-      URLs.
+- [ ] `STORAGE_TYPE` — **required on any host without a persistent disk** (Render has none: with
+      `local`, every deploy deletes uploaded driver documents and trip photos).
+      - `db` (what render.yaml uses): uploads are kept in Postgres (`stored_files`, V22), compressed
+        to a JPEG of about 1 MB or less and encrypted with `APP_ENCRYPTION_KEY`. Nothing else to set
+        up; uploads are refused until the key is set. Budget about 0.5 MB per photo against your
+        database size limit.
+      - `s3` + `S3_*`: an S3/R2 bucket with Block Public Access on, for very large volumes.
+      - Uploads accept up to 30 MB per photo (125 MB per request); the stored copy is always the
+        compressed JPEG, without EXIF/GPS metadata.
 
 ### Razorpay
 
