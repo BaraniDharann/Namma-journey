@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { getPublicPackages, getPublicReviews } from '../utils/api'
 import Pagination, { usePagination } from '../components/Pagination'
 import QuickBooking from '../components/journey/QuickBooking'
+import CityBooking from '../components/journey/CityBooking'
+import CityRideStory from '../components/journey/CityRideStory'
 import MemoryAlbum from '../components/drive/MemoryAlbum'
 import CarAssemblyLoader, { shouldPlayIntro } from '../components/brand/CarAssemblyLoader'
 import Icon from '../components/dash/Icon'
@@ -139,7 +141,86 @@ function Nav({ user, onDashboard }) {
   )
 }
 
-/* ─────────────────────────  the hero: the car on the road  ───────────────────────── */
+/* ─────────────────────────  the hero: City ride first, Trip on request  ───────────────────────── */
+
+const HERO_MODES = [
+  { key: 'city', icon: 'bike', label: 'City ride' },
+  { key: 'trip', icon: 'car', label: 'Trip' },
+]
+
+function ModeSwitch({ mode, onChange }) {
+  return (
+    <div className="hm-switch" role="group" aria-label="What are you booking?">
+      {HERO_MODES.map((m) => (
+        <button key={m.key} type="button" aria-pressed={mode === m.key} onClick={() => onChange(m.key)}>
+          {mode === m.key && <motion.span layoutId="hm-switch-pill" className="hm-switch-pill" transition={{ duration: 0.4, ease: EASE }} />}
+          <Icon name={m.icon} size={17} />
+          <span>{m.label}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Hero({ ready }) {
+  const [mode, setMode] = useState('city')
+  const switcher = <ModeSwitch mode={mode} onChange={setMode} />
+  return mode === 'city' ? <CityHero ready={ready} switcher={switcher} /> : <TripHero ready={ready} switcher={switcher} />
+}
+
+/**
+ * The bus is full again: the street story fills the window. On wide screens the
+ * booking is a small card top right, in the sky over the street; narrower ones
+ * get the full card below the story.
+ */
+function CityHero({ ready, switcher }) {
+  const stacked = useIsCompact('(max-width: 1099px)')
+  return (
+    <>
+      <section id="drive" className="cr-hero" aria-labelledby="cr-title">
+        <CityRideStory active={ready} />
+        <div className="cr-scrim" aria-hidden="true" />
+        <div className="ws-wrap cr-content">
+          <motion.div
+            className="cr-copy"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: EASE, delay: 0.1 }}
+          >
+            {switcher}
+            <h1 id="cr-title">Bus full again? <em>Skip the queue.</em></h1>
+            <p>Bike, auto or car across the city with a verified driver. Book in a tap, pay at the end.</p>
+            {stacked && (
+              <div className="rw-ctas">
+                <button type="button" className="ws-btn" onClick={() => document.getElementById('book')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                  <Icon name="bike" />Book a ride
+                </button>
+              </div>
+            )}
+          </motion.div>
+          {!stacked && (
+            <motion.div
+              id="book"
+              className="cr-book"
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, ease: EASE, delay: 0.25 }}
+            >
+              <CityBooking layout="mini" />
+            </motion.div>
+          )}
+        </div>
+      </section>
+      {stacked && (
+        <section id="book" className="rw-book-m" aria-label="Book a city ride">
+          <div className="ws-wrap"><CityBooking /></div>
+        </section>
+      )}
+    </>
+  )
+}
+
+/* ── Trip: the car on the road ── */
 
 /** Painted fallback for reduced motion / no WebGL: the valley as a still. */
 function StillSky() {
@@ -152,7 +233,7 @@ function StillSky() {
 }
 
 /** The ready prop holds the 3D world back until the intro has finished, so the loader animates on a free main thread. */
-function Hero({ ready }) {
+function TripHero({ ready, switcher }) {
   const reduced = useReducedMotion()
   const compact = useIsCompact('(max-width: 820px)')
   const [webgl] = useState(() => hasWebGL())
@@ -184,6 +265,7 @@ function Hero({ ready }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: EASE, delay: 0.1 }}
         >
+          {switcher}
           <h1 id="rw-title">Leave the traffic.<br /><em>Keep the journey.</em></h1>
           <p>Verified drivers, AC or non-AC cars and fares quoted up front, to temples, hills and coastlines.</p>
           <div className="rw-ctas">

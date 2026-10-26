@@ -941,6 +941,94 @@
   .rts * { animation: none !important; transition: none !important; }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   THE CITY RIDE STORY — the home page's City hero, filling the window
+   A packed bus, a bike booked in a minute, a bus full of stares.
+   Driven by CityRideStory.jsx; the people are Person.jsx (.pp-*).
+   ═══════════════════════════════════════════════════════════════ */
+
+.crs { position: absolute; inset: 0; }
+.crs-svg { position: absolute; inset: 0; z-index: 0; display: block; width: 100%; height: 100%; }
+.crs-dip { position: absolute; inset: 0; z-index: 1; background: #fdf0e0; pointer-events: none; }
+.crs-bubble { filter: drop-shadow(0 6px 10px rgba(15, 23, 42, .2)); }
+.crs-phone { filter: drop-shadow(0 18px 22px rgba(15, 23, 42, .45)); }
+
+.crs-chip-slot { position: absolute; left: 24px; bottom: 26px; z-index: 3; pointer-events: none; }
+.crs-chip {
+  display: inline-block; padding: 9px 16px; border-radius: 999px;
+  background: rgba(255, 255, 255, .95); color: #0f172a;
+  font-size: 14px; font-weight: 800; line-height: 1.2;
+  box-shadow: 0 10px 22px -12px rgba(15, 23, 42, .65);
+}
+.crs-progress { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; height: 3px; background: #f97316; transform-origin: 0 50%; opacity: .9; }
+.crs-ctrl {
+  position: absolute; right: 24px; bottom: 22px; z-index: 3;
+  width: 42px; height: 42px; border: 0; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: rgba(255, 255, 255, .92); color: #0f172a;
+  box-shadow: 0 8px 18px -8px rgba(15, 23, 42, .6);
+  transition: transform .25s cubic-bezier(.16, 1, .3, 1), background .2s ease;
+}
+.crs-ctrl:hover { transform: scale(1.08); background: #fff; }
+.crs-ctrl:focus-visible { outline: 2px solid #f97316; outline-offset: 3px; }
+@media (max-width: 640px) {
+  .crs-chip-slot { left: 16px; bottom: 18px; }
+  .crs-chip { font-size: 12.5px; padding: 7px 13px; }
+  .crs-ctrl { right: 16px; bottom: 14px; width: 38px; height: 38px; }
+}
+
+/* the street keeps moving */
+.cs-moving .cs-wheel { animation: rts-spin .5s linear infinite; }
+.cs-moving .cs-body { animation: rts-rumble .28s ease-in-out infinite alternate; }
+.cs-cloud { animation: cs-drift 46s linear infinite; }
+.cs-glow { transform-box: fill-box; transform-origin: center; animation: cs-glow 1.6s ease-in-out infinite alternate; }
+.cs-hop { animation: cs-hop .5s cubic-bezier(.25, 1, .5, 1) both; }
+@keyframes cs-drift { from { transform: translateX(-60px); } 50% { transform: translateX(60px); } to { transform: translateX(-60px); } }
+@keyframes cs-glow { from { opacity: .15; } to { opacity: .45; } }
+@keyframes cs-hop { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+
+/* people: a walk with knees, breathing, blinking, glancing about */
+.pp-walking .pp-thigh { animation: pp-thigh .9s ease-in-out infinite; }
+.pp-walking .pp-knee { animation: pp-knee .9s linear infinite; }
+.pp-walking .pp-arm { animation: pp-arm .9s ease-in-out infinite; }
+.pp-walking .pp-fore { animation: pp-fore .9s ease-in-out infinite; }
+.pp-walking .pp-far { animation-delay: -.45s; }
+.pp-walking .pp-bob { animation: pp-bob .45s ease-in-out infinite; }
+.pp-walking .pp-skirt { transform-box: fill-box; transform-origin: 50% 0; animation: pp-skirt .45s ease-in-out infinite alternate; }
+.pp-breathe { animation: pp-breathe 3.6s ease-in-out infinite alternate; }
+.pp-idle .pp-look { animation: pp-look 7s ease-in-out infinite; }
+.pp-eyes { transform-box: fill-box; transform-origin: 50% 50%; animation: pp-blink 4.8s linear infinite; }
+.pp-talk { transform-box: fill-box; transform-origin: center; animation: rts-mouth .17s ease-in-out infinite alternate; }
+@keyframes pp-thigh { 0%, 100% { transform: rotate(-24deg); } 50% { transform: rotate(20deg); } }
+@keyframes pp-knee { 0%, 100% { transform: rotate(4deg); } 40% { transform: rotate(10deg); } 64% { transform: rotate(50deg); } 86% { transform: rotate(14deg); } }
+@keyframes pp-arm { 0%, 100% { transform: rotate(20deg); } 50% { transform: rotate(-22deg); } }
+@keyframes pp-fore { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(-36deg); } }
+@keyframes pp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes pp-skirt { from { transform: skewX(-3deg); } to { transform: skewX(3deg); } }
+@keyframes pp-breathe { from { transform: translateY(0); } to { transform: translateY(-1.3px); } }
+@keyframes pp-look { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-4deg); } 62% { transform: rotate(4deg); } }
+@keyframes pp-blink { 0%, 93%, 100% { transform: scaleY(1); } 95.5% { transform: scaleY(.08); } }
+
+.crs.is-paused * { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) {
+  .crs * { animation: none !important; transition: none !important; }
+}
+
+/* ── the City booking card's ride choice ── */
+.cb-rides { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cb-ride {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 11px 11px 10px; min-width: 0;
+  border-radius: 13px; border: 1.5px solid #ebe8e4; background: #fafaf9; cursor: pointer; text-align: left;
+  font-family: var(--ws-fb, inherit); color: var(--ink); transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+.cb-ride .pc-ic { color: var(--muted); margin-bottom: 3px; }
+.cb-ride b { font-size: 14px; font-weight: 800; }
+.cb-ride small { font-size: 11.5px; font-weight: 600; color: var(--muted); line-height: 1.3; }
+.cb-ride:hover { border-color: #fed7aa; }
+.cb-ride[aria-checked='true'] { border-color: var(--brand); background: #fff8f2; box-shadow: 0 0 0 3px rgba(249, 115, 22, .13); }
+.cb-ride[aria-checked='true'] .pc-ic { color: var(--brand-dark); }
+.cb-ride:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
 /* ═════════════  QUICK BOOKING v2  ═════════════
    Everything fits without scrolling: the route as one joined block, the day as
    Today / Tomorrow / Later, and numbers as steppers rather than chip rows.   */

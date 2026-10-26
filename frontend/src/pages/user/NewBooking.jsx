@@ -52,9 +52,16 @@ export default function NewBooking() {
   // One key per booking attempt, reused if the request is retried, so it can only book once.
   const bookingKey = useRef(actionKey())
 
+  // The home page's City card sends the picked places with their coordinates, so the fares show straight away.
+  const coord = (key) => {
+    const n = parseFloat(searchParams.get(key))
+    return Number.isFinite(n) ? n : null
+  }
   const [form, setForm] = useState(() => ({
     ...emptyForm(searchParams.get('mode') === 'city' ? 'CITY' : 'TRIP'),
+    ...(VEHICLES[searchParams.get('vehicle')] ? { vehicleType: searchParams.get('vehicle') } : {}),
     fromPlace: searchParams.get('from') || '', toPlace: searchParams.get('to') || '',
+    fromLat: coord('fromLat'), fromLon: coord('fromLon'), toLat: coord('toLat'), toLon: coord('toLon'),
     fromDate: searchParams.get('date') || '', travelMembers: Number(searchParams.get('members')) || 1,
   }))
   const [loading, setLoading] = useState(false)
