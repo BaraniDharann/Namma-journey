@@ -20,10 +20,15 @@ public class DriverStateUpdates {
     private final DriverStateStore store;
 
     /** Booking dates are Indian calendar days. */
-    private final Clock clock = Clock.system(ZoneId.of("Asia/Kolkata"));
+    private Clock clock = Clock.system(ZoneId.of("Asia/Kolkata"));
 
     public DriverStateUpdates(DriverStateStore store) {
         this.store = store;
+    }
+
+    /** Tests pin "today" to their own clock; a ride dated by a fixed clock must not age out on the real one. */
+    void setClock(Clock clock) {
+        this.clock = clock;
     }
 
     /** Vehicle, seats, City/Trip switches, online or offline. */

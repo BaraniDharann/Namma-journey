@@ -84,6 +84,8 @@ class MatchingWorkerTest {
     private CityService cityService;
     private DriverPresenceService presence;
     private DriverStateStore states;
+    private DriverCardLoader cards;
+    private DriverStateUpdates stateUpdates;
     private RideQueue queue;
     private LocalCityLock.Registry locks;
     private DispatchService dispatch;
@@ -146,12 +148,14 @@ class MatchingWorkerTest {
         presence = new DriverPresenceService(noRedis, "caffeine", properties);
         ReflectionTestUtils.setField(presence, "cityService", cityService);
 
-        states = new LocalDriverStateStore(new DriverCardLoader(driverRepository, bookingRepository));
+        cards = new DriverCardLoader(driverRepository, bookingRepository);
+        states = new LocalDriverStateStore(cards);
+        stateUpdates = new DriverStateUpdates(states);
         queue = new LocalRideQueue(() -> clock.get().millis());
         locks = new LocalCityLock.Registry();
         AfterCommitDispatcher inline = new AfterCommitDispatcher(Runnable::run);
         dispatch = new DispatchService(bookingRepository, rejectionRepository, notificationService, publisher, inline,
-                queue, new DriverStateUpdates(states));
+                queue, stateUpdates);
         at(T0);
         worker = newWorker("a", publisher);
     }
@@ -169,6 +173,9 @@ class MatchingWorkerTest {
         Clock fixed = Clock.fixed(time.atZone(IST).toInstant(), IST);
         clock.set(fixed);
         ReflectionTestUtils.setField(dispatch, "clock", fixed);
+        // The rides are dated by this clock, so "today" for driver states must be too.
+        cards.setClock(fixed);
+        stateUpdates.setClock(fixed);
     }
 
     // ---- fixtures ----

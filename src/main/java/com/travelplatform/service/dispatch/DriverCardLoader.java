@@ -35,11 +35,16 @@ public class DriverCardLoader {
     private final TravelBookingRepository bookings;
 
     /** Ride dates are Indian calendar days, as everywhere else. */
-    private final Clock clock = Clock.system(ZoneId.of("Asia/Kolkata"));
+    private Clock clock = Clock.system(ZoneId.of("Asia/Kolkata"));
 
     public DriverCardLoader(DriverRepository drivers, TravelBookingRepository bookings) {
         this.drivers = drivers;
         this.bookings = bookings;
+    }
+
+    /** Tests pin "today" to their own clock, as DispatchService does. */
+    void setClock(Clock clock) {
+        this.clock = clock;
     }
 
     public Map<Long, DriverCard> load(Collection<Long> ids) {
