@@ -15,8 +15,10 @@ import { VEHICLES, VEHICLE_ORDER, vehicleLabel } from '../../dash/vehicles'
  * layout="mini" is a small card for the top right of wide screens, in the sky
  * above the street, so the bus and the people stay in view; the default is the
  * card that sits under the story on smaller screens.
+ *
+ * dropSeed ({ text, key }) starts a Drop search from outside: the home page's place tiles.
  */
-export default function CityBooking({ layout = 'card' }) {
+export default function CityBooking({ layout = 'card', dropSeed }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [route, setRoute] = useState({ fromPlace: '', toPlace: '', fromLat: null, fromLon: null, toLat: null, toLon: null })
@@ -53,7 +55,7 @@ export default function CityBooking({ layout = 'card' }) {
           </div>
           <div className="qb-stop">
             <span className="qb-dot qb-dot-end" aria-hidden><Icon name="pin" size={13} weight="fill" /></span>
-            <PlaceAutocomplete value={route.toPlace} onChange={setTo} placeholder="Drop: where to?" />
+            <PlaceAutocomplete value={route.toPlace} onChange={setTo} placeholder="Drop: where to?" seed={dropSeed} />
           </div>
         </div>
         <div className="cb-mini-rides" role="radiogroup" aria-label="Ride with">
@@ -124,6 +126,7 @@ export default function CityBooking({ layout = 'card' }) {
               value={route.toPlace}
               onChange={setTo}
               placeholder="Drop: where are you going?"
+              seed={dropSeed}
             />
           </div>
         </div>

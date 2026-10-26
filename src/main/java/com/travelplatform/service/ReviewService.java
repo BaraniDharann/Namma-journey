@@ -58,6 +58,7 @@ public class ReviewService {
         ReviewResponse response = mapToResponse(saved);
         response.setFromPlace(booking.getFromPlace());
         response.setToPlace(booking.getToPlace());
+        response.setServiceMode(modeOf(booking));
         return response;
     }
     
@@ -78,13 +79,19 @@ public class ReviewService {
             review.getFeedback(),
             null,
             null,
-            review.getCreatedAt()
+            review.getCreatedAt(),
+            "TRIP"
         );
+    }
+
+    private static String modeOf(TravelBooking booking) {
+        return booking.getServiceMode() != null ? booking.getServiceMode().name() : "TRIP";
     }
 
     private ReviewResponse mapToResponseWithBooking(Review review) {
         String fromPlace = null;
         String toPlace = null;
+        String serviceMode = "TRIP";
         // findById can't throw a checked exception here; if Hibernate ever raises a runtime issue
         // we log it instead of silently dropping it so a regression is investigable.
         try {
@@ -92,6 +99,7 @@ public class ReviewService {
             if (booking != null) {
                 fromPlace = booking.getFromPlace();
                 toPlace = booking.getToPlace();
+                serviceMode = modeOf(booking);
             }
         } catch (Exception ex) {
             org.slf4j.LoggerFactory.getLogger(ReviewService.class)
@@ -106,7 +114,8 @@ public class ReviewService {
             review.getFeedback(),
             fromPlace,
             toPlace,
-            review.getCreatedAt()
+            review.getCreatedAt(),
+            serviceMode
         );
     }
 }

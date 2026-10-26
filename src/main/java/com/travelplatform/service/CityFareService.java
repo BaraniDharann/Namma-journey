@@ -106,6 +106,28 @@ public class CityFareService {
         return result;
     }
 
+    /**
+     * The rate card the home page shows before anyone signs in: the rates per vehicle and the
+     * longest City ride. Leaves out who last changed a fare and when.
+     */
+    public Map<String, Object> publicRates() {
+        List<Map<String, Object>> rates = new ArrayList<>();
+        for (CityFare f : all()) {
+            Map<String, Object> rate = new LinkedHashMap<>();
+            rate.put("vehicleType", f.getVehicleType().name());
+            rate.put("baseFare", f.getBaseFare());
+            rate.put("perKm", f.getPerKm());
+            rate.put("perMinute", f.getPerMinute());
+            rate.put("minimumFare", f.getMinimumFare());
+            rate.put("maxPassengers", f.getVehicleType().maxPassengers());
+            rates.add(rate);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("maxKm", maxKm);
+        result.put("rates", rates);
+        return result;
+    }
+
     private static BigDecimal amount(BigDecimal value, String what) {
         if (value == null || value.signum() < 0) {
             throw new IllegalArgumentException(what + " must be zero or more");

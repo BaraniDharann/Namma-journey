@@ -267,6 +267,7 @@ export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/prof
 // Public APIs (silent — landing page has fallbacks)
 export const getPublicReviews = () => cachedGet('/public/reviews', 5000, true)
 export const getPublicPricing = () => cachedGet('/public/pricing', 60000, true)
+export const getPublicCityFares = () => cachedGet('/public/city-fares', 60000, true)
 
 // Travel Package APIs (Public)
 export const getPublicPackages = (params = {}) => {

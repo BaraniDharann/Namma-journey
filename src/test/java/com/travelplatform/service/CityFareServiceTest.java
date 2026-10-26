@@ -87,4 +87,22 @@ class CityFareServiceTest {
         assertEquals(new BigDecimal("6.50"), service.update(VehicleType.BIKE,
                 new BigDecimal("15"), new BigDecimal("6.5"), BigDecimal.ONE, new BigDecimal("25"), 1L).getPerKm());
     }
+
+    @Test
+    @DisplayName("the public rate card lists bike, auto, car with their rates and nothing about who set them")
+    void publicRateCard() {
+        Map<String, Object> card = service.publicRates();
+
+        assertEquals(50.0, card.get("maxKm"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rates = (List<Map<String, Object>>) card.get("rates");
+        assertEquals(List.of("BIKE", "AUTO", "CAR"), rates.stream().map(r -> r.get("vehicleType")).toList());
+        Map<String, Object> bike = rates.get(0);
+        assertEquals(new BigDecimal("20"), bike.get("baseFare"));
+        assertEquals(new BigDecimal("6"), bike.get("perKm"));
+        assertEquals(new BigDecimal("1"), bike.get("perMinute"));
+        assertEquals(new BigDecimal("30"), bike.get("minimumFare"));
+        assertEquals(1, bike.get("maxPassengers"));
+        assertEquals(java.util.Set.of("vehicleType", "baseFare", "perKm", "perMinute", "minimumFare", "maxPassengers"), bike.keySet());
+    }
 }

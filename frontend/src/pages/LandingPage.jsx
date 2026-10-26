@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { getPublicPackages, getPublicReviews } from '../utils/api'
@@ -13,16 +13,27 @@ import Icon from '../components/dash/Icon'
 import { fleet, tripTypes } from '../data/journeyData'
 import { BIOMES } from '../landing/biomes'
 import { useIsCompact, useOnScreen } from '../components/motion/primitives'
+import { EASE, SectionHead, rise } from '../landing/sectionParts'
+import {
+  CityCta, CityFacts, CityFeatures, CityPlaces, CityRates, CitySteps, DEFAULT_MAX_KM, RideTimeline, useCityFares,
+} from '../landing/CitySections'
 
 // The 3D road is its own chunk: text and booking never wait for three.js.
 const RoadWorld = lazy(() => import('../components/drive/RoadWorld'))
-
-const EASE = [0.16, 1, 0.3, 1]
 
 const NAV_ITEMS = [
   { label: 'The drive', href: '#drive' },
   { label: 'Our cars', href: '#fleet' },
   { label: 'Packages', href: '#packages' },
+  { label: 'Why us', href: '#features' },
+  { label: 'Reviews', href: '#reviews' },
+]
+
+// Same anchors as the Trip page, so the footer and deep links land in either mode.
+const CITY_NAV_ITEMS = [
+  { label: 'The ride', href: '#drive' },
+  { label: 'Fares', href: '#fleet' },
+  { label: 'Places', href: '#packages' },
   { label: 'Why us', href: '#features' },
   { label: 'Reviews', href: '#reviews' },
 ]
@@ -74,7 +85,7 @@ function hasWebGL() {
 
 /* ─────────────────────────  navigation  ───────────────────────── */
 
-function Nav({ user, onDashboard }) {
+function Nav({ user, onDashboard, items }) {
   const [stuck, setStuck] = useState(false)
   const [sheet, setSheet] = useState(false)
   useEffect(() => {
@@ -95,7 +106,7 @@ function Nav({ user, onDashboard }) {
           <span>Namma <b>Journey</b></span>
         </Link>
         <div className="ws-nav-links">
-          {NAV_ITEMS.map((item) => (
+          {items.map((item) => (
             <button key={item.href} type="button" onClick={() => go(item.href)}>{item.label}</button>
           ))}
         </div>
@@ -121,7 +132,7 @@ function Nav({ user, onDashboard }) {
             transition={{ duration: 0.5, ease: EASE }}
           >
             <button type="button" className="ws-sheet-x" onClick={() => setSheet(false)} aria-label="Close menu"><Icon name="x" size={22} /></button>
-            {NAV_ITEMS.map((item) => (
+            {items.map((item) => (
               <button key={item.href} type="button" onClick={() => go(item.href)}>{item.label}</button>
             ))}
             <div className="ws-sheet-actions">
@@ -162,10 +173,9 @@ function ModeSwitch({ mode, onChange }) {
   )
 }
 
-function Hero({ ready }) {
-  const [mode, setMode] = useState('city')
-  const switcher = <ModeSwitch mode={mode} onChange={setMode} />
-  return mode === 'city' ? <CityHero ready={ready} switcher={switcher} /> : <TripHero ready={ready} switcher={switcher} />
+function Hero({ ready, mode, onMode, dropSeed }) {
+  const switcher = <ModeSwitch mode={mode} onChange={onMode} />
+  return mode === 'city' ? <CityHero ready={ready} switcher={switcher} dropSeed={dropSeed} /> : <TripHero ready={ready} switcher={switcher} />
 }
 
 /**
@@ -173,7 +183,7 @@ function Hero({ ready }) {
  * booking is a small card top right, in the sky over the street; narrower ones
  * get the full card below the story.
  */
-function CityHero({ ready, switcher }) {
+function CityHero({ ready, switcher, dropSeed }) {
   const stacked = useIsCompact('(max-width: 1099px)')
   return (
     <>
@@ -206,14 +216,14 @@ function CityHero({ ready, switcher }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: EASE, delay: 0.25 }}
             >
-              <CityBooking layout="mini" />
+              <CityBooking layout="mini" dropSeed={dropSeed} />
             </motion.div>
           )}
         </div>
       </section>
       {stacked && (
         <section id="book" className="rw-book-m" aria-label="Book a city ride">
-          <div className="ws-wrap"><CityBooking /></div>
+          <div className="ws-wrap"><CityBooking dropSeed={dropSeed} /></div>
         </section>
       )}
     </>
@@ -307,26 +317,6 @@ function TripHero({ ready, switcher }) {
 
 /* ─────────────────────────  after the drive  ───────────────────────── */
 
-function SectionHead({ title, children }) {
-  return (
-    <motion.div
-      className="ws-head"
-      initial={{ opacity: 0, y: 22 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.4 }}
-      transition={{ duration: 0.7, ease: EASE }}
-    >
-      <h2>{title}</h2>
-      {children && <p>{children}</p>}
-    </motion.div>
-  )
-}
-
-const rise = {
-  hidden: { opacity: 0, y: 24 },
-  show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.6, delay: i * 0.06, ease: EASE } }),
-}
-
 function Fleet() {
   return (
     <section id="fleet" className="ws-sec ws-cream">
@@ -368,6 +358,30 @@ export default function LandingPage() {
   const [packages, setPackages] = useState([])
   const [reviews, setReviews] = useState(DEFAULT_REVIEWS)
   const [category, setCategory] = useState('ALL')
+  // City ride is the default; ?mode=trip keeps Trip across a reload, a shared link and the back button.
+  const [params, setParams] = useSearchParams()
+  const mode = params.get('mode') === 'trip' ? 'trip' : 'city'
+  const trip = mode === 'trip'
+  const setMode = useCallback((next) => {
+    setParams((p) => {
+      const out = new URLSearchParams(p)
+      if (next === 'trip') out.set('mode', 'trip')
+      else out.delete('mode')
+      return out
+    }, { replace: true })
+  }, [setParams])
+  const fares = useCityFares()
+  const maxKm = fares?.maxKm || DEFAULT_MAX_KM
+  const [dropSeed, setDropSeed] = useState(null)
+  const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const pickPlace = (query) => {
+    setDropSeed({ text: query, key: Date.now() })
+    scrollTo('book')
+  }
+  const toTrip = () => {
+    setMode('trip')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   useEffect(() => {
     getPublicPackages().then((res) => setPackages(res.data || [])).catch(() => {})
@@ -376,7 +390,7 @@ export default function LandingPage() {
         if (res.data?.length) {
           setReviews(res.data.map((r) => ({
             userName: r.userName, rating: r.rating, comment: r.feedback || r.comment,
-            fromPlace: r.fromPlace || '', toPlace: r.toPlace || '',
+            fromPlace: r.fromPlace || '', toPlace: r.toPlace || '', serviceMode: r.serviceMode || 'TRIP',
           })))
         }
       })
@@ -385,17 +399,25 @@ export default function LandingPage() {
 
   const filtered = useMemo(() => packages.filter((p) => category === 'ALL' || p.category === category), [packages, category])
   const pkgPage = usePagination(filtered, 6)
-  const revPage = usePagination(reviews, 6)
+  // City mode shows City ride reviews once there are any; until then, every review.
+  const shownReviews = useMemo(() => {
+    if (trip) return reviews
+    const city = reviews.filter((r) => r.serviceMode === 'CITY')
+    return city.length ? city : reviews
+  }, [reviews, trip])
+  const revPage = usePagination(shownReviews, 6)
   const dashboardPath = user?.role === 'ROLE_DRIVER' ? '/driver/dashboard' : user?.role === 'ROLE_OWNER' ? '/owner/dashboard' : '/user/dashboard'
   const endIntro = useCallback(() => setIntro(false), [])
 
   return (
     <div className="ws">
       {intro && <CarAssemblyLoader onDone={endIntro} />}
-      <Nav user={user} onDashboard={() => navigate(dashboardPath)} />
+      <Nav user={user} onDashboard={() => navigate(dashboardPath)} items={trip ? NAV_ITEMS : CITY_NAV_ITEMS} />
 
-      <Hero ready={!intro} />
+      <Hero ready={!intro} mode={mode} onMode={setMode} dropSeed={dropSeed} />
 
+      {/* Trip: the long drive. City ride: the same story, told for a hop across town. */}
+      {trip ? (<>
       <MemoryAlbum />
 
       <section className="ws-arrive" aria-label="You've arrived">
@@ -505,9 +527,18 @@ export default function LandingPage() {
         </div>
       </section>
 
+      </>) : (<>
+      <RideTimeline />
+      <CityFacts maxKm={maxKm} />
+      <CityRates card={fares} />
+      <CityPlaces maxKm={maxKm} onPick={pickPlace} onTrip={toTrip} />
+      <CityFeatures />
+      <CitySteps onBook={() => scrollTo('book')} />
+      </>)}
+
       <section id="reviews" className="ws-sec ws-cream">
         <div className="ws-wrap">
-          <SectionHead title="What the road says back" />
+          <SectionHead title={trip ? 'What the road says back' : 'What riders say'} />
           <div className="ws-revs">
             {revPage.paginatedItems.map((r, i) => (
               <motion.figure key={`${r.userName}-${i}`} className="ws-rev" variants={rise} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} custom={i}>
@@ -526,6 +557,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {trip ? (
       <section className="ws-sec">
         <div className="ws-wrap">
           <div className="ws-cta">
@@ -538,6 +570,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+      ) : (
+      <CityCta onBook={() => scrollTo('book')} />
+      )}
 
       <footer className="ws-footer">
         <div className="ws-wrap">

@@ -20,4 +20,6 @@ public class ReviewResponse {
     private String fromPlace;
     private String toPlace;
     private LocalDateTime createdAt;
+    /** CITY or TRIP, from the reviewed booking; TRIP when the booking is gone. */
+    private String serviceMode = "TRIP";
 }

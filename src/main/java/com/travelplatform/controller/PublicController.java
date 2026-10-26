@@ -1,6 +1,7 @@
 package com.travelplatform.controller;
 
 import com.travelplatform.dto.ReviewResponse;
+import com.travelplatform.service.CityFareService;
 import com.travelplatform.service.ReviewService;
 import com.travelplatform.service.OwnerService;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,14 @@ public class PublicController {
 
     private final ReviewService reviewService;
     private final OwnerService ownerService;
+    private final CityFareService cityFareService;
+
+    @GetMapping("/city-fares")
+    public ResponseEntity<Map<String, Object>> getCityFares() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
+                .body(cityFareService.publicRates());
+    }
 
     @GetMapping("/reviews")
     public ResponseEntity<List<ReviewResponse>> getPublicReviews() {

@@ -59,7 +59,7 @@ async function searchPhoton(query) {
     }))
 }
 
-export default function PlaceAutocomplete({ value, onChange, placeholder, required }) {
+export default function PlaceAutocomplete({ value, onChange, placeholder, required, seed }) {
   const [query, setQuery] = useState(value || '')
   const [suggestions, setSuggestions] = useState([])
   const [showDropdown, setShowDropdown] = useState(false)
@@ -67,6 +67,7 @@ export default function PlaceAutocomplete({ value, onChange, placeholder, requir
   const [selected, setSelected] = useState(!!value)
   const debounceRef = useRef(null)
   const wrapperRef = useRef(null)
+  const inputRef = useRef(null)
 
   useEffect(() => {
     if (!value && query) {
@@ -116,6 +117,14 @@ export default function PlaceAutocomplete({ value, onChange, placeholder, requir
     }, 300)
   }
 
+  // A search started from outside ({ text, key }), e.g. a "Railway station" tile: type it in and
+  // open the suggestions, so the rider still picks the real place (and its coordinates).
+  useEffect(() => {
+    if (!seed?.text) return
+    handleInput(seed.text)
+    inputRef.current?.focus({ preventScroll: true })
+  }, [seed?.key])
+
   const handleSelect = (place) => {
     setQuery(place.shortName)
     setSelected(true)
@@ -133,6 +142,7 @@ export default function PlaceAutocomplete({ value, onChange, placeholder, requir
       <input
         className="input-field"
         placeholder={placeholder}
+        ref={inputRef}
         value={query}
         onChange={(e) => handleInput(e.target.value)}
         onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
