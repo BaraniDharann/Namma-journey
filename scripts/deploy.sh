@@ -60,6 +60,17 @@ reload_nginx() {
 }
 
 log "Deploying images tagged '$IMAGE_TAG'"
+
+# Settings first: a missing .env value is not a registry problem, and must not be reported as one.
+if [ ! -f .env ]; then
+  log "No .env here. Run this on the server, in the checkout that has the production .env."
+  exit 1
+fi
+if ! dc config --quiet; then
+  log "docker compose cannot read its settings (above). Add the missing values to this server's .env."
+  exit 1
+fi
+
 if ! dc pull backend frontend; then
   log "Pull failed. Private images? Log in once: docker login ghcr.io (see the top of this script)"
   exit 1
