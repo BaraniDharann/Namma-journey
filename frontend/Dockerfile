@@ -1,5 +1,7 @@
 # Stage 1: Build
-FROM node:20-alpine AS build
+# On the builder's own CPU even when the image is for another one (CI makes amd64 + arm64): the
+# bundle is plain static files, identical for both, and npm under emulation is very slow.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci

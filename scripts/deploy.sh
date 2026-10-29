@@ -72,7 +72,9 @@ if ! dc config --quiet; then
 fi
 
 if ! dc pull backend frontend; then
-  log "Pull failed. Private images? Log in once: docker login ghcr.io (see the top of this script)"
+  log "Pull failed - the reason is above. \"denied\"/\"unauthorized\": private images, log in once"
+  log "(docker login ghcr.io, see the top of this script). \"no matching manifest\": CI did not"
+  log "build for this server's CPU ($(uname -m)) - check the platforms in .github/workflows/main.yml."
   exit 1
 fi
 

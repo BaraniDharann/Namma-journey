@@ -104,6 +104,11 @@ jobs:
           echo "backend=${prefix}-backend" >> "$GITHUB_OUTPUT"
           echo "frontend=${prefix}-frontend" >> "$GITHUB_OUTPUT"
 
+      # The EC2 server is ARM (Graviton), this runner is x86: QEMU lets it make the arm64 image
+      # too. Only each Dockerfile's last stage runs emulated - the builds use $BUILDPLATFORM.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3 (pinned to a commit: tags can be moved)
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3 (pinned to a commit: tags can be moved)
 
@@ -121,6 +126,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ steps.names.outputs.backend }}:latest
@@ -138,6 +144,7 @@ jobs:
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
             VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}

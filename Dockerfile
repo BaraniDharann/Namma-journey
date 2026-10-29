@@ -1,5 +1,7 @@
 # Stage 1: Build
-FROM eclipse-temurin:17-jdk AS build
+# On the builder's own CPU even when the image is for another one (CI makes amd64 + arm64): the
+# jar is the same bytecode either way, and Maven under emulation would take many times longer.
+FROM --platform=$BUILDPLATFORM eclipse-temurin:17-jdk AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
