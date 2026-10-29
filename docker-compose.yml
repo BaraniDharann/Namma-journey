@@ -1,5 +1,9 @@
 services:
   postgres:
+    # Come back after a crash or an EC2 reboot (AWS maintenance, kernel updates). Without a
+    # policy nothing restarted on its own. unless-stopped: a container stopped on purpose
+    # (docker stop, scripts/deploy.sh) stays stopped.
+    restart: unless-stopped
     image: postgres:15
     env_file: .env
     # Same credentials the backend uses (DB_USERNAME / DB_PASSWORD in .env). These read
@@ -26,6 +30,10 @@ services:
       - travel-network
 
   backend:
+    restart: unless-stopped
+    # On the server: pulled, already built by CI (scripts/deploy.sh; IMAGE_TAG picks the commit).
+    # Locally, "docker compose up --build" still builds from source and tags it with this name.
+    image: ${IMAGE_PREFIX:-ghcr.io/baranidharann/namma-journey}-backend:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -45,6 +53,13 @@ services:
       # ranges lets it read the real client from nginx's X-Forwarded-For (rightmost untrusted
       # hop, see ClientIpResolver). Safe ONLY because 8080 is not reachable from outside, below.
       RATELIMIT_TRUSTED_PROXIES: ${RATELIMIT_TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16}
+      # A fixed heap instead of the JVM's default of 1/4 of the host's RAM per JVM. During a
+      # rolling deploy (scripts/deploy.sh) two backends run side by side for a minute or two;
+      # uncapped, they plus Postgres could run a 2 GB server out of memory, and the kernel's OOM
+      # killer picks a victim - possibly Postgres. 512m heap is roughly 750 MB per JVM in total.
+      # ExitOnOutOfMemoryError: a JVM out of heap is broken for good; exit and let restart: bring
+      # back a clean one instead of limping on, half its threads dead.
+      JAVA_TOOL_OPTIONS: ${BACKEND_JAVA_OPTS:--Xms256m -Xmx512m -XX:MaxMetaspaceSize=192m -XX:+ExitOnOutOfMemoryError}
     # Loopback only: the public way in is nginx on :80, which serves /api from the same origin.
     # Published on all interfaces, anyone could skip nginx, hit 8080 directly with a forged
     # X-Forwarded-For, and - arriving from the Docker gateway, a trusted range - pick a fresh
@@ -64,6 +79,8 @@ services:
       - travel-network
 
   frontend:
+    restart: unless-stopped
+    image: ${IMAGE_PREFIX:-ghcr.io/baranidharann/namma-journey}-frontend:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -75,11 +92,15 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      # Wait for a backend that can serve (Dockerfile HEALTHCHECK = readiness), so the first
+      # requests after "up" are not 502s while Flyway is still running.
+      backend:
+        condition: service_healthy
     networks:
       - travel-network
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     # requirepass: Redis holds cache entries the backend deserialises and live trip positions.
     # With no password, anything that could reach the port could read where every passenger is
@@ -108,6 +129,7 @@ services:
   # Grafana shows the "Namma Journey - Overview" dashboard (monitoring/grafana/dashboards).
   # Both are loopback-only: reach them through an SSH tunnel on a server, never publicly.
   prometheus:
+    restart: unless-stopped
     image: prom/prometheus:v2.55.1
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -129,6 +151,7 @@ services:
       - travel-network
 
   grafana:
+    restart: unless-stopped
     image: grafana/grafana:11.3.0
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}

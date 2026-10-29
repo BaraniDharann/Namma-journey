@@ -27,7 +27,7 @@ public class RazorpayGateway {
     private static final Logger log = LoggerFactory.getLogger(RazorpayGateway.class);
 
     private final RazorpayProperties properties;
-    private final RestTemplate http = ExternalHttpClients.forThirdPartyApis();
+    private final RestTemplate http = ExternalHttpClients.forThirdPartyApis("razorpay");
 
     public RazorpayGateway(RazorpayProperties properties) {
         this.properties = properties;

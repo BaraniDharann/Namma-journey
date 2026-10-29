@@ -26,6 +26,10 @@ USER appuser
 VOLUME ["/app/uploads"]
 
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-  CMD curl -f http://localhost:8080/api/health || exit 1
+# Readiness, not liveness: it turns healthy only once Flyway has run and the database answers
+# (management.endpoint.health.group.readiness), and drops during graceful shutdown, so the
+# deploy script never moves traffic onto a replica that cannot serve it. start-period covers
+# boot + migrations without counting them as failures.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=90s --retries=3 \
+  CMD curl -fs http://localhost:8080/actuator/health/readiness || exit 1
 ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -41,6 +41,7 @@ services:
         VITE_OSRM_BASE_URL: /osrm
 
   rabbitmq:
+    restart: unless-stopped
     image: rabbitmq:3.13-management-alpine
     # The STOMP plugin is what the backend's broker relay speaks (port 61613).
     command: ["sh", "-c", "rabbitmq-plugins enable --offline rabbitmq_stomp && exec docker-entrypoint.sh rabbitmq-server"]
@@ -63,6 +64,7 @@ services:
   # Self-hosted routing. The map data must be prepared once before this starts - see
   # docs/guides/OSRM_SETUP.md (download a Geofabrik extract, osrm-extract/partition/customize).
   osrm:
+    restart: unless-stopped
     image: ghcr.io/project-osrm/osrm-backend:v5.27.1
     command: ["osrm-routed", "--algorithm", "mld", "--max-table-size", "1000", "/data/region.osrm"]
     volumes:

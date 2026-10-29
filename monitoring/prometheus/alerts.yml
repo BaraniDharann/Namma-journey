@@ -5,7 +5,9 @@ groups:
   - name: namma-journey
     rules:
       - alert: BackendDown
-        expr: up{job="namma-backend"} == 0
+        # Replicas are discovered through DNS, so with every backend gone there is no target and
+        # no "up" series at all - absent() catches that; the sum catches all targets failing.
+        expr: sum(up{job="namma-backend"}) < 1 or absent(up{job="namma-backend"})
         for: 1m
         labels: { severity: critical }
         annotations:
@@ -64,6 +66,25 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "Background jobs keep failing and retrying"
+
+      - alert: ThirdPartyCircuitOpen
+        # A provider (razorpay, telegram, osrm-eta, routing, places) kept failing, so calls to it
+        # are refused at once (ExternalHttpClients). razorpay open = no online payments; telegram
+        # open = drivers not pinged; osrm-eta/routing/places = straight-line estimates only.
+        expr: max by (name) (resilience4j_circuitbreaker_state{state="open"}) == 1
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.name }} is failing - its circuit breaker is open and calls fail fast"
+
+      - alert: ThirdPartyBulkheadFull
+        # 20 calls to one provider in flight at once on an instance: it is slow, not down, and
+        # further calls are being refused so it cannot hold every request thread.
+        expr: min by (name) (resilience4j_bulkhead_available_concurrent_calls) == 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.name }} is slow - its bulkhead is full and extra calls are refused"
 
       - alert: HeavyRateLimiting
         # Sustained 429s: either an attack, or limits set too tight for real traffic.

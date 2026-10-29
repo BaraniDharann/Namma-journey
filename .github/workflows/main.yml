@@ -81,44 +81,41 @@ jobs:
           name: frontend-dist
           path: frontend/dist
 
-  # Publishing needs Docker Hub credentials, which forks and outside contributors
-  # never have. Without this gate the docker job below fails on every fork PR and the
-  # repository looks broken to the exact people we want opening pull requests.
-  docker-credentials:
-    name: Check Docker Credentials
-    runs-on: ubuntu-latest
-    outputs:
-      available: ${{ steps.check.outputs.available }}
-    steps:
-      - id: check
-        run: |
-          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DOCKERHUB_USERNAME / DOCKERHUB_TOKEN are not set — skipping image publish."
-          fi
-
+  # Images are built here, never on the server: the Maven and Vite builds were the biggest memory
+  # spikes on a 2 GB EC2, and the server now only runs "docker pull" (scripts/deploy.sh).
+  # GitHub Container Registry needs no secrets (the workflow's own GITHUB_TOKEN can push) and is
+  # free for public images. Forks never push to this repository's main, so no credential gate.
   docker:
     name: Build & Push Docker Images
-    needs: [backend, frontend, docker-credentials]
+    needs: [backend, frontend]
     runs-on: ubuntu-latest
-    if: >-
-      github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' &&
-      needs.docker-credentials.outputs.available == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 (pinned to a commit: tags can be moved)
+
+      # Registry paths must be lowercase; the owner (BaraniDharann) is not.
+      - name: Image names
+        id: names
+        run: |
+          prefix="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/namma-journey"
+          echo "backend=${prefix}-backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=${prefix}-frontend" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3 (pinned to a commit: tags can be moved)
 
-      - name: Log in to Docker Hub
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3 (pinned to a commit: tags can be moved)
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Two tags each: the commit sha, which a deploy or a rollback names exactly
+      # (scripts/deploy.sh <sha>), and latest, the default.
       - name: Build & push backend image
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5 (pinned to a commit: tags can be moved)
         with:
@@ -126,19 +123,29 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/namma-journey-backend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/namma-journey-backend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ steps.names.outputs.backend }}:latest
+            ${{ steps.names.outputs.backend }}:${{ github.sha }}
+          # Links the package to this repository on GitHub (its page, its permissions).
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
 
+      # VITE_* are inlined into the bundle at build time, so they come in as build args. They are
+      # public by nature (they ship to every browser), so repository variables, not secrets:
+      # Settings -> Secrets and variables -> Actions -> Variables. Unset ones build as empty.
       - name: Build & push frontend image
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5 (pinned to a commit: tags can be moved)
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
+          build-args: |
+            VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
+            VITE_OSRM_BASE_URL=${{ vars.VITE_OSRM_BASE_URL }}
+            VITE_PHOTON_BASE_URL=${{ vars.VITE_PHOTON_BASE_URL }}
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/namma-journey-frontend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/namma-journey-frontend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ steps.names.outputs.frontend }}:latest
+            ${{ steps.names.outputs.frontend }}:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,scope=frontend,mode=max

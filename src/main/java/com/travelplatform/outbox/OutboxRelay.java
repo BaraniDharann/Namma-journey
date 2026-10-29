@@ -5,8 +5,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PreDestroy;
+
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Moves due outbox rows to their transport: runs them here ({@code in-process}) or sends them
@@ -27,12 +34,30 @@ public class OutboxRelay {
     private final OutboxTransport transport;
     private final OutboxProperties properties;
 
+    /**
+     * How long one batch may run. Under the claim lease, so a job is never handed to a second
+     * instance while this one is still working on it.
+     */
+    static final Duration BATCH_DEADLINE = OutboxStore.LEASE.minusSeconds(30);
+
+    private final ExecutorService workers;
+
     public OutboxRelay(OutboxStore store, OutboxTransport transport, OutboxProperties properties) {
         this.store = store;
         this.transport = transport;
         this.properties = properties;
+        this.workers = Executors.newFixedThreadPool(Math.max(1, properties.getWorkers()), r -> {
+            Thread t = new Thread(r, "outbox-worker");
+            t.setDaemon(true);
+            return t;
+        });
     }
 
+    /**
+     * Fixed delay and waits for the whole batch, so batches never overlap. Jobs of a batch run in
+     * parallel: they used to run one after another, and one hung SMTP connection stalled every
+     * refund queued behind it.
+     */
     @Scheduled(fixedDelayString = "${app.outbox.poll-interval-ms:2000}",
                initialDelayString = "${app.outbox.initial-delay-ms:10000}")
     public void relay() {
@@ -43,7 +68,28 @@ public class OutboxRelay {
             log.warn("Outbox poll failed: {}", e.toString());
             return;
         }
-        due.forEach(this::deliver);
+        if (due.isEmpty()) {
+            return;
+        }
+        List<Callable<Void>> deliveries = new ArrayList<>(due.size());
+        for (OutboxJob job : due) {
+            deliveries.add(() -> {
+                deliver(job);
+                return null;
+            });
+        }
+        try {
+            // Anything still running at the deadline is interrupted; its lease lapses and the job
+            // is claimed again - delivery is at-least-once either way, as with SQS.
+            workers.invokeAll(deliveries, BATCH_DEADLINE.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @PreDestroy
+    void stop() {
+        workers.shutdownNow();
     }
 
     void deliver(OutboxJob job) {

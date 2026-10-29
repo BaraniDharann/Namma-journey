@@ -33,7 +33,7 @@ public class PlaceSearchService {
     private String photonBaseUrl;
 
     // Timeout-bounded: a hanging third party must not pin a request thread. See ExternalHttpClients.
-    private final RestTemplate restTemplate = ExternalHttpClients.forThirdPartyApis();
+    private final RestTemplate restTemplate = ExternalHttpClients.forThirdPartyApis("places");
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**

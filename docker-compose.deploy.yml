@@ -1,0 +1,12 @@
+# Server overlay used by scripts/deploy.sh (rolling deploys). Never needed locally.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.deploy.yml ...
+#   (with docker-compose.prod.yml too when DEPLOY_PROD=1)
+#
+# The backend publishes no host port here. A rolling deploy runs the new backend next to the
+# old one for a minute or two, and two containers cannot both bind 127.0.0.1:8080. nginx reaches
+# every backend over travel-network, so nothing outside used that port anyway; for a direct look
+# on the server: docker compose exec backend curl -s localhost:8080/api/health
+services:
+  backend:
+    ports: !reset []

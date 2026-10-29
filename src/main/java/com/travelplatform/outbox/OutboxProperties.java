@@ -20,6 +20,8 @@ public class OutboxProperties {
     private int batchSize = 20;
     /** In-process only: after this many failed attempts a job is marked DEAD. SQS uses its redrive policy. */
     private int maxAttempts = 8;
+    /** Jobs of one batch delivered at once, so one slow SMTP or Razorpay call cannot hold up the rest. */
+    private int workers = 4;
     private final Sqs sqs = new Sqs();
 
     public boolean usesSqs() {
@@ -55,5 +57,7 @@ public class OutboxProperties {
     public void setBatchSize(int batchSize) { this.batchSize = batchSize; }
     public int getMaxAttempts() { return maxAttempts; }
     public void setMaxAttempts(int maxAttempts) { this.maxAttempts = maxAttempts; }
+    public int getWorkers() { return workers; }
+    public void setWorkers(int workers) { this.workers = workers; }
     public Sqs getSqs() { return sqs; }
 }

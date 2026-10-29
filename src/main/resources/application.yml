@@ -15,9 +15,17 @@ spring:
       maximum-pool-size: 20
       minimum-idle: 5
       idle-timeout: 300000
-      connection-timeout: 20000
+      # A request waiting for a pooled connection fails after 3s instead of 20s: when the pool is
+      # exhausted, 20s waits piled every Tomcat thread up behind it and the app looked hung
+      # rather than overloaded. A fast 503 sheds load and shows up in metrics.
+      connection-timeout: 3000
       max-lifetime: 1200000
       leak-detection-threshold: 60000
+      # No query or lock wait may hold a connection indefinitely: one runaway report or one
+      # row-lock queue used to pin connections until the pool was gone. 15s is far above any
+      # request query; lock waits surface as CannotAcquireLockException, which the dispatch and
+      # booking paths already treat as "retry next round". Flyway lifts both (init-sqls below).
+      connection-init-sql: "SET statement_timeout = '15s'; SET lock_timeout = '5s'"
 
   flyway:
     enabled: true
@@ -31,6 +39,9 @@ spring:
     # Refuse to start against a database whose applied migrations do not match these files,
     # instead of silently drifting.
     validate-on-migrate: true
+    # Migrations may rewrite whole tables or wait for live traffic's locks; the request-sized
+    # timeouts set on every pooled connection (hikari.connection-init-sql) must not abort them.
+    init-sqls: "SET statement_timeout = 0; SET lock_timeout = 0"
 
   jpa:
     hibernate:
@@ -80,6 +91,11 @@ spring:
           auth: true
           starttls:
             enable: true
+          # JavaMail waits forever by default. Mail goes out from the outbox, so one hung SMTP
+          # connection used to stall every job queued behind it - refunds included.
+          connectiontimeout: 5000
+          timeout: 10000
+          writetimeout: 10000
 
   # Async task executor
   task:
@@ -215,6 +231,8 @@ app:
     transport: ${OUTBOX_TRANSPORT:in-process}
     poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:2000}
     max-attempts: ${OUTBOX_MAX_ATTEMPTS:8}
+    # Jobs of one batch delivered in parallel: one slow email no longer delays a refund behind it.
+    workers: ${OUTBOX_WORKERS:4}
     sqs:
       queue-url: ${OUTBOX_SQS_QUEUE_URL:}
       region: ${OUTBOX_SQS_REGION:ap-south-1}

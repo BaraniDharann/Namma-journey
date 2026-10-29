@@ -74,6 +74,38 @@ class OutboxRelayTest {
     }
 
     @Test
+    @DisplayName("a slow job does not hold up the rest of its batch")
+    void slowJobDoesNotBlockOthers() throws Exception {
+        OutboxJob slow = new OutboxJob(1, "email", "{}", 1);
+        OutboxJob refund = new OutboxJob(2, "razorpay-refund", "{}", 1);
+        when(store.claimDue(anyInt())).thenReturn(List.of(slow, refund));
+        java.util.concurrent.CountDownLatch refundDone = new java.util.concurrent.CountDownLatch(1);
+        org.mockito.Mockito.doAnswer(inv -> {
+            // Finishes only once the refund behind it has been delivered: run one after the
+            // other, as before, this would wait out the latch and fail.
+            if (!refundDone.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                throw new IllegalStateException("refund was stuck behind the slow job");
+            }
+            return null;
+        }).when(transport).deliver(slow);
+        org.mockito.Mockito.doAnswer(inv -> {
+            refundDone.countDown();
+            return null;
+        }).when(transport).deliver(refund);
+
+        relay.relay();
+
+        verify(store).markDone(1);
+        verify(store).markDone(2);
+    }
+
+    @Test
+    @DisplayName("a batch always finishes inside the claim lease")
+    void batchDeadlineUnderLease() {
+        assertEquals(true, OutboxRelay.BATCH_DEADLINE.compareTo(OutboxStore.LEASE) < 0);
+    }
+
+    @Test
     @DisplayName("backoff doubles from 20s and stops at an hour")
     void backoffGrows() {
         assertEquals(Duration.ofSeconds(20), OutboxRelay.backoff(1));

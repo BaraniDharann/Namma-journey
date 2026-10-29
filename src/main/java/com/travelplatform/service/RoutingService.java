@@ -48,7 +48,7 @@ public class RoutingService {
     private GraphHopper hopper;
     private boolean initialized = false;
     // Timeout-bounded: a hanging third party must not pin a request thread. See ExternalHttpClients.
-    private final RestTemplate restTemplate = ExternalHttpClients.forThirdPartyApis();
+    private final RestTemplate restTemplate = ExternalHttpClients.forThirdPartyApis("routing");
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     @PostConstruct

@@ -70,3 +70,6 @@ scripts/db-backup-*.sql
 
 # Prepared OSRM map data (docs/guides/OSRM_SETUP.md) - hundreds of MB, regenerated from Geofabrik
 osrm-data/
+
+# scripts/deploy.sh: which image tag went live when (for rollbacks); per server.
+.deploy-history

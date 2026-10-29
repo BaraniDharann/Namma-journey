@@ -42,7 +42,7 @@ public class OsrmEtaService implements EtaService {
 
     public OsrmEtaService(HaversineEtaService fallback,
                           @Value("${routing.osrm.base-url}") String baseUrl) {
-        this(fallback, baseUrl, ExternalHttpClients.forThirdPartyApis());
+        this(fallback, baseUrl, ExternalHttpClients.forThirdPartyApis("osrm-eta"));
     }
 
     OsrmEtaService(HaversineEtaService fallback, String baseUrl, RestTemplate http) {

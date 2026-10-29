@@ -54,7 +54,7 @@ public class TelegramClient {
         this.events = events;
         // Timeout-bounded: an unresponsive Telegram must not pin the request thread that is
         // completing a booking assignment. See ExternalHttpClients.
-        this.restTemplate = ExternalHttpClients.forThirdPartyApis();
+        this.restTemplate = ExternalHttpClients.forThirdPartyApis("telegram");
     }
 
     /**
