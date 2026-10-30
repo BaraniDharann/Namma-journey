@@ -79,6 +79,16 @@ class CityFareServiceTest {
     }
 
     @Test
+    @DisplayName("V25's auto fare is the Bengaluru meter: Rs 36 for the first 2 km, Rs 18 a km after")
+    void autoMatchesBengaluruMeter() {
+        CityFare meter = fare(VehicleType.AUTO, "0", "18", "0", "36");
+        assertEquals(new BigDecimal("36.00"), CityFareService.priced(meter, 1.2, 5));
+        assertEquals(new BigDecimal("36.00"), CityFareService.priced(meter, 2, 6));
+        assertEquals(new BigDecimal("90.00"), CityFareService.priced(meter, 5, 15));   // 36 + 18 x 3
+        assertEquals(new BigDecimal("180.00"), CityFareService.priced(meter, 10, 30)); // 36 + 18 x 8
+    }
+
+    @Test
     @DisplayName("the owner cannot set a negative fare")
     void refusesNegativeFare() {
         when(repository.findById(VehicleType.BIKE)).thenReturn(Optional.empty());
