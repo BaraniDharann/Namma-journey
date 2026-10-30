@@ -270,6 +270,24 @@ app:
     webhook-secret: ${TELEGRAM_WEBHOOK_SECRET:}
     api-base-url: ${TELEGRAM_API_BASE_URL:https://api.telegram.org}
 
+  safety:
+    # Passenger ride updates and the mid-trip "are you safe?" check, sent over the same Telegram
+    # bot as driver dispatch (free). Works in-app even with Telegram off. See SafetyProperties.
+    enabled: ${SAFETY_ENABLED:true}
+    # The public share-trip link is <public-base-url>/trip/<token>.
+    public-base-url: ${PUBLIC_BASE_URL:https://nammajourneys.site}
+    # Telegram group that receives SOS alerts: create a group, add the bot, and put the group's
+    # id here (a negative number). Blank = SOS goes to the owner's in-app notifications only.
+    ops-chat-id: ${SAFETY_OPS_CHAT_ID:}
+    first-check-after: ${SAFETY_FIRST_CHECK_AFTER:10m}
+    check-interval: ${SAFETY_CHECK_INTERVAL:25m}
+    reminder-after: 2m
+    escalate-after: 4m
+    stopped-for: 5m
+    gps-silent-for: 3m
+    overdue-factor: 1.5
+    monitor-interval-ms: ${SAFETY_MONITOR_INTERVAL_MS:30000}
+
   ratelimit:
     # Proxies whose X-Forwarded-For / X-Real-IP headers may be believed, as literal
     # addresses or CIDR blocks ("*" trusts every peer). EMPTY BY DEFAULT ON PURPOSE:

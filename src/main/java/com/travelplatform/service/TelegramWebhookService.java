@@ -42,6 +42,14 @@ public class TelegramWebhookService {
     private final TelegramLinkService linkService;
     private final TelegramClient telegramClient;
 
+    // Passenger side of the same bot: linking, Safe / Unsafe answers, /sos. Field-injected so the
+    // tests that build this service by hand still compile; null there, and passengers are ignored.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private RiderTelegramLinkService riderLinkService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private RideSafetyService rideSafetyService;
+
     public TelegramWebhookService(DriverRepository driverRepository,
                                   DriverService driverService,
                                   TelegramLinkService linkService,
@@ -70,6 +78,9 @@ public class TelegramWebhookService {
                 Map<String, Object> chat = asMap(chatMember.get("chat"));
                 if (newMember != null && chat != null && "kicked".equals(newMember.get("status"))) {
                     linkService.unlinkChat(asId(chat.get("id")));
+                    if (riderLinkService != null) {
+                        riderLinkService.unlinkChat(asId(chat.get("id")));
+                    }
                 }
                 return;
             }
@@ -99,27 +110,66 @@ public class TelegramWebhookService {
             String[] parts = text.split("\\s+", 2);
             String token = parts.length > 1 ? parts[1].trim() : "";
             handleStart(telegramUserId, token);
+        } else if (text.startsWith("/sos")) {
+            // A passenger in trouble. Answered even when we cannot match them to a trip: the 112
+            // line is the part that matters most then.
+            String reply = rideSafetyService == null
+                    ? "If you are in danger, call <b>112</b> now."
+                    : rideSafetyService.sosFromTelegram(telegramUserId);
+            if (reply != null) {
+                telegramClient.sendMessage(telegramUserId, reply, List.of());
+            }
         } else if (text.startsWith("/status")) {
             String reply = findLinkedDriver(telegramUserId)
                     .map(d -> "✅ Linked as <b>" + escapeHtml(d.getName()) + "</b>. "
                             + "You will get new trips here.")
-                    .orElse("❌ This Telegram account is not linked to a driver yet. "
-                            + "Ask the owner for your link.");
+                    .orElseGet(() -> riderLinkService != null && riderLinkService.isChatLinked(telegramUserId)
+                            ? "✅ Linked as a passenger. Ride updates and safety checks will arrive here."
+                            : "❌ This Telegram account is not linked yet. Drivers: ask the owner for your "
+                                    + "link. Passengers: open Profile → Ride safety in the app.");
             telegramClient.sendMessage(telegramUserId, reply, List.of());
         }
     }
 
-    /** Redeems an onboarding token and reports the outcome back into the chat. */
+    /**
+     * Redeems an onboarding token and reports the outcome back into the chat. A token that is
+     * not a driver's is tried as a passenger's, then as an emergency contact's invite.
+     */
     private void handleStart(String telegramUserId, String token) {
         TelegramLinkService.RedeemResult result = linkService.redeem(telegramUserId, token);
+        if (result.status() == TelegramLinkService.Status.INVALID && riderLinkService != null) {
+            Optional<RiderTelegramLinkService.Redeemed> rider = riderLinkService.redeemUser(telegramUserId, token)
+                    .or(() -> riderLinkService.redeemContact(telegramUserId, token));
+            if (rider.isPresent()) {
+                telegramClient.sendMessage(telegramUserId, riderStartReply(rider.get()), List.of());
+                return;
+            }
+        }
         telegramClient.sendMessage(telegramUserId, startReply(result), List.of());
+    }
+
+    private String riderStartReply(RiderTelegramLinkService.Redeemed r) {
+        return switch (r.outcome()) {
+            case USER_LINKED -> "✅ <b>Connected, " + escapeHtml(r.name()) + "!</b>\n\n"
+                    + "You'll get ride updates here: when a driver accepts, a live map once the trip "
+                    + "starts, and a quick <b>Are you safe?</b> check during the ride.\n\n"
+                    + "If you ever feel unsafe on a trip, send /sos here.";
+            case CONTACT_LINKED -> "✅ <b>Thanks, " + escapeHtml(r.name()) + ".</b>\n\n"
+                    + "You are now an emergency contact for <b>" + escapeHtml(r.passengerName()) + "</b>. "
+                    + "If they press SOS on a Namma Journey ride, you'll get an alert here with a link "
+                    + "to watch the car live. Nothing else will be sent to you.";
+            case EXPIRED -> "❌ This link has expired. Please ask for a new one in the app.";
+            case ALREADY_LINKED_TO_OTHER -> "❌ This Telegram account is already connected to another "
+                    + "passenger account.";
+        };
     }
 
     private String startReply(TelegramLinkService.RedeemResult result) {
         return switch (result.status()) {
             case NO_TOKEN -> "👋 Welcome to Namma Journey.\n\n"
-                    + "To receive trips here, open the personal link the owner gave you. "
-                    + "This bot cannot link your account without it.";
+                    + "Drivers: open the personal link the owner gave you. Passengers: open "
+                    + "Profile → Ride safety in the app and tap Connect Telegram. "
+                    + "This bot cannot link your account without that link.";
             case INVALID -> "❌ This link is not valid or has already been used. "
                     + "Please ask the owner to send you a new one.";
             case EXPIRED -> "❌ This link has expired. "
@@ -144,6 +194,19 @@ public class TelegramWebhookService {
 
         if (telegramUserId == null) {
             telegramClient.answerCallbackQuery(callbackId, "Could not identify you.");
+            return;
+        }
+
+        // A passenger's Safe / Unsafe answer. Handled before the driver lookup: passengers are not
+        // drivers. The safety service resolves who is answering from the Telegram id, not the payload.
+        if (RideSafetyService.isSafetyCallback(data) && rideSafetyService != null) {
+            String toast;
+            try {
+                toast = rideSafetyService.answerFromTelegram(telegramUserId, data, messageId);
+            } catch (org.springframework.security.access.AccessDeniedException e) {
+                toast = "This check is not for your account.";
+            }
+            telegramClient.answerCallbackQuery(callbackId, toast);
             return;
         }
 

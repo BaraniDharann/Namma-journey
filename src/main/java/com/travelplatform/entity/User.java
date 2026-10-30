@@ -106,7 +106,25 @@ public class User {
     
     @Column(nullable = false)
     private String role = "ROLE_USER";
-    
+
+    /**
+     * Telegram chat for ride updates and safety checks, or null until the passenger opens the
+     * bot from their personal link. Optional for passengers (unlike drivers): null only means
+     * they get in-app alerts alone. See V23.
+     */
+    @Column(name = "telegram_chat_id", length = 32)
+    private String telegramChatId;
+
+    @Column(name = "telegram_linked_at")
+    private LocalDateTime telegramLinkedAt;
+
+    /** Single-use, expiring credential behind the passenger's connect link; cleared on redemption. */
+    @Column(name = "telegram_link_token", length = 64)
+    private String telegramLinkToken;
+
+    @Column(name = "telegram_link_token_expires_at")
+    private LocalDateTime telegramLinkTokenExpiresAt;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -36,6 +36,7 @@ const OwnerProfile   = lazy(() => import('./pages/owner/OwnerProfile'))
 const OwnerPackages  = lazy(() => import('./pages/owner/OwnerPackages'))
 const OwnerPackageBookings = lazy(() => import('./pages/owner/OwnerPackageBookings'))
 const PackageDetail  = lazy(() => import('./pages/PackageDetail'))
+const SharedTripPage = lazy(() => import('./pages/SharedTripPage'))
 const UserPackageBookings = lazy(() => import('./pages/user/UserPackageBookings'))
 
 function PageLoader() {
@@ -120,6 +121,8 @@ function AppRoutes() {
         <Route path="/owner/package-bookings" element={<ProtectedRoute role="ROLE_OWNER"><OwnerPackageBookings /></ProtectedRoute>} />
 
         <Route path="/packages/:id" element={<PackageDetail />} />
+        {/* Public: family opens this from a shared trip link or an SOS alert, without logging in. */}
+        <Route path="/trip/:token" element={<SharedTripPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </PageFade>

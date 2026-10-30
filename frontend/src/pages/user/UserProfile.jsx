@@ -6,6 +6,7 @@ import { needsMobileNumber } from '../../components/MobileNumberGate'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill } from '../../components/dash/ui'
 import { useCelebrate } from '../../components/celebrate/Celebration'
+import RideSafetyPanel from '../../components/safety/RideSafetyPanel'
 
 const navItems = [
   { path: '/user/dashboard', icon: '', label: 'Dashboard' },
@@ -160,6 +161,8 @@ export default function UserProfile() {
             </div>
           )}
         </Panel>
+
+        <RideSafetyPanel userId={user.userId} />
       </div>
     </DashboardLayout>
   )
