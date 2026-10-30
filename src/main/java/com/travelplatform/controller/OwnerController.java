@@ -40,6 +40,7 @@ public class OwnerController {
     private final com.travelplatform.service.CityService cityService;
     private final com.travelplatform.service.DriverVerificationService driverVerificationService;
     private final com.travelplatform.service.DriverLedgerService ledgerService;
+    private final com.travelplatform.service.DriverDuesService duesService;
 
     /** Self-signed-up drivers waiting for (or past) review; oldest first. */
     @GetMapping("/driver-applications")
@@ -259,6 +260,27 @@ public class OwnerController {
         }
         return ResponseEntity.ok(ledgerService.recordTransfer(driverId, type, amount,
                 body.get("reference"), body.get("note"), "owner:" + principal.getName()));
+    }
+
+    /** Commission payments drivers submitted from the app, waiting for the owner to check the bank. */
+    @GetMapping("/dues/pending")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<com.travelplatform.service.DriverDuesService.PendingRow>> getPendingDues() {
+        return ResponseEntity.ok(duesService.pending());
+    }
+
+    @PostMapping("/dues/{paymentId}/confirm")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.service.DriverDuesService.PaymentRow> confirmDues(
+            @PathVariable Long paymentId, java.security.Principal principal) {
+        return ResponseEntity.ok(duesService.confirm(paymentId, "owner:" + principal.getName()));
+    }
+
+    @PostMapping("/dues/{paymentId}/reject")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.service.DriverDuesService.PaymentRow> rejectDues(
+            @PathVariable Long paymentId, java.security.Principal principal) {
+        return ResponseEntity.ok(duesService.reject(paymentId, "owner:" + principal.getName()));
     }
 
     @GetMapping("/payments/pending")

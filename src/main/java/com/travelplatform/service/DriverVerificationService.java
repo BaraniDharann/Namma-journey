@@ -96,6 +96,7 @@ public class DriverVerificationService {
         d.setRejectionReason(reason);
         d.setReviewedAt(now);
         d.setReviewedBy(ownerId);
+        d.setAutoApproveAt(null);
     }
 
     // Immediate, not after commit: a stale "approved" can only outlive the decision by a few ms.

@@ -143,6 +143,11 @@ function ApplicationCard({ app, tab, busy, onApprove, onReject, onView }) {
           {app.vehicleNumber && <span className="pc-pill">{app.vehicleNumber}</span>}
           {tab === 'APPROVED' && <span className="pc-pill pc-pill-ok">Approved</span>}
           {tab === 'REJECTED' && <span className="pc-pill pc-pill-stop">Rejected</span>}
+          {tab === 'UNDER_REVIEW' && (app.autoApproveInMinutes != null
+            ? <span className="pc-pill" title="Approved automatically if its checks pass, unless you reject it">
+                <Icon name="clock" size={13} /> Auto-approves {app.autoApproveInMinutes > 0 ? `in ${app.autoApproveInMinutes} min` : 'now'}
+              </span>
+            : <span className="pc-pill" title="Held, failed an automatic check, or re-uploaded after a rejection">Needs your decision</span>)}
         </div>
       </div>
 

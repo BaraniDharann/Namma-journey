@@ -3,6 +3,7 @@ import { getDriverEarnings, setDriverPayoutUpi } from '../../utils/api'
 import Icon from '../dash/Icon'
 import { Panel, Skeleton } from '../dash/ui'
 import { inr } from '../../dash/metrics'
+import PayDuesCard from './PayDuesCard'
 
 const LINE = {
   RIDE_EARNING: 'Ride paid online',
@@ -75,6 +76,9 @@ export default function EarningsPanel({ driverId }) {
               <small style={{ color: 'var(--pc-muted)', fontSize: 11.5 }}>Stored encrypted. Only the owner sees it in full, to pay you.</small>
             </div>
           </div>
+
+          {/* Owes commission (or has payments on record): pay the owner's UPI here, then give the UTR. */}
+          <PayDuesCard driverId={driverId} />
 
           {data?.recent?.length > 0 && (
             <div style={{ overflowX: 'auto' }}>

@@ -274,6 +274,12 @@ export const createDriverTelegramLink = (driverId) => api.post(`/owner/drivers/$
 export const getDriverProfile = (driverId) => api.get(`/driver/${driverId}/profile`)
 export const getDriverEarnings = (driverId) => api.get(`/driver/${driverId}/earnings`)
 export const setDriverPayoutUpi = (driverId, upiId) => api.put(`/driver/${driverId}/payout-upi`, { upiId })
+// Commission a driver owes on cash rides, paid to the owner's UPI and confirmed by the owner
+export const getDriverDues = (driverId) => api.get(`/driver/${driverId}/dues`)
+export const submitDriverDuesPayment = (driverId, amount, utr) => api.post(`/driver/${driverId}/dues/payments`, { amount, utr })
+export const getPendingDues = () => api.get('/owner/dues/pending')
+export const confirmDues = (paymentId) => api.post(`/owner/dues/${paymentId}/confirm`)
+export const rejectDues = (paymentId) => api.post(`/owner/dues/${paymentId}/reject`)
 export const toggleDriverAvailability = (driverId, status) => api.put(`/driver/${driverId}/availability`, { status }).then(res => { invalidateCache('driver'); return res })
 export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/profile`, data).then(res => { invalidateCache('profile'); return res })
 

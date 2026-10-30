@@ -33,9 +33,21 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
 
     List<Driver> findByFleetAndEmailVerifiedFalseAndSubmittedAtBefore(Driver.Fleet fleet, LocalDateTime before);
 
-    // Conditional moves: the WHERE on the expected status is what refuses a stale decision (no @Version on Driver).
+    /** Self-signups whose automatic-approval time has come (V24). */
+    List<Driver> findByFleetAndVerificationStatusAndEmailVerifiedTrueAndAutoApproveAtLessThanEqual(
+            Driver.Fleet fleet, Driver.Verification verificationStatus, LocalDateTime at);
+
+    /** Stops automatic approval of an application still under review; the owner decides it instead. */
     @org.springframework.data.jpa.repository.Modifying
-    @Query("UPDATE Driver d SET d.verificationStatus = :to, d.rejectionReason = :reason, d.reviewedAt = :at, d.reviewedBy = :by "
+    @Query("UPDATE Driver d SET d.autoApproveAt = null WHERE d.id = :id AND d.verificationStatus = :under")
+    int holdAutoApproval(@Param("id") Long id, @Param("under") Driver.Verification under);
+
+    // Conditional moves: the WHERE on the expected status is what refuses a stale decision (no @Version on Driver).
+    // The auto-approval deadline goes with any decision, so a re-upload after a rejection is never
+    // approved on the old one.
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Driver d SET d.verificationStatus = :to, d.rejectionReason = :reason, d.reviewedAt = :at, d.reviewedBy = :by, "
+            + "d.autoApproveAt = null "
             + "WHERE d.id = :id AND d.verificationStatus = :expected")
     int decide(@Param("id") Long id, @Param("expected") Driver.Verification expected, @Param("to") Driver.Verification to,
                @Param("reason") String reason, @Param("at") java.time.LocalDateTime at, @Param("by") Long by);

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
-import { getPayouts, recordPayout } from '../../utils/api'
+import { getPayouts, recordPayout, getPendingDues, confirmDues, rejectDues } from '../../utils/api'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, Empty, Skeleton } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
@@ -85,12 +85,31 @@ export default function OwnerPayouts() {
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState(null)
 
+  const [pending, setPending] = useState([])
+  const [deciding, setDeciding] = useState(null)
+
   const load = async () => {
     try {
-      const res = await getPayouts()
+      const [res, due] = await Promise.all([getPayouts(), getPendingDues().catch(() => ({ data: [] }))])
       setRows(res.data || [])
+      setPending(due.data || [])
     } catch { /* ignore */ }
     setLoading(false)
+  }
+
+  const decide = async (p, received) => {
+    if (!received && !confirm(`Mark ${inr(p.amount)} from ${p.driverName} (UTR ${p.utr}) as not received? They will be asked to check the UTR.`)) return
+    setDeciding(p.id)
+    try {
+      if (received) {
+        await confirmDues(p.id)
+        celebrate({ title: 'Payment confirmed', message: `${inr(p.amount)} from ${p.driverName} recorded.`, autoClose: 3200 })
+      } else {
+        await rejectDues(p.id)
+      }
+      load()
+    } catch { /* the API layer toasted the reason */ }
+    setDeciding(null)
   }
 
   useEffect(() => { load() }, [])
@@ -119,6 +138,36 @@ export default function OwnerPayouts() {
             { icon: 'users', label: 'Independent drivers', value: rows.length.toLocaleString('en-IN'), sub: `${rows.filter(r => !r.upiId).length} without a UPI ID` },
           ]}
         />
+
+        {pending.length > 0 && (
+          <Panel span={12} pad={false} title="Payments from drivers to confirm" meta={`${pending.length} waiting`}>
+            <p style={{ margin: '0 20px 12px', fontSize: 13, color: 'var(--pc-muted)' }}>
+              Drivers paid their commission to your UPI and sent the UTR. Find each one in your bank app before confirming:
+              confirming records it and lowers what they owe.
+            </p>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead><tr><th>Driver</th><th style={{ textAlign: 'right' }}>Amount</th><th>UTR</th><th>Sent</th><th>Action</th></tr></thead>
+                <tbody>
+                  {pending.map(p => (
+                    <tr key={p.id}>
+                      <td><strong>{p.driverName}</strong><div style={{ fontSize: 12, color: 'var(--pc-muted)' }}>{p.driverMobile} · owes {inr(p.driverOwes)}</div></td>
+                      <td style={{ textAlign: 'right', fontWeight: 800 }}>{inr(p.amount)}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{p.utr}</td>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: 12.5 }}>{new Date(p.submittedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" disabled={deciding === p.id} onClick={() => decide(p, true)}><Icon name="check" size={14} />Received</button>
+                          <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" disabled={deciding === p.id} onClick={() => decide(p, false)} style={{ color: 'var(--pc-bad)' }}><Icon name="x" size={14} />Not received</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        )}
 
         <Panel span={12} pad={false} title="Balances" meta={loading ? null : `${rows.length} drivers`}>
           {loading ? <div style={{ padding: '0 20px 20px' }}><Skeleton rows={5} /></div>

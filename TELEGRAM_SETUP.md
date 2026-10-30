@@ -243,6 +243,31 @@ group receives the alert and a live map.
 
 ---
 
+## Owner decisions in the same group
+
+The `SAFETY_OPS_CHAT_ID` group also gets two things that need the owner. Their buttons work
+**only inside that group**, so anyone you add to it can act for you. Add only people you trust.
+
+**New driver applications** (self-signup drivers; drivers you add yourself are approved at once):
+
+| Message | Buttons | What happens |
+|---|---|---|
+| 🆕 New driver application | ✅ Approve now · ❌ Reject · ⏸ Hold | Do nothing → approved automatically after 15 min (`DRIVER_AUTO_APPROVE_AFTER`) if the checks pass |
+| ⚠️ Not approved automatically | ✅ Approve · ❌ Reject | A check failed (licence format, Aadhaar check digit, missing document); you decide |
+| 📄 Driver re-uploaded documents | ✅ Approve · ❌ Reject | After a rejection you always decide; never automatic |
+
+The automatic checks catch typos and missing uploads, **not forged documents**. Open the
+documents (link in the message) when you can. Set `DRIVER_AUTO_APPROVE=false` to approve every
+driver by hand.
+
+**Commission payments from drivers:** an independent driver who owes commission on cash rides
+taps *Pay with UPI app* in Profile → Earnings (your `OWNER_UPI_ID` and the amount are filled
+in), pays, and enters the UTR. You get 💰 *Driver commission payment* with ✅ Received /
+❌ Not received. **Check your bank app first.** Received records it and lowers what they owe;
+Not received tells the driver to check the UTR. Same buttons on the Payouts page.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause |

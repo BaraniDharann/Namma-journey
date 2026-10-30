@@ -118,6 +118,11 @@ public class TelegramClient {
      * the booking state check in the service, not the absence of a button.
      */
     public boolean editMessageText(String chatId, Long messageId, String html) {
+        return editMessageText(chatId, messageId, html, List.of());
+    }
+
+    /** Rewrites a message and replaces its buttons with {@code buttons} (empty: no buttons). */
+    public boolean editMessageText(String chatId, Long messageId, String html, List<List<InlineButton>> buttons) {
         if (!properties.isOperational() || messageId == null) {
             return false;
         }
@@ -127,6 +132,9 @@ public class TelegramClient {
         body.put("text", html);
         body.put("parse_mode", "HTML");
         body.put("disable_web_page_preview", true);
+        if (buttons != null && !buttons.isEmpty()) {
+            body.put("reply_markup", Map.of("inline_keyboard", toKeyboard(buttons)));
+        }
         return call("editMessageText", body);
     }
 

@@ -40,6 +40,12 @@ public class DriverSignupService {
     @Value("${app.drivers.unverified-ttl-hours:48}")
     private long unverifiedTtlHours = 48;
 
+    /** Self-signups are approved automatically this long after confirming their email (V24); false = the owner decides every one. */
+    @Value("${app.drivers.auto-approve:true}")
+    private boolean autoApprove = true;
+    @Value("${app.drivers.auto-approve-after:15m}")
+    private java.time.Duration autoApproveAfter = java.time.Duration.ofMinutes(15);
+
     @Autowired
     private DriverRepository driverRepository;
     @Autowired
@@ -176,6 +182,11 @@ public class DriverSignupService {
             throw new BadCredentialsException("Invalid or expired OTP");
         }
         driver.setEmailVerified(true);
+        // The owner's window to Reject or Hold starts now, when the application first reaches them,
+        // not at sign-up: a driver who confirmed a day later would otherwise be approved unseen.
+        if (autoApprove) {
+            driver.setAutoApproveAt(LocalDateTime.now().plus(autoApproveAfter));
+        }
         driverRepository.save(driver);
         try {
             notificationService.notifyDriverApplication(driver, false);

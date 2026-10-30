@@ -43,6 +43,8 @@ public class DriverDetailsResponse {
     private String rejectionReason;
     private String rcPhoto;
     private java.time.LocalDateTime submittedAt;
+    /** Minutes until automatic approval (V24); null when the owner decides this one. */
+    private Long autoApproveInMinutes;
 
     /** Copies the vehicle and City/Trip switches; shared by every mapper that shows a driver. */
     public DriverDetailsResponse withVehicle(com.travelplatform.entity.Driver driver) {
@@ -67,6 +69,9 @@ public class DriverDetailsResponse {
         this.rejectionReason = driver.getRejectionReason();
         this.rcPhoto = sign.apply(driver.getRcPhoto());
         this.submittedAt = driver.getSubmittedAt();
+        // Minutes, not a timestamp: the server clock's zone is not the owner's browser's.
+        this.autoApproveInMinutes = driver.getAutoApproveAt() == null ? null
+                : Math.max(0, java.time.Duration.between(java.time.LocalDateTime.now(), driver.getAutoApproveAt()).toMinutes());
         return this;
     }
 }

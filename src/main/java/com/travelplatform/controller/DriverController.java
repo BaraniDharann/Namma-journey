@@ -58,6 +58,30 @@ public class DriverController {
     }
 
     @Autowired
+    private com.travelplatform.service.DriverDuesService duesService;
+
+    /** Commission owed, the owner's UPI ID with a ready-filled payment link, and recent claims. */
+    @GetMapping("/{driverId}/dues")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<com.travelplatform.service.DriverDuesService.DuesView> getDues(@PathVariable Long driverId) {
+        return ResponseEntity.ok(duesService.view(driverId));
+    }
+
+    /** "I paid": {amount, utr}. Waits for the owner to confirm before the balance moves. */
+    @PostMapping("/{driverId}/dues/payments")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<com.travelplatform.service.DriverDuesService.DuesView> submitDuesPayment(
+            @PathVariable Long driverId, @RequestBody Map<String, String> body) {
+        java.math.BigDecimal amount;
+        try {
+            amount = new java.math.BigDecimal(String.valueOf(body.get("amount")).trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Enter the amount you paid, in rupees");
+        }
+        return ResponseEntity.ok(duesService.submit(driverId, amount, body.get("utr")));
+    }
+
+    @Autowired
     private TelegramProperties telegramProperties;
 
     @Autowired
