@@ -50,6 +50,16 @@ public class TelegramWebhookService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private RideSafetyService rideSafetyService;
 
+    // Owner buttons in the owner's group: driver applications and commission payments.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private OwnerTelegramAlerts ownerTelegramAlerts;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DriverAutoApprovalService driverAutoApprovalService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DriverDuesService driverDuesService;
+
     public TelegramWebhookService(DriverRepository driverRepository,
                                   DriverService driverService,
                                   TelegramLinkService linkService,
@@ -210,6 +220,13 @@ public class TelegramWebhookService {
             return;
         }
 
+        // Owner decisions: a driver application, a driver's commission payment. Honoured only when
+        // pressed inside the owner's group - the same buttons forwarded anywhere else do nothing.
+        if (OwnerTelegramAlerts.isOwnerAction(data) && ownerTelegramAlerts != null) {
+            handleOwnerAction(callbackId, data, from, message, messageId);
+            return;
+        }
+
         // Identity comes from the Telegram user id on the update, never from the callback
         // payload, so a forged payload cannot act as a different driver.
         Optional<Driver> maybeDriver = findLinkedDriver(telegramUserId);
@@ -252,6 +269,35 @@ public class TelegramWebhookService {
             telegramClient.editMessageText(chatId, messageId,
                     "⚠️ <b>This trip is no longer available.</b>\n\n"
                             + "It may have been reassigned or already actioned.");
+        }
+    }
+
+    private void handleOwnerAction(String callbackId, String data, Map<String, Object> from,
+                                   Map<String, Object> message, Long messageId) {
+        Map<String, Object> chat = message == null ? null : asMap(message.get("chat"));
+        String chatId = chat == null ? null : asId(chat.get("id"));
+        if (!ownerTelegramAlerts.isOwnerChat(chatId)) {
+            telegramClient.answerCallbackQuery(callbackId, "Only the owner's group can do this.");
+            return;
+        }
+        String actor = from != null && from.get("first_name") instanceof String name && !name.isBlank()
+                ? name : "owner";
+        OwnerTelegramAlerts.Outcome outcome;
+        if (data.startsWith(OwnerTelegramAlerts.DUES_CONFIRM) || data.startsWith(OwnerTelegramAlerts.DUES_REJECT)) {
+            outcome = driverDuesService == null ? null : driverDuesService.handleTelegram(data, actor);
+        } else {
+            outcome = driverAutoApprovalService == null ? null : driverAutoApprovalService.handleTelegram(data, actor);
+        }
+        if (outcome == null) {
+            telegramClient.answerCallbackQuery(callbackId, null);
+            return;
+        }
+        telegramClient.answerCallbackQuery(callbackId, outcome.toast());
+        if (outcome.appended() != null) {
+            // Telegram hands back the message as plain text, so it is escaped before re-sending as HTML.
+            String original = message.get("text") instanceof String s ? escapeHtml(s) : "";
+            telegramClient.editMessageText(chatId, messageId,
+                    original + "\n\n" + outcome.appended(), outcome.buttons());
         }
     }
 

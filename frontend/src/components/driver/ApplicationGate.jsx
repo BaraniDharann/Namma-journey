@@ -94,7 +94,7 @@ export default function ApplicationGate({ driverId, children }) {
         <div className="pc-tg-copy">
           <span className="pc-tg-badge"><Icon name="clock" size={28} /></span>
           <h1 id="pc-app-title" className="pc-tg-title">Your application is under review</h1>
-          <p className="pc-tg-lead">We&apos;re checking your documents, usually within 24 hours. This screen unlocks by itself once you&apos;re approved.</p>
+          <p className="pc-tg-lead">We&apos;re checking your documents. Most drivers are approved within 15 minutes; if anything needs a closer look, it can take a little longer. This screen unlocks by itself once you&apos;re approved.</p>
           <p className="pc-tg-wait" aria-live="polite"><span className="pc-tg-pulse" aria-hidden /> Waiting for approval…</p>
         </div>
       </section>

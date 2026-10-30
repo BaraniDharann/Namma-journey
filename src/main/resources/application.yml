@@ -135,6 +135,12 @@ app:
   drivers:
     # Self-signed-up drivers who never confirm their email are removed after this many hours.
     unverified-ttl-hours: ${DRIVER_UNVERIFIED_TTL_HOURS:48}
+    # Self-signed-up drivers are approved automatically this long after confirming their email,
+    # if the automatic checks pass (DriverApplicationChecks) and the owner has not pressed Reject
+    # or Hold in the Telegram group. false = the owner approves every one by hand.
+    # Owner-added drivers are never queued: they are approved when the owner creates them.
+    auto-approve: ${DRIVER_AUTO_APPROVE:true}
+    auto-approve-after: ${DRIVER_AUTO_APPROVE_AFTER:15m}
 
   trips:
     # Days before its date a confirmed trip may be started. 0 = not before the trip date.

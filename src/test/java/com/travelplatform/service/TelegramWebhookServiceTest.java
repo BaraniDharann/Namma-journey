@@ -208,4 +208,47 @@ class TelegramWebhookServiceTest {
         verify(rider).redeemContact("555000333", "inviteTok");
         verify(telegramClient).sendMessage(eq("555000333"), org.mockito.ArgumentMatchers.contains("emergency contact"), any());
     }
+
+    private OwnerTelegramAlerts ownerButtonsWiredForGroup(String groupId, DriverAutoApprovalService approvals) {
+        com.travelplatform.config.SafetyProperties props = new com.travelplatform.config.SafetyProperties();
+        props.setOpsChatId(groupId);
+        OwnerTelegramAlerts alerts = new OwnerTelegramAlerts(telegramClient, props, mock(AfterCommitDispatcher.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "ownerTelegramAlerts", alerts);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "driverAutoApprovalService", approvals);
+        return alerts;
+    }
+
+    private static Map<String, Object> ownerPress(String chatId, String data) {
+        return Map.of("callback_query", Map.of(
+                "id", "cb-9",
+                "data", data,
+                "from", Map.of("id", 777L, "first_name", "Priya"),
+                "message", Map.of("message_id", 50, "text", "New driver application",
+                        "chat", Map.of("id", Long.parseLong(chatId)))));
+    }
+
+    @Test
+    @DisplayName("an owner button pressed inside the owner's group is carried out")
+    void ownerButtonInOwnerGroupIsHonoured() {
+        DriverAutoApprovalService approvals = mock(DriverAutoApprovalService.class);
+        when(approvals.handleTelegram(anyString(), anyString()))
+                .thenReturn(new OwnerTelegramAlerts.Outcome("Approved", "✅ Approved by Priya", java.util.List.of()));
+        ownerButtonsWiredForGroup("-5417748364", approvals);
+
+        service.handleUpdate(ownerPress("-5417748364", OwnerTelegramAlerts.APPROVE + 12));
+
+        verify(approvals).handleTelegram(OwnerTelegramAlerts.APPROVE + 12, "Priya");
+    }
+
+    @Test
+    @DisplayName("the same owner button forwarded to any other chat does nothing")
+    void ownerButtonOutsideOwnerGroupIsRefused() {
+        DriverAutoApprovalService approvals = mock(DriverAutoApprovalService.class);
+        ownerButtonsWiredForGroup("-5417748364", approvals);
+
+        service.handleUpdate(ownerPress("555000111", OwnerTelegramAlerts.APPROVE + 12));
+
+        verifyNoInteractions(approvals);
+        verify(telegramClient).answerCallbackQuery("cb-9", "Only the owner's group can do this.");
+    }
 }

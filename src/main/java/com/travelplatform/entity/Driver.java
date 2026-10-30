@@ -147,6 +147,14 @@ public class Driver {
     @Column(name = "reviewed_by")
     private Long reviewedBy;
 
+    /**
+     * When this self-signup is approved automatically if the owner has not rejected or held it
+     * (V24). Null means the owner decides. Cleared by every decision, so a later re-upload is
+     * never approved on an old deadline.
+     */
+    @Column(name = "auto_approve_at")
+    private LocalDateTime autoApproveAt;
+
     public boolean isApproved() {
         return verificationStatus == Verification.APPROVED;
     }

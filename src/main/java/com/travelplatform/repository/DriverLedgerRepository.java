@@ -28,6 +28,9 @@ public interface DriverLedgerRepository extends JpaRepository<DriverLedgerEntry,
 
     boolean existsByBookingIdAndType(UUID bookingId, DriverLedgerEntry.Type type);
 
+    /** A transfer already recorded under this UTR (references are stored upper-case). */
+    boolean existsByReference(String reference);
+
     /** [driverId, balance] for every driver with any ledger history, for the owner's payout screen. */
     @Query("SELECT e.driverId, SUM(e.amount) FROM DriverLedgerEntry e GROUP BY e.driverId")
     List<Object[]> balances();

@@ -32,6 +32,9 @@ public class NotificationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private RideSafetyService rideSafetyService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private OwnerTelegramAlerts ownerTelegramAlerts;
+
     public void notifyBookingCreated(TravelBooking booking) {
         Notification notification = new Notification();
         notification.setRecipientId("owner");
@@ -56,9 +59,18 @@ public class NotificationService {
         notification.setTitle(resubmitted ? "Driver documents re-submitted" : "New driver application");
         notification.setMessage(d.getName() + " (" + d.getMobile() + ") "
                 + (resubmitted ? "re-submitted documents" : "applied to drive")
-                + " and is waiting for your review.");
+                + (d.getAutoApproveAt() != null
+                    ? " and will be approved automatically in about "
+                        + Math.max(1, java.time.Duration.between(LocalDateTime.now(), d.getAutoApproveAt()).toMinutes())
+                        + " minutes unless you reject or hold it."
+                    : " and is waiting for your review."));
         notification.setCreatedAt(LocalDateTime.now());
         notificationRepository.save(notification);
+        // The owner is rarely looking at the website when this matters: their Telegram group gets
+        // it at once, with Approve / Reject / Hold buttons.
+        if (ownerTelegramAlerts != null) {
+            ownerTelegramAlerts.driverApplication(d, resubmitted);
+        }
     }
 
     public void notifyDriverApproved(Driver d) {
