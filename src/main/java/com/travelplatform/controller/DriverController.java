@@ -64,6 +64,9 @@ public class DriverController {
     private com.travelplatform.service.DriverPresenceService driverPresenceService;
 
     @Autowired
+    private com.travelplatform.service.RideSafetyService rideSafetyService;
+
+    @Autowired
     private com.travelplatform.service.DriverVerificationService driverVerificationService;
 
     // SpEL guard reused on per-driver endpoints. Without it any logged-in driver could read
@@ -223,7 +226,11 @@ public class DriverController {
         // A driver on a trip is online too; their live position is also where Ride Now finds them.
         driverService.requireApproved(dto.getDriverId());
         driverPresenceService.report(dto.getDriverId(), dto.getLatitude(), dto.getLongitude());
-        return ResponseEntity.ok(locationTrackingService.updateLocation(dto));
+        DriverLocationDTO stored = locationTrackingService.updateLocation(dto);
+        if (rideSafetyService != null) {
+            rideSafetyService.onLocation(dto);
+        }
+        return ResponseEntity.ok(stored);
     }
 
     /**

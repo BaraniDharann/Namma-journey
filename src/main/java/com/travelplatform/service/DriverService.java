@@ -54,6 +54,10 @@ public class DriverService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DriverPresenceService presenceService;
 
+    // Passenger safety (share link, live map, "are you safe?" checks); null in hand-built tests.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private RideSafetyService rideSafetyService;
+
     // The matching engine's copy of driver state; null in hand-built tests, where nothing reads it.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
@@ -355,6 +359,10 @@ public class DriverService {
         TravelBooking updated = bookingRepository.save(booking);
         if (driverStates != null) {
             driverStates.took(updated); // already BUSY from the accept; re-stated in case that write was lost
+        }
+        // Opens the safety session: share link, live map and safety checks for the passenger.
+        if (rideSafetyService != null) {
+            rideSafetyService.onTripStarted(updated);
         }
         return mapToResponse(updated);
     }

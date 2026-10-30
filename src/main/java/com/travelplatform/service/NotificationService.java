@@ -28,6 +28,10 @@ public class NotificationService {
     private final TelegramDispatchService telegramDispatchService;
     private final AfterCommitDispatcher dispatcher;
 
+    // Field-injected so the tests that build NotificationService by hand still compile; null there.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private RideSafetyService rideSafetyService;
+
     public void notifyBookingCreated(TravelBooking booking) {
         Notification notification = new Notification();
         notification.setRecipientId("owner");
@@ -186,6 +190,10 @@ public class NotificationService {
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
             emailService.sendTripAcceptedEmail(user.getEmail(), user.getName(), booking, driver);
         });
+        // Passengers who connected Telegram get the driver's name, phone and vehicle there too.
+        if (rideSafetyService != null) {
+            rideSafetyService.onTripAccepted(booking, driver);
+        }
         log.info("Notification sent to user {} for trip accepted: {}", booking.getUserId(), booking.getId());
     }
 
@@ -271,6 +279,10 @@ public class NotificationService {
         userRepository.findById(booking.getUserId()).ifPresent(user -> {
             emailService.sendTripEndedEmail(user.getEmail(), user.getName(), booking);
         });
+        // Stops the live map and the safety checks for this trip.
+        if (rideSafetyService != null) {
+            rideSafetyService.onTripEnded(booking);
+        }
 
         // Notify owner
         Notification ownerNotification = new Notification();

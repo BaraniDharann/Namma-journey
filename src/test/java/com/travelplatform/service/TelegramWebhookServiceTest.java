@@ -176,4 +176,36 @@ class TelegramWebhookServiceTest {
         service.handleUpdate(update);
         verify(linkService, never()).unlinkChat(anyString());
     }
+
+    @Test
+    @DisplayName("a passenger's Safe/Unsafe press goes to the safety service, never to driver accept/reject")
+    void safetyAnswerIsRoutedToSafety() {
+        RideSafetyService safety = mock(RideSafetyService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "rideSafetyService", safety);
+
+        service.handleUpdate(callbackUpdate("555000222", "unsafe:12"));
+
+        verify(safety).answerFromTelegram(eq("555000222"), eq("unsafe:12"), any());
+        verifyNoInteractions(driverService);
+    }
+
+    @Test
+    @DisplayName("a token that is not a driver's is tried as a passenger link, then as a contact invite")
+    void nonDriverTokenFallsThroughToPassengerThenContact() {
+        RiderTelegramLinkService rider = mock(RiderTelegramLinkService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "riderLinkService", rider);
+        when(linkService.redeem(anyString(), any()))
+                .thenReturn(new TelegramLinkService.RedeemResult(TelegramLinkService.Status.INVALID, null));
+        when(rider.redeemUser(anyString(), anyString())).thenReturn(Optional.empty());
+        when(rider.redeemContact("555000333", "inviteTok")).thenReturn(Optional.of(new RiderTelegramLinkService.Redeemed(
+                RiderTelegramLinkService.Outcome.CONTACT_LINKED, "Amma", "Priya")));
+
+        service.handleUpdate(Map.of("message", Map.of(
+                "text", "/start inviteTok",
+                "from", Map.of("id", 555000333L))));
+
+        verify(rider).redeemUser("555000333", "inviteTok");
+        verify(rider).redeemContact("555000333", "inviteTok");
+        verify(telegramClient).sendMessage(eq("555000333"), org.mockito.ArgumentMatchers.contains("emergency contact"), any());
+    }
 }

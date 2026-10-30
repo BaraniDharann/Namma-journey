@@ -1,6 +1,8 @@
 package com.travelplatform.service;
 
 import com.travelplatform.config.ExternalHttpClients;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.travelplatform.config.TelegramProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +46,8 @@ public class TelegramClient {
      * the line and the API error is easy to miss, so it is asserted at build time instead.
      */
     private static final int MAX_CALLBACK_DATA_BYTES = 64;
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final TelegramProperties properties;
     private final RestTemplate restTemplate;
@@ -126,6 +130,66 @@ public class TelegramClient {
         return call("editMessageText", body);
     }
 
+    /**
+     * Like {@link #sendMessage}, but returns the delivered message's id (null on failure), for
+     * messages that are rewritten later - the passenger's safety check is edited once answered
+     * so its buttons cannot be pressed again.
+     */
+    public Long sendMessageForId(String chatId, String html, List<List<InlineButton>> buttons) {
+        if (!properties.isOperational() || chatId == null || chatId.isBlank()) {
+            return null;
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("chat_id", chatId);
+        body.put("text", html);
+        body.put("parse_mode", "HTML");
+        body.put("disable_web_page_preview", true);
+        if (buttons != null && !buttons.isEmpty()) {
+            body.put("reply_markup", Map.of("inline_keyboard", toKeyboard(buttons)));
+        }
+        return messageId(post("sendMessage", body));
+    }
+
+    /**
+     * Starts a live location: a map pin in the chat that moves each time
+     * {@link #editLiveLocation} is called, until {@code livePeriodSeconds} runs out or it is
+     * stopped. Returns the message id needed to move it, or null on failure.
+     */
+    public Long sendLiveLocation(String chatId, double latitude, double longitude, int livePeriodSeconds) {
+        if (!properties.isOperational() || chatId == null || chatId.isBlank()) {
+            return null;
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("chat_id", chatId);
+        body.put("latitude", latitude);
+        body.put("longitude", longitude);
+        body.put("live_period", livePeriodSeconds);
+        return messageId(post("sendLocation", body));
+    }
+
+    public boolean editLiveLocation(String chatId, Long messageId, double latitude, double longitude) {
+        if (!properties.isOperational() || chatId == null || messageId == null) {
+            return false;
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("chat_id", chatId);
+        body.put("message_id", messageId);
+        body.put("latitude", latitude);
+        body.put("longitude", longitude);
+        return post("editMessageLiveLocation", body) != null;
+    }
+
+    /** Freezes a live location at its last point, so a finished trip stops looking live. */
+    public boolean stopLiveLocation(String chatId, Long messageId) {
+        if (!properties.isOperational() || chatId == null || messageId == null) {
+            return false;
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("chat_id", chatId);
+        body.put("message_id", messageId);
+        return post("stopMessageLiveLocation", body) != null;
+    }
+
     private List<List<Map<String, String>>> toKeyboard(List<List<InlineButton>> buttons) {
         List<List<Map<String, String>>> keyboard = new ArrayList<>();
         for (List<InlineButton> row : buttons) {
@@ -149,12 +213,31 @@ public class TelegramClient {
     }
 
     private boolean call(String method, Map<String, Object> body) {
+        return post(method, body) != null;
+    }
+
+    /** Pulls result.message_id out of a Telegram reply; null when there is none. */
+    private Long messageId(String response) {
+        if (response == null) {
+            return null;
+        }
+        try {
+            JsonNode id = JSON.readTree(response).path("result").path("message_id");
+            return id.isNumber() ? id.asLong() : null;
+        } catch (Exception e) {
+            log.warn("Unreadable Telegram reply: {}", e.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    /** Returns Telegram's reply body ("" when it had none), or null when the call failed. */
+    private String post(String method, Map<String, Object> body) {
         String url = properties.getApiBaseUrl() + "/bot" + properties.getBotToken() + "/" + method;
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         try {
-            restTemplate.postForEntity(url, new HttpEntity<>(body, headers), String.class);
-            return true;
+            String reply = restTemplate.postForEntity(url, new HttpEntity<>(body, headers), String.class).getBody();
+            return reply == null ? "" : reply;
         } catch (HttpClientErrorException.Forbidden e) {
             // 403 means the person blocked the bot (or deleted their account). Telegram alerts are
             // mandatory for drivers, so this is announced and the driver is unlinked, which locks
@@ -164,12 +247,12 @@ public class TelegramClient {
             if (chatId != null) {
                 events.publishEvent(new TelegramChatBlockedEvent(chatId.toString()));
             }
-            return false;
+            return null;
         } catch (RestClientException e) {
             // The bot token appears in the URL, so the message - which may echo it - is never
             // logged. Only the method name and the exception type are safe to record.
             log.warn("Telegram {} failed: {}", method, e.getClass().getSimpleName());
-            return false;
+            return null;
         }
     }
 

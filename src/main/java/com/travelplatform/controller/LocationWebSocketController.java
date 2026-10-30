@@ -24,6 +24,9 @@ public class LocationWebSocketController {
     @Autowired
     private com.travelplatform.service.DriverService driverService;
 
+    @Autowired
+    private com.travelplatform.service.RideSafetyService rideSafetyService;
+
     /**
      * Storing and broadcasting both live in the service now, so the REST fallback in
      * {@code DriverController#updateLocationRest} produces the same push this frame does.
@@ -46,5 +49,9 @@ public class LocationWebSocketController {
         driverService.requireApproved(dto.getDriverId());
         driverPresenceService.report(dto.getDriverId(), dto.getLatitude(), dto.getLongitude());
         locationTrackingService.updateLocation(dto);
+        // Trail for the safety checks and the passenger's Telegram live map (throttled inside).
+        if (rideSafetyService != null) {
+            rideSafetyService.onLocation(dto);
+        }
     }
 }

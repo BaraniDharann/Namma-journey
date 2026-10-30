@@ -12,6 +12,7 @@ import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/d
 import { inr, shortPlace } from '../../dash/metrics'
 import { modeLabel } from '../../dash/vehicles'
 import { useCelebrate, rememberPayment } from '../../components/celebrate/Celebration'
+import TripSafetyBar from '../../components/safety/TripSafetyBar'
 
 const navItems = [
   { path: '/user/dashboard', icon: '', label: 'Dashboard' },
@@ -452,6 +453,8 @@ export default function UserBookings() {
                     {(b.status === 'PENDING' || b.status === 'CONFIRMED') && <button type="button" onClick={() => handleDelete(b)} className="pc-btn pc-btn-ghost pc-btn-sm" style={{ color: 'var(--pc-bad)' }}><Icon name="x" size={15} />Cancel</button>}
                   </div>
                 )}
+                {/* A driver is assigned and the trip is live or about to be: SOS, 112, share, safety check. */}
+                {(b.status === 'CONFIRMED' || b.status === 'STARTED') && <TripSafetyBar userId={user.userId} booking={b} />}
               </div>
             </Panel>
           ))

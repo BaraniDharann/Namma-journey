@@ -197,6 +197,52 @@ say *"This trip is no longer available"* rather than erroring.
 
 ---
 
+## Passenger ride safety
+
+The same bot also serves passengers, at no cost: ride updates, a live map of the car, an
+**Are you safe?** check during City rides, and SOS. Nothing extra to install. Code:
+`RideSafetyService`, `RiderTelegramLinkService`, migration `V23__rider_safety.sql`.
+
+**One-time setup**
+
+1. Rename the bot so passengers aren't confused: in @BotFather, `/setname` → *Namma Journey*.
+2. Create a Telegram group for safety alerts (owner + anyone who can respond), add the bot.
+3. Get the group id: send any message in the group, then open
+   `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates` and copy `chat.id` (a negative
+   number like `-1001234567890`). If the webhook is set, `getUpdates` returns nothing — delete
+   the webhook, read the id, then run Step 6 again.
+4. Set `SAFETY_OPS_CHAT_ID=<that id>` in `.env` and restart. Without it, SOS still reaches the
+   owner as an in-app notification, just not on Telegram.
+5. Re-run Step 6 with `"allowed_updates": ["message", "callback_query", "my_chat_member"]` so
+   a passenger or driver blocking the bot is noticed straight away.
+
+**What the passenger does:** Profile → *Ride safety* → **Connect Telegram** → Start. They can
+add up to 3 emergency contacts there; each contact gets an invite link (valid 7 days) that the
+passenger forwards on WhatsApp/SMS. A contact gets nothing until they open it, and after that
+only SOS alerts.
+
+**What happens on a trip**
+
+| When | Passenger gets | Owner's safety group gets |
+|---|---|---|
+| Driver accepts | Driver name, phone, vehicle | — |
+| Driver taps Start Trip | Share-trip link + a live map that moves with the car | — |
+| 10 min in, then every 25 min (City rides) | *Are you safe?* with ✅ / 🚨 buttons | — |
+| Car stopped 5+ min away from the drop, driver GPS silent 3+ min, or 1.5× over the estimate | The same question, sooner | — |
+| No answer for 2 min | Asked again | — |
+| No answer for 4 min | "Our team has been asked to check on you" | ⚠️ alert with phones and the live link |
+| 🚨 Unsafe, SOS in the app, or `/sos` in the bot | "Team and contacts alerted — call 112 if in danger" | 🚨 alert + a live map; contacts get the live link |
+| Trip ended | Amount payable; live maps stop | live map stops |
+
+The passenger is never told police are coming, because nothing here can dispatch them; they
+are told to call **112**. Someone has to watch the safety group and phone the passenger.
+
+**Test it:** connect a passenger, book a City ride, have the driver start it, and set
+`SAFETY_FIRST_CHECK_AFTER=1m` to get the first check quickly. Tap 🚨 Unsafe and confirm the
+group receives the alert and a live map.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause |

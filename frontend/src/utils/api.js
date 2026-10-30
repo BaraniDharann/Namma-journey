@@ -181,6 +181,19 @@ export const getUserPayments = (userId) => cachedGet(`/user/${userId}/payments`)
 export const pollUserPayments = (userId) => api.get(`/user/${userId}/payments`, { _silent: true })
 export const getTripSummary = (userId, bookingId) => api.get(`/user/${userId}/bookings/${bookingId}/summary`)
 
+// Ride safety (Telegram updates, emergency contacts, safety check, SOS)
+export const getUserTelegramStatus = (userId) => api.get(`/user/${userId}/telegram`, { _silent: true })
+export const createUserTelegramLink = (userId) => api.post(`/user/${userId}/telegram-link`)
+export const getEmergencyContacts = (userId) => api.get(`/user/${userId}/emergency-contacts`)
+export const addEmergencyContact = (userId, contact) => api.post(`/user/${userId}/emergency-contacts`, contact)
+export const inviteEmergencyContact = (userId, contactId) => api.post(`/user/${userId}/emergency-contacts/${contactId}/invite`)
+export const removeEmergencyContact = (userId, contactId) => api.delete(`/user/${userId}/emergency-contacts/${contactId}`)
+export const getTripSafety = (userId, bookingId) => api.get(`/user/${userId}/bookings/${bookingId}/safety`, { _silent: true })
+export const answerSafetyCheck = (userId, bookingId, safe) => api.post(`/user/${userId}/bookings/${bookingId}/safety/answer`, { safe })
+export const pressSos = (userId, bookingId) => api.post(`/user/${userId}/bookings/${bookingId}/sos`)
+/** Public: the share-trip page, opened without logging in. */
+export const getSharedTrip = (token) => api.get(`/public/trips/${encodeURIComponent(token)}`, { _silent: true })
+
 // Driver APIs
 export const getDriverBookings = (driverId) => cachedGet(`/driver/${driverId}/bookings`)
 // Ride Now: the one ride offered right now (204 when none). Uncached, because an offer lives for
