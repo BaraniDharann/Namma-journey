@@ -82,8 +82,10 @@ fi
 # VITE_GOOGLE_CLIENT_ID, not from this .env. An image without it breaks "Sign in with Google"
 # for everyone - stop before users get it.
 # The backend's GOOGLE_CLIENT_ID must be the same value, so it stands in when only that is set.
-gid=$(sed -n 's/^VITE_GOOGLE_CLIENT_ID=//p' .env | tr -d "\"'\r")
-[ -n "$gid" ] || gid=$(sed -n 's/^GOOGLE_CLIENT_ID=//p' .env | tr -d "\"'\r")
+# Spaces are stripped too (a client ID never contains one): "GOOGLE_CLIENT_ID= 4485..." is an
+# easy .env typo, and searching the image for " 4485..." failed a correct image.
+gid=$(sed -n 's/^VITE_GOOGLE_CLIENT_ID=//p' .env | tail -1 | tr -d "\"'\r\t ")
+[ -n "$gid" ] || gid=$(sed -n 's/^GOOGLE_CLIENT_ID=//p' .env | tail -1 | tr -d "\"'\r\t ")
 if [ -n "$gid" ] && ! dc run --rm --no-deps -T --entrypoint grep frontend -rqF "$gid" /usr/share/nginx/html; then
   log "The new frontend image has no Google client ID. Add the repo variable VITE_GOOGLE_CLIENT_ID"
   log "(GitHub -> Settings -> Secrets and variables -> Actions -> Variables), re-run CI, deploy again."
