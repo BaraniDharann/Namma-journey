@@ -73,3 +73,10 @@ osrm-data/
 
 # scripts/deploy.sh: which image tag went live when (for rollbacks); per server.
 .deploy-history
+# scripts/auto-deploy.sh: commit live on this server, and one whose deploy failed; per server.
+.deployed-sha
+.auto-deploy-failed
+
+# Server SSH keys (AWS key pairs). Anyone holding one controls the server: never commit them.
+*.pem
+*.ppk
