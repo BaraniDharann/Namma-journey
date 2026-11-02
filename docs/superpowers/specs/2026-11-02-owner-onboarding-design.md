@@ -74,14 +74,15 @@ The work is split into four sub-projects, each with its own spec and plan:
 - **Approve** (`POST /api/admin/owners/{id}/approve`):
   - Allowed only from `PENDING_REVIEW`.
   - Assigns `owner_code` from the sequence, generates a 12-character random password, stores its bcrypt hash, sets `must_change_password = true` and fills in the review trail.
-  - Queues an email to the owner: "Approved. Owner ID {code}, password {password}, login link".
+  - Sends the credentials email to the owner **directly**, not through the outbox, the same way `sendDriverCredentials` works today, so the password is never written to the database: "Approved. Owner ID {code}, password {password}, login link".
+  - If sending fails, the approval still stands. The admin then gets a "Resend credentials" button, which generates a new password and sends the email again.
 - **Reject** (`POST /api/admin/owners/{id}/reject`, reason required):
   - Sets the status to `REJECTED`.
   - Queues an email with the reason and a link to `/owner/signup?resubmit={token}`.
 
 ### 3. Resubmit
 
-The owner opens the resubmit link, which carries a signed, single-use token valid for 14 days. The signup form opens pre-filled except for the documents. Submitting it updates the same row back to `PENDING_REVIEW` with a new `submitted_at`. The admin alert email is sent again.
+The owner opens the resubmit link, which carries a signed, single-use token valid for 14 days. The signup form opens pre-filled. The existing documents are kept unless the owner uploads replacements. Submitting it updates the same row back to `PENDING_REVIEW` with a new `submitted_at`. The admin alert email is sent again.
 
 ### 4. Owner login: `POST /api/auth/owner/login` (changed)
 
@@ -117,7 +118,7 @@ Requires the header `X-Bootstrap-Secret` = `ADMIN_BOOTSTRAP_SECRET`. It works on
 - `SecurityConfig`: `/api/admin/**` requires `ROLE_ADMIN`. `/api/auth/owner/signup` and `/api/auth/admin/bootstrap` are public and rate-limited with the existing limiter.
 - Owner documents are never served to `ROLE_OWNER` or `ROLE_USER`, only to `ROLE_ADMIN`.
 - PAN, bank account and UPI are encrypted at rest, and the API returns them masked (`XXXXX1234A`, `XXXXXX6789`).
-- The generated password exists only in memory and in the outbox email payload. The outbox row is purged after it is sent, using the same handling as `sendDriverCredentials`.
+- The generated password exists only in memory and in the email that is sent directly. It is never stored in plain text and never written to the outbox.
 
 ## Testing
 
