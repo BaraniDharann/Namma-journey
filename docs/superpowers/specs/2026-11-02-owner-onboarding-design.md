@@ -25,7 +25,7 @@ The work is split into four sub-projects, each with its own spec and plan:
 | Email | Every email is sent from `nammajourney463@gmail.com` (`MAIL_USERNAME`, Gmail App Password). Admin alerts go to `ADMIN_NOTIFY_EMAIL=nammajourney463@gmail.com`. |
 | Environment | Built and tested locally only. No deploy in this sub-project. |
 | Document verification | **Free official sources only. No paid KYC API.** The admin checks each owner by hand, using the government sites in the verification checklist below. Approve stays disabled until every check is marked verified. |
-| Aadhaar | Verified **only by the admin, by hand**, by scanning the card's Secure QR code with UIDAI's free QR scanner app, which checks UIDAI's digital signature. The owner must tick an explicit consent box at signup. |
+| Aadhaar | **UIDAI offline verification, run automatically and free** (`AadhaarQrVerifier`). At signup the backend reads the Secure QR on the uploaded Aadhaar image and checks UIDAI's digital signature with UIDAI's public certificate (`AADHAAR_QR_CERTIFICATES`). No API call is made and nothing leaves the server. **The admin still approves by hand**, using the result. The owner must tick an explicit consent box at signup. |
 | Driver verification | Owners add their own drivers and **approve them by hand**, checking driving licence and RC on Parivahan. This is designed in sub-project 2, not here. |
 
 ## Data model (migration V26)
@@ -86,7 +86,7 @@ The work is split into four sub-projects, each with its own spec and plan:
   | Check | How the admin verifies it (free) |
   |---|---|
   | `PAN` | Income Tax e-filing portal, "Verify Your PAN": the PAN is active and the name matches |
-  | `AADHAAR` | Scan the Secure QR code on the uploaded Aadhaar image with UIDAI's free QR scanner app (Android/iOS). The signature must be valid, and the name and photo must match the owner. The last 4 digits must match `aadhaar_last4`. |
+  | `AADHAAR` | Prefilled by the automatic QR check, which runs at signup and is stored in `owner_aadhaar_qr` (status, name, DOB, gender, state, pincode, last 4 digits and photo; never the full number). The admin sees "UIDAI signature valid ✔", the QR name next to the travels/contact name, and the QR photo. The QR photo is JPEG 2000, so the server converts it for the browser. The admin then marks the check. If the status is `UNREADABLE` or `NOT_SECURE_QR` (blurry photo, or an old card without a Secure QR), the admin either scans the card with UIDAI's free QR scanner app or rejects the application and asks for a clearer photo. `INVALID_SIGNATURE` means the card was edited, so reject. |
   | `REGISTRATION_DOC` | Compare the business name and number with the travels name. Where the registration number can be looked up (for example GST or Udyam), check it on that portal. |
   | `BANK` | Account holder name matches the owner or travels name, and the IFSC is valid (RBI IFSC list) |
 

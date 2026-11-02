@@ -142,6 +142,12 @@ app:
     auto-approve: ${DRIVER_AUTO_APPROVE:true}
     auto-approve-after: ${DRIVER_AUTO_APPROVE_AFTER:15m}
 
+  aadhaar:
+    # UIDAI's Secure QR signing certificate(s), comma-separated file paths. Download from
+    # uidai.gov.in > Developer section > UIDAI Certificate Details (Secure QR code). Empty = QR
+    # details are read but not verified. See AadhaarQrVerifier.
+    qr-certificates: ${AADHAAR_QR_CERTIFICATES:}
+
   trips:
     # Days before its date a confirmed trip may be started. 0 = not before the trip date.
     early-start-days: ${TRIP_EARLY_START_DAYS:0}
