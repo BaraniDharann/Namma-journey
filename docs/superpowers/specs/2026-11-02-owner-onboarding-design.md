@@ -24,6 +24,9 @@ The work is split into four sub-projects, each with its own spec and plan:
 | Credentials | The owner never chooses a password at signup. On approval the system generates an Owner ID and a random password and emails both. The owner must change the password on first login. |
 | Email | Every email is sent from `nammajourney463@gmail.com` (`MAIL_USERNAME`, Gmail App Password). Admin alerts go to `ADMIN_NOTIFY_EMAIL=nammajourney463@gmail.com`. |
 | Environment | Built and tested locally only. No deploy in this sub-project. |
+| Document verification | **Free official sources only. No paid KYC API.** The admin checks each owner by hand, using the government sites in the verification checklist below. Approve stays disabled until every check is marked verified. |
+| Aadhaar | Verified **only by the admin, by hand**, by scanning the card's Secure QR code with UIDAI's free QR scanner app, which checks UIDAI's digital signature. The owner must tick an explicit consent box at signup. |
+| Driver verification | Owners add their own drivers and **approve them by hand**, checking driving licence and RC on Parivahan. This is designed in sub-project 2, not here. |
 
 ## Data model (migration V26)
 
@@ -50,6 +53,12 @@ The work is split into four sub-projects, each with its own spec and plan:
 ### `owner_cities` (new)
 `owner_id`, `city_id`, primary key on both.
 
+### `owners`: consent
+`aadhaar_consent_at` records when the owner ticked the consent box. It is required for new signups.
+
+### `owner_verification_checks` (new)
+`owner_id`, `check_type` (`PAN` / `AADHAAR` / `REGISTRATION_DOC` / `BANK`), `result` (`VERIFIED` / `FAILED`), `note`, `checked_by_admin_id`, `checked_at`. The primary key is (`owner_id`, `check_type`). Every change is also written to the application log, so there is an audit trail of who checked what and when.
+
 ## Flows
 
 ### 1. Owner signup: `POST /api/auth/owner/signup` (public, multipart)
@@ -59,6 +68,7 @@ The work is split into four sub-projects, each with its own spec and plan:
    - IFSC matches `[A-Z]{4}0[A-Z0-9]{6}`
    - Aadhaar passes its check digit (reuse `DriverApplicationChecks`)
    - at least one city is given and every city exists
+  - the Aadhaar consent box is ticked ("I consent to NammaJourney verifying my Aadhaar offline for owner registration"). The time is stored in `aadhaar_consent_at`.
    - each document is an image or PDF of at most 5 MB
 2. Reject the signup if the email or PAN hash already belongs to an owner, unless that owner is `REJECTED` (see Resubmit).
 3. Store the documents and save the owner as `PENDING_REVIEW` with `submitted_at = now`.
@@ -71,8 +81,18 @@ The work is split into four sub-projects, each with its own spec and plan:
 - `GET /api/admin/owners?status=` lists owners. Each row shows submitted time, hours waiting and whether it is overdue (more than 48 hours).
 - `GET /api/admin/owners/{id}` returns details, masked bank and PAN values, and the results of each automatic check.
 - `GET /api/admin/owners/{id}/documents/{type}` streams a document, or returns a signed URL on S3.
+- **Verification checklist** (`PUT /api/admin/owners/{id}/checks/{type}`, body `{result, note}`). The admin checks each item on a free official source and records the result:
+
+  | Check | How the admin verifies it (free) |
+  |---|---|
+  | `PAN` | Income Tax e-filing portal, "Verify Your PAN": the PAN is active and the name matches |
+  | `AADHAAR` | Scan the Secure QR code on the uploaded Aadhaar image with UIDAI's free QR scanner app (Android/iOS). The signature must be valid, and the name and photo must match the owner. The last 4 digits must match `aadhaar_last4`. |
+  | `REGISTRATION_DOC` | Compare the business name and number with the travels name. Where the registration number can be looked up (for example GST or Udyam), check it on that portal. |
+  | `BANK` | Account holder name matches the owner or travels name, and the IFSC is valid (RBI IFSC list) |
+
+  The admin screen shows a button per check that opens the official site in a new tab. A `FAILED` check needs a note, and that note is suggested as the rejection reason.
 - **Approve** (`POST /api/admin/owners/{id}/approve`):
-  - Allowed only from `PENDING_REVIEW`.
+  - Allowed only from `PENDING_REVIEW`, and only when **all four checks are `VERIFIED`**. Otherwise it returns 409 with the list of missing or failed checks.
   - Assigns `owner_code` from the sequence, generates a 12-character random password, stores its bcrypt hash, sets `must_change_password = true` and fills in the review trail.
   - Sends the credentials email to the owner **directly**, not through the outbox, the same way `sendDriverCredentials` works today, so the password is never written to the database: "Approved. Owner ID {code}, password {password}, login link".
   - If sending fails, the approval still stands. The admin then gets a "Resend credentials" button, which generates a new password and sends the email again.
@@ -110,7 +130,8 @@ Requires the header `X-Bootstrap-Secret` = `ADMIN_BOOTSTRAP_SECRET`. It works on
 - Owner login page: accepts the Owner ID or the email, shows the pending or rejected message, and redirects to the change-password screen when required.
 - `/admin/login` and `/admin/owners`, with Pending, Approved and Rejected tabs:
   - The Pending tab is sorted by oldest first, with an overdue badge on anything past 48 hours.
-  - The detail view shows the document viewer, the check results, and Approve / Reject (with a reason box).
+  - The detail view shows the document viewer, the automatic format-check results, and the verification checklist: for each of PAN, Aadhaar, registration document and bank, an "Open official site" button, ✔ Verified / ✘ Failed buttons and a note field.
+  - Approve stays disabled until all four checks are verified. Reject is always available and needs a reason box.
 - Owner profile: the migrated `NJO-0001` is prompted to complete its business details.
 
 ## Security
@@ -126,7 +147,9 @@ Requires the header `X-Bootstrap-Secret` = `ADMIN_BOOTSTRAP_SECRET`. It works on
 - **Integration (Spring Boot test):**
   - signup creates the owner as pending and queues 2 emails
   - a duplicate email or PAN is rejected
-  - approve sets the code and password and queues the credentials email
+  - signup without Aadhaar consent is rejected
+  - approve returns 409 until all four checks are verified, and a failed check without a note is rejected
+  - approve sets the code and password and sends the credentials email
   - reject followed by resubmit
   - login is blocked while pending or rejected
   - `must_change_password` blocks every endpoint except change-password
@@ -136,7 +159,8 @@ Requires the header `X-Bootstrap-Secret` = `ADMIN_BOOTSTRAP_SECRET`. It works on
 
 ## Out of scope (later sub-projects)
 
-- Per-owner vehicles, drivers, prices and dashboard scoping (2)
+- Per-owner vehicles, drivers, prices and dashboard scoping (2). This includes owners manually approving their own drivers, with a driving licence and RC checklist on free Parivahan sources (Sarathi "DL Status", Vahan / mParivahan).
+- Paid KYC APIs and DigiLocker integration. These are not planned. The checklist is built so an automatic verifier could fill it in later.
 - Customer compare-and-book (3)
 - Commission statements and payments (4)
 - City rides: unchanged
