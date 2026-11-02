@@ -10,6 +10,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import java.io.InputStream;
@@ -75,6 +76,24 @@ public class S3FileStore implements FileStore {
     public void delete(String key) {
         if (isValidKey(key)) {
             s3.deleteObject(b -> b.bucket(props.bucket()).key(key));
+        }
+    }
+
+    /** True if the bucket already holds this key (a HEAD request; used by {@link DatabaseToS3Import}). */
+    public boolean exists(String key) {
+        if (!isValidKey(key)) {
+            return false;
+        }
+        try {
+            s3.headObject(b -> b.bucket(props.bucket()).key(key));
+            return true;
+        } catch (S3Exception e) {
+            // Without s3:ListBucket (not granted - the app never lists), S3 answers a missing key
+            // with 403 rather than 404. A real permission problem still surfaces on the put.
+            if (e.statusCode() == 404 || e.statusCode() == 403) {
+                return false;
+            }
+            throw e;
         }
     }
 

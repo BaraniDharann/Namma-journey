@@ -197,6 +197,9 @@ app:
       path-style: ${S3_PATH_STYLE:false}
       # How long an image link given to a browser stays valid.
       signed-url-ttl: ${S3_SIGNED_URL_TTL:10m}
+      # Moving from type db: copy stored_files into the bucket on startup (DatabaseToS3Import).
+      # Keys already in the bucket are skipped; turn it off once the log reports 0 failed.
+      import-from-db: ${S3_IMPORT_FROM_DB:false}
 
   metrics:
     # Bearer token Prometheus presents to read /actuator/prometheus (ScrapeTokenAuthorizationManager).

@@ -1,5 +1,6 @@
 package com.travelplatform.config;
 
+import com.travelplatform.storage.DatabaseToS3Import;
 import com.travelplatform.storage.FileStore;
 import com.travelplatform.storage.LocalFileStore;
 import com.travelplatform.storage.S3FileStore;
@@ -7,9 +8,11 @@ import com.travelplatform.storage.S3StorageProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -68,5 +71,24 @@ public class StorageConfig {
         log.info("Uploads stored in S3-compatible bucket '{}'{}", bucket,
                 endpoint.isBlank() ? "" : " at " + endpoint);
         return new S3FileStore(S3FileStore.client(props), S3FileStore.presigner(props), props);
+    }
+
+    /**
+     * Moving from db to s3 (S3_IMPORT_FROM_DB=true): copies stored_files into the bucket after
+     * startup, in the background so health checks pass meanwhile. Turn it off once the log reports
+     * 0 failed.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "app.storage.type", havingValue = "s3")
+    public ApplicationRunner importUploadsFromDatabase(FileStore fileStore, JdbcTemplate jdbc,
+                                                       @Value("${app.storage.s3.import-from-db:false}") boolean enabled) {
+        return args -> {
+            if (!enabled || !(fileStore instanceof S3FileStore s3)) {
+                return;
+            }
+            Thread worker = new Thread(() -> new DatabaseToS3Import(jdbc, s3).run(), "upload-import");
+            worker.setDaemon(true);
+            worker.start();
+        };
     }
 }
