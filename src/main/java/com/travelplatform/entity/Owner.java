@@ -58,6 +58,13 @@ public class Owner {
     @Column(nullable = false, length = 20)
     private OwnerStatus status = OwnerStatus.PENDING_REVIEW;
 
+    /** How this owner's Trips get a driver (V27): automatically, or by the owner from the Bookings screen. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assignment_mode", nullable = false, length = 8)
+    private AssignmentMode assignmentMode = AssignmentMode.MANUAL;
+
+    public enum AssignmentMode { AUTO, MANUAL }
+
     @Column(name = "travels_name")
     private String travelsName;
 

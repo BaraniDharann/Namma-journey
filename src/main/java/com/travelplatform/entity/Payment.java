@@ -25,6 +25,10 @@ public class Payment {
     
     @Column(nullable = false)
     private UUID bookingId;
+
+    /** Owner of the booking, filled by a database trigger (V27); read-only here. */
+    @Column(name = "owner_id", insertable = false, updatable = false)
+    private Long ownerId;
     
     @Column(nullable = false)
     private UUID userId;

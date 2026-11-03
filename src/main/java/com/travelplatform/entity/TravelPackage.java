@@ -100,6 +100,10 @@ public class TravelPackage {
     @Column
     private Long createdBy;
 
+    /** The travels owner who runs this package (V27); taken from the login, never the request. */
+    @Column(name = "owner_id", nullable = false)
+    private Long ownerId;
+
     public enum PackageCategory {
         TEMPLE,
         HONEYMOON,

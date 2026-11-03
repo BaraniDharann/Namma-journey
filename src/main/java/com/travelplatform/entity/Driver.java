@@ -125,6 +125,14 @@ public class Driver {
     @Column(nullable = false, length = 12)
     private Fleet fleet = Fleet.OWNER_FLEET;
 
+    /** The travels owner whose fleet this driver is in; null for independent drivers (V27). */
+    @Column(name = "owner_id")
+    private Long ownerId;
+
+    /** The car this driver usually drives; pre-selected when a Trip is assigned, swappable per trip. */
+    @Column(name = "default_vehicle_id")
+    private Long defaultVehicleId;
+
     /** Owner-created drivers need no check, so the default is APPROVED; self-signups start UNDER_REVIEW. */
     @Enumerated(EnumType.STRING)
     @Column(name = "verification_status", nullable = false, length = 12)
