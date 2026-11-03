@@ -263,6 +263,13 @@ app:
     # this it is a race between the operator and anyone scanning the internet. Empty disables
     # the endpoint, which is what every environment that already has an owner should use.
     owner-secret: ${OWNER_BOOTSTRAP_SECRET:}
+    # One-time secret for POST /api/auth/admin/bootstrap, which creates the first NammaJourney
+    # admin (who approves travels owners). Same reasoning as above: empty disables it.
+    admin-secret: ${ADMIN_BOOTSTRAP_SECRET:}
+
+  admin:
+    # Where admin alerts go: new owner applications, and the 36-hour review reminder.
+    notify-email: ${ADMIN_NOTIFY_EMAIL:nammajourney463@gmail.com}
 
   telegram:
     # Dispatch pushes to drivers over a Telegram bot. A driver cannot read email or open a

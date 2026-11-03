@@ -93,6 +93,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/user/**").hasRole("USER")
                 .requestMatchers("/api/driver/location/**").authenticated()
                 .requestMatchers("/api/driver/**").hasRole("DRIVER")
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/owner/pricing/current").authenticated()
                 .requestMatchers("/api/owner/**").hasRole("OWNER")
                 .anyRequest().authenticated()

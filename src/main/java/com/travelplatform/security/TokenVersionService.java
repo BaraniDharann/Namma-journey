@@ -2,9 +2,11 @@ package com.travelplatform.security;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.travelplatform.entity.Admin;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.entity.Owner;
 import com.travelplatform.entity.User;
+import com.travelplatform.repository.AdminRepository;
 import com.travelplatform.repository.DriverRepository;
 import com.travelplatform.repository.OwnerRepository;
 import com.travelplatform.repository.UserRepository;
@@ -33,16 +35,19 @@ public class TokenVersionService {
     private final UserRepository users;
     private final DriverRepository drivers;
     private final OwnerRepository owners;
+    private final AdminRepository admins;
 
     private final Cache<String, Long> versions = Caffeine.newBuilder()
             .expireAfterWrite(CACHE_TTL)
             .maximumSize(100_000)
             .build();
 
-    public TokenVersionService(UserRepository users, DriverRepository drivers, OwnerRepository owners) {
+    public TokenVersionService(UserRepository users, DriverRepository drivers, OwnerRepository owners,
+                               AdminRepository admins) {
         this.users = users;
         this.drivers = drivers;
         this.owners = owners;
+        this.admins = admins;
     }
 
     /** True if the account still exists and the token was issued at its current version. */
@@ -72,12 +77,19 @@ public class TokenVersionService {
         versions.invalidate("ROLE_OWNER:" + owner.getId());
     }
 
+    public void revokeAdmin(Admin admin) {
+        admin.setTokenVersion(admin.getTokenVersion() + 1);
+        admins.save(admin);
+        versions.invalidate("ROLE_ADMIN:" + admin.getId());
+    }
+
     private Long lookup(String role, String principal) {
         try {
             return switch (role) {
                 case "ROLE_USER" -> users.findById(UUID.fromString(principal)).map(User::getTokenVersion).orElse(null);
                 case "ROLE_DRIVER" -> drivers.findById(Long.valueOf(principal)).map(Driver::getTokenVersion).orElse(null);
                 case "ROLE_OWNER" -> owners.findById(Long.valueOf(principal)).map(Owner::getTokenVersion).orElse(null);
+                case "ROLE_ADMIN" -> admins.findById(Long.valueOf(principal)).map(Admin::getTokenVersion).orElse(null);
                 default -> null;
             };
         } catch (IllegalArgumentException malformedId) {

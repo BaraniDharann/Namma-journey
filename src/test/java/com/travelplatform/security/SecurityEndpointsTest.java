@@ -1,8 +1,10 @@
 package com.travelplatform.security;
 
 import com.travelplatform.config.JwtUtil;
+import com.travelplatform.entity.Admin;
 import com.travelplatform.entity.Owner;
 import com.travelplatform.entity.User;
+import com.travelplatform.repository.AdminRepository;
 import com.travelplatform.repository.OwnerRepository;
 import com.travelplatform.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,6 +70,10 @@ class SecurityEndpointsTest {
     private UserRepository users;
     @Autowired
     private OwnerRepository owners;
+    @Autowired
+    private AdminRepository admins;
+    @Autowired
+    private TokenVersionService tokenVersions;
 
     private User alice;
     private User bob;
@@ -160,5 +166,39 @@ class SecurityEndpointsTest {
     @DisplayName("identity documents are not served without a signed link")
     void identityDocumentsNeedASignature() throws Exception {
         mvc.perform(get("/uploads/drivers/aadhaar_" + UUID.randomUUID() + ".jpg")).andExpect(status().isNotFound());
+    }
+
+    private Admin admin() {
+        Admin a = new Admin();
+        a.setEmail("admin-" + UUID.randomUUID() + "@x.com");
+        a.setPassword("x");
+        return admins.save(a);
+    }
+
+    @Test
+    @DisplayName("the admin API is for admins only - not owners, not passengers")
+    void adminEndpointsAreAdminOnly() throws Exception {
+        Admin a = admin();
+        String adminToken = "Bearer " + jwt.generateToken(a.getId().toString(), "ROLE_ADMIN", a.getTokenVersion());
+
+        mvc.perform(get("/api/admin/owners")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/admin/owners").header("Authorization", ownerToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/owners").header("Authorization", aliceToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/owners").header("Authorization", adminToken))
+                .andExpect(r -> org.junit.jupiter.api.Assertions.assertTrue(
+                        r.getResponse().getStatus() != 401 && r.getResponse().getStatus() != 403,
+                        "admin was refused: " + r.getResponse().getStatus()));
+        mvc.perform(get("/api/owner/bookings").header("Authorization", adminToken)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("an admin token stops working once the admin's tokens are revoked")
+    void adminTokenDiesWhenAdminRevoked() throws Exception {
+        Admin a = admin();
+        String adminToken = "Bearer " + jwt.generateToken(a.getId().toString(), "ROLE_ADMIN", a.getTokenVersion());
+
+        tokenVersions.revokeAdmin(a);
+
+        mvc.perform(get("/api/admin/owners").header("Authorization", adminToken)).andExpect(status().isUnauthorized());
     }
 }

@@ -54,7 +54,7 @@ class TokenRevocationTest {
 
         users = mock(UserRepository.class);
         drivers = mock(DriverRepository.class);
-        versions = new TokenVersionService(users, drivers, mock(OwnerRepository.class));
+        versions = new TokenVersionService(users, drivers, mock(OwnerRepository.class), mock(com.travelplatform.repository.AdminRepository.class));
 
         user = new User();
         user.setId(userId);
