@@ -267,6 +267,14 @@ app:
   # The web app's address, for links in emails (owner resubmit link, admin review link).
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
 
+  owners:
+    # The original owner, who runs the platform today.
+    platform-owner-code: ${PLATFORM_OWNER_CODE:NJO-0001}
+    # false until every owner screen is scoped to its own owner (sub-project 2). Until then an
+    # owner token sees ALL bookings, drivers and payouts, so newly approved owners can finish
+    # setup but get "the portal opens soon" instead of an owner token. Do not turn on before then.
+    portal-open-to-all: ${OWNER_PORTAL_OPEN_TO_ALL:false}
+
   admin:
     # Where admin alerts go: new owner applications, and the 36-hour review reminder.
     notify-email: ${ADMIN_NOTIFY_EMAIL:nammajourney463@gmail.com}
