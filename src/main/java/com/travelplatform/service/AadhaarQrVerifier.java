@@ -16,6 +16,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReadParam;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -28,6 +31,7 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -50,6 +54,11 @@ public class AadhaarQrVerifier {
     private static final Map<DecodeHintType, Object> HINTS = Map.of(
             DecodeHintType.POSSIBLE_FORMATS, List.of(BarcodeFormat.QR_CODE),
             DecodeHintType.TRY_HARDER, Boolean.TRUE);
+
+    /** 12 MP phone photos pass; a header claiming gigapixels does not. */
+    static final long MAX_PIXELS = 50_000_000L;
+    /** Long side decoded at most; a card QR stays readable well below this. */
+    static final long MAX_DECODE_SIDE = 4000;
 
     private final List<PublicKey> uidaiKeys;
 
@@ -82,14 +91,9 @@ public class AadhaarQrVerifier {
         if (image == null || image.length == 0) {
             return null;
         }
-        BufferedImage img;
-        try {
-            img = ImageIO.read(new ByteArrayInputStream(image));
-        } catch (IOException | RuntimeException e) {
-            return null;
-        }
+        BufferedImage img = decode(image);
         if (img == null) {
-            return null; // not an image ImageIO can read (a PDF, HEIC, ...)
+            return null; // not an image ImageIO can read (a PDF, HEIC, ...), or absurdly large
         }
         LuminanceSource source = new BufferedImageLuminanceSource(img);
         // Hybrid copes with uneven lighting in phone photos; global with flat scans.
@@ -102,6 +106,37 @@ public class AadhaarQrVerifier {
             }
         }
         return null;
+    }
+
+    /**
+     * Decodes from the header first: this runs on a public upload before any other check, and a
+     * few-KB PNG can declare a raster of gigabytes. Big photos are subsampled to about
+     * {@link #MAX_DECODE_SIDE} px on the long side - still far more than a card's QR needs.
+     */
+    private static BufferedImage decode(byte[] image) {
+        try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(image))) {
+            Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
+            if (readers == null || !readers.hasNext()) {
+                return null;
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(in, true, true);
+                long w = reader.getWidth(0);
+                long h = reader.getHeight(0);
+                if (w <= 0 || h <= 0 || w * h > MAX_PIXELS) {
+                    return null;
+                }
+                int step = (int) Math.max(1, (Math.max(w, h) + MAX_DECODE_SIDE - 1) / MAX_DECODE_SIDE);
+                ImageReadParam param = reader.getDefaultReadParam();
+                param.setSourceSubsampling(step, step, 0, 0);
+                return reader.read(0, param);
+            } finally {
+                reader.dispose();
+            }
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
     }
 
     private static List<PublicKey> loadKeys(String paths) {

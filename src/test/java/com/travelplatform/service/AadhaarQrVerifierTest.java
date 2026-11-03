@@ -54,6 +54,51 @@ class AadhaarQrVerifierTest {
     }
 
     @Test
+    @DisplayName("a tiny PNG claiming 46000x46000 pixels is refused from its header, not decoded into gigabytes")
+    void decompressionBombImageIsRefused() throws Exception {
+        AadhaarQrVerifier verifier = new AadhaarQrVerifier(List.of());
+        byte[] bomb = pngHeaderOnly(30_000, 30_000); // would be a 900 MB raster
+        com.sun.management.ThreadMXBean threads =
+                (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+        long before = threads.getCurrentThreadAllocatedBytes();
+
+        AadhaarSecureQr.Result r = verifier.verifyImage(bomb);
+
+        long allocated = threads.getCurrentThreadAllocatedBytes() - before;
+        assertEquals(AadhaarSecureQr.Status.UNREADABLE, r.status());
+        org.junit.jupiter.api.Assertions.assertTrue(allocated < 50L * 1024 * 1024,
+                "decoding allocated " + (allocated >> 20) + " MB");
+    }
+
+    /** A valid PNG signature and IHDR for a huge greyscale image, followed by one tiny IDAT. */
+    static byte[] pngHeaderOnly(int width, int height) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
+        java.nio.ByteBuffer ihdr = java.nio.ByteBuffer.allocate(13);
+        ihdr.putInt(width).putInt(height).put((byte) 8).put((byte) 0).put((byte) 0).put((byte) 0).put((byte) 0);
+        chunk(out, "IHDR", ihdr.array());
+        java.io.ByteArrayOutputStream z = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.DeflaterOutputStream d = new java.util.zip.DeflaterOutputStream(z)) {
+            d.write(new byte[1024]);
+        }
+        chunk(out, "IDAT", z.toByteArray());
+        chunk(out, "IEND", new byte[0]);
+        return out.toByteArray();
+    }
+
+    private static void chunk(ByteArrayOutputStream out, String type, byte[] data) throws Exception {
+        java.io.DataOutputStream d = new java.io.DataOutputStream(out);
+        d.writeInt(data.length);
+        byte[] t = type.getBytes(StandardCharsets.US_ASCII);
+        d.write(t);
+        d.write(data);
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        crc.update(t);
+        crc.update(data);
+        d.writeInt((int) crc.getValue());
+    }
+
+    @Test
     @DisplayName("no certificate configured: runs, but says so")
     void unconfigured() {
         assertFalse(new AadhaarQrVerifier("").isConfigured());

@@ -11,6 +11,8 @@ import java.io.ByteArrayOutputStream;
  */
 public final class AadhaarPhotoConverter {
 
+    static final long MAX_PIXELS = 1_000_000L;
+
     private AadhaarPhotoConverter() {
     }
 
@@ -19,8 +21,24 @@ public final class AadhaarPhotoConverter {
         if (jpeg2000 == null || jpeg2000.length == 0) {
             return null;
         }
-        try {
-            BufferedImage img = ImageIO.read(new ByteArrayInputStream(jpeg2000));
+        try (javax.imageio.stream.ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(jpeg2000))) {
+            java.util.Iterator<javax.imageio.ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
+            if (readers == null || !readers.hasNext()) {
+                return null;
+            }
+            javax.imageio.ImageReader reader = readers.next();
+            BufferedImage img;
+            try {
+                reader.setInput(in, true, true);
+                // A QR photo is about 100x120. The QR itself may be unsigned (forged), so its
+                // header is not trusted to declare a sane size.
+                if ((long) reader.getWidth(0) * reader.getHeight(0) > MAX_PIXELS) {
+                    return null;
+                }
+                img = reader.read(0);
+            } finally {
+                reader.dispose();
+            }
             if (img == null) {
                 return null;
             }
