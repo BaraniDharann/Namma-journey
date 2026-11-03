@@ -76,6 +76,12 @@ public class NotificationController {
         if (!isOwner && !auth.getName().equals(recipientId)) {
             throw new AccessDeniedException("Cannot read another user's notifications");
         }
+        // Ids come from different tables (drivers, admins, owners on a setup token), so the same
+        // id is not the same person: the bucket's role must be the caller's own.
+        boolean ownRole = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase(role));
+        if (!isOwner && !ownRole) {
+            throw new AccessDeniedException("Cannot read another user's notifications");
+        }
     }
 
     private String currentPrincipal() {
