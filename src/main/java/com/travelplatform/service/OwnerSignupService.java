@@ -65,9 +65,25 @@ public class OwnerSignupService {
 
     @Transactional
     public SignupResult signup(OwnerSignupForm form) {
-        Owner owner = new Owner();
+        // A rejected owner applying again (say, after their resubmit link expired) reopens their
+        // own application rather than being told the email is taken forever.
+        Owner owner = form.getEmail() == null ? new Owner()
+                : ownerRepository.findByEmailIgnoreCase(form.getEmail().trim().toLowerCase(Locale.ROOT))
+                        .filter(o -> o.getStatus() == OwnerStatus.REJECTED)
+                        .orElseGet(Owner::new);
         AadhaarSecureQr.Result qr = applyForm(owner, form, false);
+        if (owner.getId() != null) {
+            reopen(owner);
+        }
         return submit(owner, qr);
+    }
+
+    /** A rejected application going back for review: link used up, old verdicts cleared. */
+    private void reopen(Owner owner) {
+        owner.setResubmitTokenHash(null);
+        owner.setResubmitTokenExpiresAt(null);
+        owner.setRejectionReason(null);
+        checkRepository.deleteByOwnerId(owner.getId());
     }
 
     @Transactional(readOnly = true)
@@ -87,10 +103,7 @@ public class OwnerSignupService {
     public SignupResult resubmit(String token, OwnerSignupForm form) {
         Owner owner = byResubmitToken(token);
         AadhaarSecureQr.Result qr = applyForm(owner, form, true);
-        owner.setResubmitTokenHash(null);
-        owner.setResubmitTokenExpiresAt(null);
-        owner.setRejectionReason(null);
-        checkRepository.deleteByOwnerId(owner.getId());
+        reopen(owner);
         return submit(owner, qr);
     }
 
@@ -175,7 +188,13 @@ public class OwnerSignupService {
         ownerRepository.findByPanHash(panHash)
                 .filter(other -> !other.getId().equals(owner.getId()))
                 .ifPresent(other -> {
-                    throw new IllegalArgumentException("This PAN is already registered");
+                    if (other.getStatus() != OwnerStatus.REJECTED) {
+                        throw new IllegalArgumentException("This PAN is already registered");
+                    }
+                    // Only the format of a PAN is checked at signup, so a rejected application may
+                    // have used someone else's. It must not lock the real holder out.
+                    other.setPanHash(null);
+                    ownerRepository.saveAndFlush(other);
                 });
 
         // Read before storing: storeImage re-compresses, which can blur a QR past reading.

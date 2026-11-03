@@ -317,6 +317,38 @@ class OwnerSignupServiceTest {
     }
 
     @Test
+    @DisplayName("a rejected owner whose link expired can simply apply again with the same email")
+    void freshSignupReusesOwnRejectedApplication() {
+        Owner o = rejected(LocalDateTime.now().minusDays(1));
+        com.travelplatform.repository.OwnerVerificationCheckRepository checks =
+                (com.travelplatform.repository.OwnerVerificationCheckRepository) ReflectionTestUtils.getField(service, "checkRepository");
+
+        OwnerSignupService.SignupResult r = service.signup(form());
+
+        assertEquals(42L, r.ownerId());
+        assertEquals(OwnerStatus.PENDING_REVIEW, o.getStatus());
+        assertNull(o.getResubmitTokenHash());
+        assertNull(o.getRejectionReason());
+        verify(checks).deleteByOwnerId(42L);
+    }
+
+    @Test
+    @DisplayName("a PAN held only by a rejected application (maybe someone else's misuse) does not block its real holder")
+    void panHeldByRejectedApplicationIsReleased() {
+        Owner squatter = new Owner();
+        squatter.setId(7L);
+        squatter.setEmail("someone-else@example.com");
+        squatter.setStatus(OwnerStatus.REJECTED);
+        squatter.setPanHash(OwnerApplicationChecks.panHash("ABCDE1234F"));
+        when(owners.findByPanHash(OwnerApplicationChecks.panHash("ABCDE1234F"))).thenReturn(Optional.of(squatter));
+
+        assertDoesNotThrow(() -> service.signup(form()));
+
+        assertNull(squatter.getPanHash());
+        verify(owners).saveAndFlush(squatter);
+    }
+
+    @Test
     @DisplayName("an Aadhaar photo whose QR cannot be read still signs up - the admin falls back to the app")
     void signupSucceedsWhenAadhaarQrUnreadable() {
         when(verifier.verifyImage(any())).thenReturn(AadhaarSecureQr.Result.of(AadhaarSecureQr.Status.UNREADABLE));
