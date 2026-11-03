@@ -158,6 +158,23 @@ export const driverRequestResetOtp = (mobile) => api.post('/auth/driver/request-
 export const ownerForgotPassword = (data) => api.post('/auth/owner/forgot-password', data)
 export const userForgotPassword = (data) => api.post('/user/forgot-password', data)
 
+// Travels owner onboarding: apply, fix a rejected application, replace the emailed password.
+export const publicCities = () => api.get('/public/cities')
+export const ownerSignup = (formData) => api.post('/auth/owner/signup', formData, { timeout: 60000 })
+export const ownerResubmitPrefill = (token) => api.get(`/auth/owner/resubmit/${encodeURIComponent(token)}`)
+export const ownerResubmit = (token, formData) =>
+  api.post(`/auth/owner/resubmit/${encodeURIComponent(token)}`, formData, { timeout: 60000 })
+export const ownerChangePassword = (data) => api.post('/owner/change-password', data)
+
+// NammaJourney admin: reviewing owner applications.
+export const adminLogin = (data) => api.post('/auth/admin/login', data)
+export const adminOwners = (status) => api.get('/admin/owners', { params: { status } })
+export const adminOwner = (id) => api.get(`/admin/owners/${id}`)
+export const adminOwnerCheck = (id, type, data) => api.put(`/admin/owners/${id}/checks/${type}`, data)
+export const adminApproveOwner = (id) => api.post(`/admin/owners/${id}/approve`)
+export const adminRejectOwner = (id, reason) => api.post(`/admin/owners/${id}/reject`, { reason })
+export const adminResendCredentials = (id) => api.post(`/admin/owners/${id}/resend-credentials`)
+
 // Place Search API (debounced to avoid flooding on keystrokes)
 export const searchPlaces = (query) => debouncedGet(`/places/search?q=${encodeURIComponent(query)}`, 350)
 

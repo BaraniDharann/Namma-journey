@@ -27,7 +27,7 @@ const BOOKING_ROUTES = {
   ROLE_OWNER: '/owner/bookings',
 }
 
-const ROLE_LABEL = { ROLE_USER: 'Traveller', ROLE_DRIVER: 'Driver', ROLE_OWNER: 'Owner' }
+const ROLE_LABEL = { ROLE_USER: 'Traveller', ROLE_DRIVER: 'Driver', ROLE_OWNER: 'Owner', ROLE_ADMIN: 'Admin' }
 
 /**
  * The Postcard shell every owner, driver and traveller page renders inside: teal rail with
@@ -51,7 +51,8 @@ export default function DashboardLayout({ children, navItems, role }) {
   const handleLogout = () => { logout(); navigate('/') }
 
   const fetchNotifications = useCallback(async () => {
-    if (!user?.userId || !user?.role) return
+    // Admins have no notification feed; their alerts arrive by email.
+    if (!user?.userId || !user?.role || user.role === 'ROLE_ADMIN') return
     try {
       const recipientId = user.role === 'ROLE_OWNER' ? 'owner' : String(user.userId)
       const [notifRes, countRes] = await Promise.all([

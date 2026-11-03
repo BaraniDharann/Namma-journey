@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ownerLogin, ownerForgotPassword, sendOtp } from '../utils/api'
 import { offerToSaveLogin } from '../utils/rememberLogin'
@@ -26,7 +26,8 @@ export default function OwnerLoginPage() {
       const res = await ownerLogin(form)
       void offerToSaveLogin(form.email, form.password, res.data?.name)
       login(res.data)
-      navigate('/owner/dashboard')
+      // First sign-in on the emailed one-time password: the token only allows choosing a new one.
+      navigate(res.data?.mustChangePassword ? '/owner/change-password' : '/owner/dashboard')
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid credentials')
     } finally {
@@ -108,11 +109,12 @@ export default function OwnerLoginPage() {
   }
 
   return (
-    <AuthShell role="owner" title="Owner portal" sub="Sign in to run your fleet and bookings.">
+    <AuthShell role="owner" title="Owner portal" sub="Sign in to run your fleet and bookings."
+      footer={<p className="au-sub" style={{ marginTop: 16 }}>New travels owner? <Link to="/owner/signup">Apply to list your travels</Link>. Your Owner ID and password are emailed once we approve you.</p>}>
       <Alert>{error}</Alert>
       <form onSubmit={handleSubmit} className="au-form">
-        <Field label="Email address" icon="mail">
-          <input type="email" placeholder="owner@example.com" value={form.email} name="username" autoComplete="username"
+        <Field label="Owner ID or email" icon="mail">
+          <input type="text" placeholder="NJO-0002 or owner@example.com" value={form.email} name="username" autoComplete="username"
             onChange={e => setForm({ ...form, email: e.target.value })} required />
         </Field>
         <Field label="Password" icon="lock" aside={<TextButton onClick={() => setShowForgot(true)}>Forgot password?</TextButton>}>

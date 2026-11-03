@@ -12,6 +12,11 @@ const SignupPage      = lazy(() => import('./pages/SignupPage'))
 const DriverLoginPage = lazy(() => import('./pages/DriverLoginPage'))
 const DriverSignupPage = lazy(() => import('./pages/DriverSignupPage'))
 const OwnerLoginPage  = lazy(() => import('./pages/OwnerLoginPage'))
+const OwnerSignupPage = lazy(() => import('./pages/OwnerSignupPage'))
+const OwnerChangePassword = lazy(() => import('./pages/owner/OwnerChangePassword'))
+const AdminLoginPage  = lazy(() => import('./pages/AdminLoginPage'))
+const AdminOwners     = lazy(() => import('./pages/admin/AdminOwners'))
+const AdminOwnerDetail = lazy(() => import('./pages/admin/AdminOwnerDetail'))
 
 const UserDashboard  = lazy(() => import('./pages/user/UserDashboard'))
 const UserBookings   = lazy(() => import('./pages/user/UserBookings'))
@@ -80,6 +85,8 @@ function getDashboard(role) {
   if (role === 'ROLE_USER')   return '/user/dashboard'
   if (role === 'ROLE_DRIVER') return '/driver/dashboard'
   if (role === 'ROLE_OWNER')  return '/owner/dashboard'
+  if (role === 'ROLE_OWNER_SETUP') return '/owner/change-password'
+  if (role === 'ROLE_ADMIN')  return '/admin/owners'
   return '/'
 }
 
@@ -94,7 +101,12 @@ function AppRoutes() {
         <Route path="/signup"       element={user ? <Navigate to="/user/dashboard" /> : <SignupPage />} />
         <Route path="/driver/login" element={user ? <Navigate to="/driver/dashboard" /> : <DriverLoginPage />} />
         <Route path="/driver/signup" element={user ? <Navigate to="/driver/dashboard" /> : <DriverSignupPage />} />
-        <Route path="/owner/login"  element={user ? <Navigate to="/owner/dashboard" /> : <OwnerLoginPage />} />
+        <Route path="/owner/login"  element={user ? <Navigate to={getDashboard(user.role)} /> : <OwnerLoginPage />} />
+        <Route path="/owner/signup" element={user ? <Navigate to={getDashboard(user.role)} /> : <OwnerSignupPage />} />
+        <Route path="/owner/change-password" element={<ProtectedRoute role="ROLE_OWNER_SETUP"><OwnerChangePassword /></ProtectedRoute>} />
+        <Route path="/admin/login"  element={user ? <Navigate to={getDashboard(user.role)} /> : <AdminLoginPage />} />
+        <Route path="/admin/owners" element={<ProtectedRoute role="ROLE_ADMIN"><AdminOwners /></ProtectedRoute>} />
+        <Route path="/admin/owners/:id" element={<ProtectedRoute role="ROLE_ADMIN"><AdminOwnerDetail /></ProtectedRoute>} />
 
         <Route path="/user/dashboard"    element={<ProtectedRoute role="ROLE_USER"><UserDashboard /></ProtectedRoute>} />
         <Route path="/user/bookings"     element={<ProtectedRoute role="ROLE_USER"><UserBookings /></ProtectedRoute>} />
