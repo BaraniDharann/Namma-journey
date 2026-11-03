@@ -63,6 +63,10 @@ class SignedUploadUrlsTest {
         assertTrue(SignedUploadUrls.isSensitive("uploads/drivers/aadhaar_x.jpg"));
         assertTrue(SignedUploadUrls.isSensitive("uploads/drivers/license_x.jpg"));
         assertTrue(SignedUploadUrls.isSensitive("uploads/drivers/rc_x.jpg"));
+        // Every travels owner document is KYC: registration, PAN and Aadhaar.
+        assertTrue(SignedUploadUrls.isSensitive("uploads/owners/pan_x.jpg"));
+        assertTrue(SignedUploadUrls.isSensitive("uploads/owners/registration_x.jpg"));
+        assertTrue(SignedUploadUrls.isSensitive("uploads/owners/aadhaar_x.jpg"));
         assertFalse(SignedUploadUrls.isSensitive("uploads/drivers/photo_x.jpg"));
         assertFalse(SignedUploadUrls.isSensitive("uploads/trips/trip_1/end.jpg"));
         assertEquals("/uploads/drivers/photo_x.jpg", urls.signIfSensitive("/uploads/drivers/photo_x.jpg"));

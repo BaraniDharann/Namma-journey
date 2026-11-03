@@ -262,6 +262,45 @@ public class EmailService {
                 HTML_FOOTER);
     }
 
+    // ---- Travels owner onboarding --------------------------------------------------------
+
+    /** Admin alerts (new owner applications, review reminders) go here, not to an owner. */
+    @Value("${app.admin.notify-email:nammajourney463@gmail.com}")
+    private String adminNotifyEmail;
+
+    /** Where links in emails point: the web app, not the API. */
+    @Value("${app.frontend-base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
+
+    private static final java.time.format.DateTimeFormatter WHEN =
+            java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a", java.util.Locale.ENGLISH);
+
+    public void sendOwnerApplicationReceived(String toEmail, String travelsName, java.time.LocalDateTime reviewBy) {
+        queue(toEmail, "We received your Namma Journey owner application", HTML_HEADER +
+                "<h2>Application received</h2>" +
+                "<p>Dear " + esc(travelsName) + ",</p>" +
+                "<p>Thank you for applying to list your travels on Namma Journey. Our team will verify your " +
+                "documents within 48 hours (by " + esc(WHEN.format(reviewBy)) + ").</p>" +
+                "<p>Once you are approved we will email your Owner ID and password.</p>" +
+                HTML_FOOTER);
+    }
+
+    public void sendAdminNewOwnerApplication(com.travelplatform.entity.Owner owner, java.time.LocalDateTime reviewBy) {
+        String cities = owner.getCities() == null ? "" : owner.getCities().stream()
+                .map(com.travelplatform.entity.City::getName).sorted()
+                .collect(java.util.stream.Collectors.joining(", "));
+        queue(adminNotifyEmail, "New owner application: " + owner.getTravelsName(), HTML_HEADER +
+                "<h2>New travels owner application</h2>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>Travels:</strong> " + esc(owner.getTravelsName()) + "</p>" +
+                "<p><strong>Contact:</strong> " + esc(owner.getContactName()) + ", " + esc(owner.getPhone()) + "</p>" +
+                "<p><strong>Cities:</strong> " + esc(cities) + "</p>" +
+                "<p><strong>Review by:</strong> " + esc(WHEN.format(reviewBy)) + "</p>" +
+                "</div>" +
+                "<p><a href='" + esc(frontendBaseUrl + "/admin/owners/" + owner.getId()) + "'>Open the application</a></p>" +
+                HTML_FOOTER);
+    }
+
     private void queue(String to, String subject, String html) {
         if (to == null || to.isBlank()) {
             return;

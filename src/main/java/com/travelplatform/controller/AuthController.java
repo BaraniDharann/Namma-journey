@@ -34,6 +34,9 @@ public class AuthController {
     private com.travelplatform.service.DriverSignupService driverSignupService;
 
     @Autowired
+    private com.travelplatform.service.OwnerSignupService ownerSignupService;
+
+    @Autowired
     private com.travelplatform.security.RevokedTokenStore revokedTokens;
 
     @Autowired
@@ -187,6 +190,16 @@ public class AuthController {
             @RequestPart(value = "rcPhoto", required = false) org.springframework.web.multipart.MultipartFile rcPhoto) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(driverSignupService.signup(form, photo, licensePhoto, aadhaarPhoto, rcPhoto));
+    }
+
+    /**
+     * TRAVELS OWNER APPLICATION - business, KYC and bank details plus three document images.
+     * POST /api/auth/owner/signup
+     */
+    @PostMapping(value = "/owner/signup", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<com.travelplatform.service.OwnerSignupService.SignupResult> ownerSignup(
+            @ModelAttribute com.travelplatform.dto.OwnerSignupForm form) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ownerSignupService.signup(form));
     }
 
     /**

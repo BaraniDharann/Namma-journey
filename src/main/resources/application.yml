@@ -267,6 +267,9 @@ app:
     # admin (who approves travels owners). Same reasoning as above: empty disables it.
     admin-secret: ${ADMIN_BOOTSTRAP_SECRET:}
 
+  # The web app's address, for links in emails (owner resubmit link, admin review link).
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+
   admin:
     # Where admin alerts go: new owner applications, and the 36-hour review reminder.
     notify-email: ${ADMIN_NOTIFY_EMAIL:nammajourney463@gmail.com}

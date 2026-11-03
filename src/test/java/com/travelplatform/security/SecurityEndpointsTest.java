@@ -192,6 +192,22 @@ class SecurityEndpointsTest {
     }
 
     @Test
+    @DisplayName("an owner can apply and see the city list without an account")
+    void ownerSignupIsPublic() throws Exception {
+        mvc.perform(get("/api/public/cities")).andExpect(status().isOk());
+        // An empty form is refused by validation (400), not by authentication.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/auth/owner/signup").param("travelsName", "X"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("owner KYC documents are not served without a signed link")
+    void ownerDocumentsNeedASignature() throws Exception {
+        mvc.perform(get("/uploads/owners/pan_" + UUID.randomUUID() + ".jpg")).andExpect(status().isNotFound());
+    }
+
+    @Test
     @DisplayName("an admin token stops working once the admin's tokens are revoked")
     void adminTokenDiesWhenAdminRevoked() throws Exception {
         Admin a = admin();

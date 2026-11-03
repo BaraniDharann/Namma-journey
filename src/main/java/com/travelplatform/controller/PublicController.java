@@ -23,12 +23,24 @@ public class PublicController {
     private final ReviewService reviewService;
     private final OwnerService ownerService;
     private final CityFareService cityFareService;
+    private final com.travelplatform.service.CityService cityService;
 
     @GetMapping("/city-fares")
     public ResponseEntity<Map<String, Object>> getCityFares() {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
                 .body(cityFareService.publicRates());
+    }
+
+    /** Active cities, for a travels owner choosing where they serve at signup. */
+    @GetMapping("/cities")
+    public ResponseEntity<List<Map<String, Object>>> getCities() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
+                .body(cityService.all().stream()
+                        .filter(com.travelplatform.entity.City::isActive)
+                        .map(c -> Map.<String, Object>of("id", c.getId(), "name", c.getName()))
+                        .toList());
     }
 
     @GetMapping("/reviews")
