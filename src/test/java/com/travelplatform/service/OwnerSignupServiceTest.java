@@ -201,6 +201,121 @@ class OwnerSignupServiceTest {
         assertTrue(e.getMessage().contains(mentions), "message should mention " + mentions + ": " + e.getMessage());
     }
 
+    // ---- resubmit after rejection ----------------------------------------------------------
+
+    static final String TOKEN = "tok-123";
+
+    Owner rejected(LocalDateTime tokenExpires) {
+        com.travelplatform.repository.OwnerVerificationCheckRepository checks =
+                mock(com.travelplatform.repository.OwnerVerificationCheckRepository.class);
+        ReflectionTestUtils.setField(service, "checkRepository", checks);
+        Owner o = new Owner();
+        o.setId(42L);
+        o.setStatus(OwnerStatus.REJECTED);
+        o.setEmail("ravi@example.com");
+        o.setTravelsName("Ravi Travels");
+        o.setContactName("Ravi Kumar");
+        o.setPhone("9876543210");
+        City c = new City();
+        c.setId(1L);
+        o.setCities(new java.util.HashSet<>(List.of(c)));
+        o.setPanNumber("ABCDE1234F");
+        o.setPanHash(OwnerApplicationChecks.panHash("ABCDE1234F"));
+        o.setBankAccountHolder("Ravi Kumar");
+        o.setBankAccountNumber("12345678906789");
+        o.setBankIfsc("SBIN0001234");
+        o.setBankName("SBI");
+        o.setUpiId("ravi@okaxis");
+        o.setRegistrationDocPath("/uploads/owners/registration_old.jpg");
+        o.setPanDocPath("/uploads/owners/pan_old.jpg");
+        o.setAadhaarDocPath("/uploads/owners/aadhaar_old.jpg");
+        o.setRejectionReason("PAN unclear");
+        o.setAdminRemindedAt(LocalDateTime.now().minusDays(1));
+        o.setResubmitTokenHash(OwnerCredentials.hash(TOKEN));
+        o.setResubmitTokenExpiresAt(tokenExpires);
+        when(owners.findByResubmitTokenHash(OwnerCredentials.hash(TOKEN))).thenReturn(Optional.of(o));
+        when(owners.findByEmailIgnoreCase("ravi@example.com")).thenReturn(Optional.of(o));
+        when(owners.findByPanHash(o.getPanHash())).thenReturn(Optional.of(o));
+        return o;
+    }
+
+    @Test
+    @DisplayName("the resubmit form is pre-filled, but never with the account number, UPI or Aadhaar")
+    void prefillOmitsSecrets() throws Exception {
+        rejected(LocalDateTime.now().plusDays(3));
+
+        com.travelplatform.dto.OwnerResubmitPrefill p = service.prefill(TOKEN);
+
+        assertEquals("Ravi Travels", p.travelsName());
+        assertEquals(List.of(1L), p.cityIds());
+        assertEquals("XXXXX1234F", p.panMasked());
+        assertEquals("PAN unclear", p.rejectionReason());
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(p);
+        assertFalse(json.contains("12345678906789"));
+        assertFalse(json.contains("ravi@okaxis"));
+        assertFalse(json.contains("ABCDE1234F"));
+    }
+
+    @Test
+    @DisplayName("resubmitting reopens the same application as pending and uses up the link")
+    void resubmitReopensSameRowAndClearsToken() {
+        Owner o = rejected(LocalDateTime.now().plusDays(3));
+        com.travelplatform.repository.OwnerVerificationCheckRepository checks =
+                (com.travelplatform.repository.OwnerVerificationCheckRepository) ReflectionTestUtils.getField(service, "checkRepository");
+        OwnerSignupForm f = form();
+        f.setRegistrationDoc(null);
+        f.setPanDoc(null);
+        f.setAadhaarDoc(null);
+
+        OwnerSignupService.SignupResult r = service.resubmit(TOKEN, f);
+
+        assertEquals(42L, r.ownerId());
+        assertEquals(OwnerStatus.PENDING_REVIEW, o.getStatus());
+        assertNull(o.getResubmitTokenHash());
+        assertNull(o.getResubmitTokenExpiresAt());
+        assertNull(o.getRejectionReason());
+        assertNull(o.getAdminRemindedAt());
+        assertNotNull(o.getSubmittedAt());
+        verify(checks).deleteByOwnerId(42L);
+        verify(emails).sendAdminNewOwnerApplication(eq(o), any(LocalDateTime.class));
+    }
+
+    @Test
+    @DisplayName("documents not sent again are kept; the Aadhaar QR is re-read only for a new Aadhaar image")
+    void resubmitKeepsDocumentsNotReplaced() {
+        Owner o = rejected(LocalDateTime.now().plusDays(3));
+        OwnerSignupForm f = form();
+        f.setRegistrationDoc(null);
+        f.setAadhaarDoc(null);
+
+        service.resubmit(TOKEN, f);
+
+        verify(files, times(1)).storeImage(any(), eq("owners"), anyString());
+        assertEquals("/uploads/owners/pan_x.jpg", o.getPanDocPath());
+        assertEquals("/uploads/owners/registration_old.jpg", o.getRegistrationDocPath());
+        assertEquals("/uploads/owners/aadhaar_old.jpg", o.getAadhaarDocPath());
+        verify(verifier, never()).verifyImage(any());
+        verify(qrs, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("an expired or already used link is refused")
+    void expiredOrUsedTokenIsRefused() {
+        rejected(LocalDateTime.now().minusMinutes(1));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> service.prefill(TOKEN));
+        assertEquals("This link has expired. Please contact support.", e.getMessage());
+
+        e = assertThrows(IllegalArgumentException.class, () -> service.resubmit("unknown", form()));
+        assertEquals("This link has expired. Please contact support.", e.getMessage());
+    }
+
+    @Test
+    @DisplayName("the owner may keep their own email and PAN when resubmitting")
+    void resubmitMayKeepOwnPanAndEmail() {
+        rejected(LocalDateTime.now().plusDays(3));
+        assertDoesNotThrow(() -> service.resubmit(TOKEN, form()));
+    }
+
     @Test
     @DisplayName("an Aadhaar photo whose QR cannot be read still signs up - the admin falls back to the app")
     void signupSucceedsWhenAadhaarQrUnreadable() {

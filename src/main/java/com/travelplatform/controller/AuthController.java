@@ -202,6 +202,19 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ownerSignupService.signup(form));
     }
 
+    /** The rejected application behind an emailed resubmit link, to pre-fill the form. */
+    @GetMapping("/owner/resubmit/{token}")
+    public com.travelplatform.dto.OwnerResubmitPrefill ownerResubmitPrefill(@PathVariable String token) {
+        return ownerSignupService.prefill(token);
+    }
+
+    /** The fixed application. Documents not sent again are kept. */
+    @PostMapping(value = "/owner/resubmit/{token}", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public com.travelplatform.service.OwnerSignupService.SignupResult ownerResubmit(
+            @PathVariable String token, @ModelAttribute com.travelplatform.dto.OwnerSignupForm form) {
+        return ownerSignupService.resubmit(token, form);
+    }
+
     /**
      * DRIVER SIGN-UP EMAIL CHECK - confirms the emailed code and signs the driver in.
      * POST /api/auth/driver/signup/verify-email

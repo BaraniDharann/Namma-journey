@@ -60,11 +60,46 @@ public class OwnerSignupService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private com.travelplatform.repository.OwnerVerificationCheckRepository checkRepository;
+
     @Transactional
     public SignupResult signup(OwnerSignupForm form) {
         Owner owner = new Owner();
         AadhaarSecureQr.Result qr = applyForm(owner, form, false);
         return submit(owner, qr);
+    }
+
+    @Transactional(readOnly = true)
+    public com.travelplatform.dto.OwnerResubmitPrefill prefill(String token) {
+        Owner o = byResubmitToken(token);
+        return new com.travelplatform.dto.OwnerResubmitPrefill(o.getTravelsName(), o.getContactName(), o.getEmail(),
+                o.getPhone(), o.getCities().stream().map(City::getId).sorted().toList(), o.getBankAccountHolder(),
+                o.getBankIfsc(), o.getBankName(), OwnerApplicationChecks.maskPan(o.getPanNumber()),
+                o.getRejectionReason());
+    }
+
+    /**
+     * A rejected owner fixes their application through the emailed link: the same row goes back
+     * to PENDING_REVIEW with the earlier checks cleared, and the link is used up.
+     */
+    @Transactional
+    public SignupResult resubmit(String token, OwnerSignupForm form) {
+        Owner owner = byResubmitToken(token);
+        AadhaarSecureQr.Result qr = applyForm(owner, form, true);
+        owner.setResubmitTokenHash(null);
+        owner.setResubmitTokenExpiresAt(null);
+        owner.setRejectionReason(null);
+        checkRepository.deleteByOwnerId(owner.getId());
+        return submit(owner, qr);
+    }
+
+    private Owner byResubmitToken(String token) {
+        return (token == null || token.isBlank() ? java.util.Optional.<Owner>empty()
+                : ownerRepository.findByResubmitTokenHash(OwnerCredentials.hash(token)))
+                .filter(o -> o.getStatus() == OwnerStatus.REJECTED)
+                .filter(o -> o.getResubmitTokenExpiresAt() != null && o.getResubmitTokenExpiresAt().isAfter(LocalDateTime.now()))
+                .orElseThrow(() -> new IllegalArgumentException("This link has expired. Please contact support."));
     }
 
     /** Saves the application as pending, records the QR result and tells the admin and the owner. */
