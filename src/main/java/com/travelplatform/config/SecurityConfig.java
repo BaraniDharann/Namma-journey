@@ -38,6 +38,12 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
 
+    @Autowired
+    private com.travelplatform.repository.OwnerRepository ownerRepository;
+
+    @Value("${app.owners.platform-owner-code:NJO-0001}")
+    private String platformOwnerCode;
+
     @Value("${app.metrics.scrape-token:}")
     private String metricsScrapeToken;
 
@@ -110,7 +116,9 @@ public class SecurityConfig {
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            // After authentication: an owner request runs in that owner's row-level-security scope (V28).
+            .addFilterAfter(new OwnerScopeFilter(ownerRepository, platformOwnerCode), JwtAuthenticationFilter.class);
         
         return http.build();
     }
