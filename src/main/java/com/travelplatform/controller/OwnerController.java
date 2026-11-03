@@ -41,6 +41,8 @@ public class OwnerController {
     private final com.travelplatform.service.DriverVerificationService driverVerificationService;
     private final com.travelplatform.service.DriverLedgerService ledgerService;
     private final com.travelplatform.service.DriverDuesService duesService;
+    private final com.travelplatform.service.TripRateService tripRateService;
+    private final com.travelplatform.config.OwnerScope ownerScope;
 
     /** Self-signed-up drivers waiting for (or past) review; oldest first. */
     @GetMapping("/driver-applications")
@@ -138,29 +140,28 @@ public class OwnerController {
         return ResponseEntity.ok(ownerService.getAllBookings());
     }
     
-    @PostMapping("/pricing/set")
+    /** My Trip prices, one row per car category I offer. */
+    @GetMapping("/trip-rates")
     @PreAuthorize("hasRole('OWNER')")
-    public ResponseEntity<Map<String, Object>> setPricePerKm(
-            @RequestParam BigDecimal pricePerKm,
-            @RequestParam Long ownerId) {
-        return ResponseEntity.ok(ownerService.setPricePerKm(pricePerKm, ownerId));
-    }
-    
-    @GetMapping("/pricing/current")
-    @PreAuthorize("hasAnyRole('OWNER','USER','DRIVER')")
-    public ResponseEntity<Map<String, Object>> getCurrentPrice() {
-        return ResponseEntity.ok(Map.of(
-            "pricePerKm", ownerService.getCurrentPricePerKm(),
-            "pricePerHour", ownerService.getCurrentPricePerHour()
-        ));
+    public ResponseEntity<List<com.travelplatform.service.TripRateView>> getTripRates() {
+        return ResponseEntity.ok(tripRateService.ratesFor(ownerScope.ownerId()));
     }
 
-    @PostMapping("/pricing/set-hourly")
+    /** Sets my per-km and per-hour price for one car category: {perKm, perHour}. */
+    @PutMapping("/trip-rates/{category}")
     @PreAuthorize("hasRole('OWNER')")
-    public ResponseEntity<Map<String, Object>> setPricePerHour(
-            @RequestParam BigDecimal pricePerHour,
-            @RequestParam Long ownerId) {
-        return ResponseEntity.ok(ownerService.setPricePerHour(pricePerHour, ownerId));
+    public ResponseEntity<com.travelplatform.service.TripRateView> setTripRate(
+            @PathVariable String category, @RequestBody Map<String, BigDecimal> body) {
+        return ResponseEntity.ok(tripRateService.set(ownerScope.ownerId(),
+                com.travelplatform.entity.CarCategory.parse(category), body.get("perKm"), body.get("perHour")));
+    }
+
+    /** AUTO: my Trips go to my first free driver and car. MANUAL: I assign each Trip myself. Body {mode}. */
+    @PutMapping("/assignment-mode")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Map<String, String>> setAssignmentMode(@RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(Map.of("assignmentMode",
+                ownerService.setAssignmentMode(ownerScope.ownerId(), body == null ? null : body.get("mode")).name()));
     }
 
     @GetMapping("/bookings/{bookingId}/driver-photo")

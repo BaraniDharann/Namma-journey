@@ -5,10 +5,8 @@ import com.travelplatform.dto.MonthlyRevenue;
 import com.travelplatform.dto.RevenueTotals;
 import com.travelplatform.dto.TravelBookingResponse;
 import com.travelplatform.entity.Driver;
-import com.travelplatform.entity.PricingConfig;
 import com.travelplatform.entity.TravelBooking;
 import com.travelplatform.repository.DriverRepository;
-import com.travelplatform.repository.PricingConfigRepository;
 import com.travelplatform.repository.TravelBookingRepository;
 import com.travelplatform.entity.TripDriverPhoto;
 import com.travelplatform.repository.TripDriverPhotoRepository;
@@ -28,12 +26,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OwnerService {
 
-    /** Used until the owner sets prices for the first time. */
-    private static final BigDecimal DEFAULT_PRICE_PER_KM = new BigDecimal("10.00");
-    private static final BigDecimal DEFAULT_PRICE_PER_HOUR = new BigDecimal("150.00");
-    
     private final TravelBookingRepository travelBookingRepository;
-    private final PricingConfigRepository pricingConfigRepository;
+    private final com.travelplatform.repository.OwnerRepository ownerRepository;
     private final DriverRepository driverRepository;
     private final TripDriverPhotoRepository tripDriverPhotoRepository;
     private final NotificationService notificationService;
@@ -57,68 +51,20 @@ public class OwnerService {
         return travelBookingRepository.findAll();
     }
     
-    // Every price change is a NEW row (history), carrying the other price forward. A per-km change
-    // used to save a row with no hourly price, so the hourly price silently fell back to the default
-    // once its cache expired; both caches are evicted so every instance sees both prices at once.
-    @Caching(evict = {
-            @CacheEvict(value = "pricing", allEntries = true),
-            @CacheEvict(value = "hourlyPricing", allEntries = true)
-    })
-    public Map<String, Object> setPricePerKm(BigDecimal requestedPricePerKm, Long ownerId) {
-        BigDecimal pricePerKm = Money.positivePrice(requestedPricePerKm, "Price per km");
-        BigDecimal currentHourly = pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
-                .map(PricingConfig::getPricePerHour)
-                .orElse(null);
-        PricingConfig config = new PricingConfig();
-        config.setPricePerKm(pricePerKm);
-        config.setPricePerHour(currentHourly);
-        config.setUpdatedAt(LocalDateTime.now());
-        config.setUpdatedBy(ownerId);
-        pricingConfigRepository.save(config);
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Price per km updated successfully");
-        response.put("pricePerKm", pricePerKm);
-        response.put("updatedAt", config.getUpdatedAt());
-        return response;
-    }
-    
-    @Cacheable(value = "pricing")
-    public BigDecimal getCurrentPricePerKm() {
-        return pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
-            .map(PricingConfig::getPricePerKm)
-            .orElse(DEFAULT_PRICE_PER_KM);
-    }
-
-    @Caching(evict = {
-            @CacheEvict(value = "pricing", allEntries = true),
-            @CacheEvict(value = "hourlyPricing", allEntries = true)
-    })
-    public Map<String, Object> setPricePerHour(BigDecimal requestedPricePerHour, Long ownerId) {
-        BigDecimal pricePerHour = Money.positivePrice(requestedPricePerHour, "Price per hour");
-        // A new row, never an edit of the latest one: editing in place destroyed pricing history.
-        BigDecimal currentKm = pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
-                .map(PricingConfig::getPricePerKm)
-                .orElse(DEFAULT_PRICE_PER_KM);
-        PricingConfig config = new PricingConfig();
-        config.setPricePerHour(pricePerHour);
-        config.setPricePerKm(currentKm);
-        config.setUpdatedAt(LocalDateTime.now());
-        config.setUpdatedBy(ownerId);
-        pricingConfigRepository.save(config);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Price per hour updated successfully");
-        response.put("pricePerHour", pricePerHour);
-        response.put("updatedAt", config.getUpdatedAt());
-        return response;
-    }
-
-    @Cacheable(value = "hourlyPricing")
-    public BigDecimal getCurrentPricePerHour() {
-        return pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
-            .map(PricingConfig::getPricePerHour)
-            .orElse(DEFAULT_PRICE_PER_HOUR);
+    /** How this owner's Trips get a driver: AUTO (first free driver and car) or MANUAL (the owner assigns). */
+    @Transactional
+    public com.travelplatform.entity.Owner.AssignmentMode setAssignmentMode(Long ownerId, String mode) {
+        com.travelplatform.entity.Owner.AssignmentMode m;
+        try {
+            m = com.travelplatform.entity.Owner.AssignmentMode.valueOf(String.valueOf(mode).trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Assignment mode must be AUTO or MANUAL");
+        }
+        com.travelplatform.entity.Owner owner = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Owner not found"));
+        owner.setAssignmentMode(m);
+        ownerRepository.save(owner);
+        return m;
     }
 
     public Map<String, Object> getDriverPhotoForBooking(UUID bookingId) {

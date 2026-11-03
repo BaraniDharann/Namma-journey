@@ -85,7 +85,6 @@ class UserServiceCityTripTest {
         user.setId(USER_ID);
         user.setPhone("9876543210");
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(ownerService.getCurrentPricePerKm()).thenReturn(new BigDecimal("14.0"));
         when(photoRepository.findByBookingId(any())).thenReturn(Optional.empty());
         when(driverRepository.findById(any())).thenReturn(Optional.empty());
         when(bookingRepository.saveAndFlush(any(TravelBooking.class))).thenAnswer(i -> {
@@ -94,6 +93,25 @@ class UserServiceCityTripTest {
             return b;
         });
         route(12.0, 35L);
+
+        // Trips are priced by the booked owner's rate for the car category (V27); until customers
+        // choose an owner, every Trip is the platform owner's.
+        tripRates = mock(TripRateService.class);
+        when(tripRates.platformOwnerId()).thenReturn(PLATFORM_OWNER);
+        when(tripRates.rate(eq(PLATFORM_OWNER), any())).thenAnswer(i -> rate(i.getArgument(1), "14.0", "200.00"));
+        ReflectionTestUtils.setField(service, "tripRates", tripRates);
+    }
+
+    private static final long PLATFORM_OWNER = 38L;
+    private TripRateService tripRates;
+
+    private static com.travelplatform.entity.OwnerTripRate rate(com.travelplatform.entity.CarCategory c, String km, String hour) {
+        com.travelplatform.entity.OwnerTripRate r = new com.travelplatform.entity.OwnerTripRate();
+        r.setOwnerId(PLATFORM_OWNER);
+        r.setCategory(c);
+        r.setPerKm(new BigDecimal(km));
+        r.setPerHour(new BigDecimal(hour));
+        return r;
     }
 
     private void route(double km, long minutes) {
@@ -255,5 +273,60 @@ class UserServiceCityTripTest {
         d.setStatus(Driver.Status.ACTIVE);
         d.setVehicleAc(ac);
         return d;
+    }
+
+    @Test
+    @DisplayName("a Trip is the platform owner's, priced by that owner's rate for the booked car category")
+    void tripPricedByOwnersCategoryRate() {
+        when(tripRates.rate(PLATFORM_OWNER, com.travelplatform.entity.CarCategory.SUV))
+                .thenReturn(rate(com.travelplatform.entity.CarCategory.SUV, "18.00", "250.00"));
+        route(100.0, 120L);
+        TravelBookingRequest r = base();
+        r.setCarCategory("SUV");
+
+        service.createBooking(USER_ID, r);
+
+        TravelBooking b = saved();
+        assertEquals(PLATFORM_OWNER, b.getOwnerId());
+        assertEquals(com.travelplatform.entity.CarCategory.SUV, b.getCarCategory());
+        assertEquals(new BigDecimal("1800.00"), b.getTotalAmount());
+    }
+
+    @Test
+    @DisplayName("an hourly Trip uses the category's per-hour rate")
+    void hourlyTripUsesCategoryPerHour() {
+        when(tripRates.rate(PLATFORM_OWNER, com.travelplatform.entity.CarCategory.SEDAN))
+                .thenReturn(rate(com.travelplatform.entity.CarCategory.SEDAN, "12.00", "250.00"));
+        TravelBookingRequest r = base();
+        r.setBookingType("HOUR_BASED");
+        r.setBookingHours(4);
+
+        service.createBooking(USER_ID, r);
+
+        TravelBooking b = saved();
+        assertEquals(com.travelplatform.entity.CarCategory.SEDAN, b.getCarCategory(), "no category given means a Sedan");
+        assertEquals(new BigDecimal("1000.00"), b.getTotalAmount());
+        assertEquals(new BigDecimal("250.00"), b.getPricePerHourAtBooking());
+    }
+
+    @Test
+    @DisplayName("a car category the owner has not priced is refused")
+    void unpricedCategoryRefused() {
+        when(tripRates.rate(PLATFORM_OWNER, com.travelplatform.entity.CarCategory.TEMPO_TRAVELLER))
+                .thenThrow(new IllegalArgumentException("This car type is not available"));
+        TravelBookingRequest r = base();
+        r.setCarCategory("TEMPO_TRAVELLER");
+
+        assertThrows(IllegalArgumentException.class, () -> service.createBooking(USER_ID, r));
+    }
+
+    @Test
+    @DisplayName("a City ride belongs to no owner and has no car category")
+    void cityRideHasNoOwner() {
+        service.createBooking(USER_ID, city("CAR", 2));
+
+        TravelBooking b = saved();
+        assertNull(b.getOwnerId());
+        assertNull(b.getCarCategory());
     }
 }

@@ -3,7 +3,6 @@ package com.travelplatform.controller;
 import com.travelplatform.dto.ReviewResponse;
 import com.travelplatform.service.CityFareService;
 import com.travelplatform.service.ReviewService;
-import com.travelplatform.service.OwnerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 public class PublicController {
 
     private final ReviewService reviewService;
-    private final OwnerService ownerService;
+    private final com.travelplatform.service.TripRateService tripRateService;
     private final CityFareService cityFareService;
     private final com.travelplatform.service.CityService cityService;
 
@@ -50,13 +49,14 @@ public class PublicController {
                 .body(reviewService.getAllReviews());
     }
 
-    @GetMapping("/pricing")
-    public ResponseEntity<Map<String, Object>> getPublicPricing() {
+    /**
+     * The car categories a Trip can be booked in, with their per-km and per-hour prices: the
+     * platform owner's, since every Trip goes to them until customers can choose an owner.
+     */
+    @GetMapping("/trip-rates")
+    public ResponseEntity<List<com.travelplatform.service.TripRateView>> getTripRates() {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
-                .body(Map.of(
-                    "pricePerKm", ownerService.getCurrentPricePerKm(),
-                    "pricePerHour", ownerService.getCurrentPricePerHour()
-                ));
+                .body(tripRateService.ratesFor(tripRateService.platformOwnerId()));
     }
 }

@@ -85,7 +85,7 @@ class UserServiceDriverAssignmentTest {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(routingService.calculateRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(new RouteInfo(460.0, 480L, "NH38"));
-        when(ownerService.getCurrentPricePerKm()).thenReturn(new java.math.BigDecimal("14.0"));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "tripRates", TestTripRates.flat("14.0", "150.00"));
         when(photoRepository.findByBookingId(any())).thenReturn(Optional.empty());
         when(driverRepository.findById(any())).thenReturn(Optional.empty());
     }

@@ -8,7 +8,6 @@ import com.travelplatform.entity.TravelBooking;
 import com.travelplatform.repository.BookingDriverRejectionRepository;
 import com.travelplatform.repository.DriverRepository;
 import com.travelplatform.repository.PaymentRepository;
-import com.travelplatform.repository.PricingConfigRepository;
 import com.travelplatform.repository.TravelBookingRepository;
 import com.travelplatform.repository.TripDriverPhotoRepository;
 import com.travelplatform.repository.UserRepository;
@@ -82,12 +81,13 @@ class BookingLifecycleTest {
         when(routing.calculateRoute(any(String.class), any(String.class)))
                 .thenReturn(new com.travelplatform.dto.RouteInfo(40.0, 60L, "route"));
         OwnerService pricing = mock(OwnerService.class);
-        when(pricing.getCurrentPricePerKm()).thenReturn(new BigDecimal("14.00"));
+
         UserService s = new UserService(bookings, routing, mock(DriverRepository.class),
                 pricing, mock(UserRepository.class), mock(OtpService.class), mock(PasswordEncoder.class),
                 notifications, mock(TripDriverPhotoRepository.class),
                 new TransactionTemplate(mock(PlatformTransactionManager.class)));
         ReflectionTestUtils.setField(s, "paymentRepository", payments);
+        ReflectionTestUtils.setField(s, "tripRates", TestTripRates.flat("14.00", "150.00"));
         return s;
     }
 
@@ -222,7 +222,7 @@ class BookingLifecycleTest {
         d.setId(9L);
         d.setStatus(Driver.Status.ACTIVE);
         when(drivers.findById(9L)).thenReturn(Optional.of(d));
-        OwnerService owner = new OwnerService(bookings, mock(PricingConfigRepository.class), drivers,
+        OwnerService owner = new OwnerService(bookings, mock(com.travelplatform.repository.OwnerRepository.class), drivers,
                 mock(TripDriverPhotoRepository.class), notifications);
 
         assertThrows(RuntimeException.class, () -> owner.assignDriver(bookingId, 9L));

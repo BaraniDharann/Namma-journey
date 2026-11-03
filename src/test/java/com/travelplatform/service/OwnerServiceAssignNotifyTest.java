@@ -3,7 +3,6 @@ package com.travelplatform.service;
 import com.travelplatform.entity.Driver;
 import com.travelplatform.entity.TravelBooking;
 import com.travelplatform.repository.DriverRepository;
-import com.travelplatform.repository.PricingConfigRepository;
 import com.travelplatform.repository.TravelBookingRepository;
 import com.travelplatform.repository.TripDriverPhotoRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +40,7 @@ class OwnerServiceAssignNotifyTest {
         bookingRepository = mock(TravelBookingRepository.class);
         driverRepository = mock(DriverRepository.class);
         notificationService = mock(NotificationService.class);
-        service = new OwnerService(bookingRepository, mock(PricingConfigRepository.class), driverRepository,
+        service = new OwnerService(bookingRepository, mock(com.travelplatform.repository.OwnerRepository.class), driverRepository,
                 mock(TripDriverPhotoRepository.class), notificationService);
 
         booking = new TravelBooking();

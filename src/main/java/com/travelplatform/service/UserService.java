@@ -1,5 +1,7 @@
 package com.travelplatform.service;
 
+import com.travelplatform.entity.CarCategory;
+import com.travelplatform.entity.OwnerTripRate;
 import com.travelplatform.dto.DriverDetailsResponse;
 import com.travelplatform.dto.ForgotPasswordRequest;
 import com.travelplatform.dto.RouteInfo;
@@ -82,6 +84,9 @@ public class UserService {
     // The matching engine's copy of driver state. Null only in unit tests that build UserService by hand.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
+    // Trip prices per owner and car category (V27).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripRateService tripRates;
 
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -264,20 +269,29 @@ public class UserService {
         boolean city = "CITY".equalsIgnoreCase(request.getServiceMode());
         VehicleType vehicle = city ? VehicleType.parse(request.getVehicleType()) : VehicleType.CAR;
 
+        // A Trip is booked with an owner (the platform owner until customers choose one) and
+        // priced by that owner's rate for the car category.
+        Long tripOwner = city ? null : tripRates.platformOwnerId();
+        CarCategory category = city ? null : tripCategory(request.getCarCategory());
         if (city) {
             totalAmount = cityFareService.fare(vehicle, routeInfo.getDistanceKm(),
                     routeInfo.getTimeMinutes() == null ? 0 : routeInfo.getTimeMinutes());
-        } else if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
-            bookingType = TravelBooking.BookingType.HOUR_BASED;
-            bookingHours = request.getBookingHours();
-            pricePerHourAtBooking = ownerService.getCurrentPricePerHour();
-            totalAmount = Money.times(pricePerHourAtBooking, bookingHours);
         } else {
-            // Rounded to paise once, here: distances carry metres (461.237 km), money does not.
-            totalAmount = Money.times(ownerService.getCurrentPricePerKm(), routeInfo.getDistanceKm());
+            OwnerTripRate rate = tripRates.rate(tripOwner, category);
+            if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
+                bookingType = TravelBooking.BookingType.HOUR_BASED;
+                bookingHours = request.getBookingHours();
+                pricePerHourAtBooking = rate.getPerHour();
+                totalAmount = Money.times(pricePerHourAtBooking, bookingHours);
+            } else {
+                // Rounded to paise once, here: distances carry metres (461.237 km), money does not.
+                totalAmount = Money.times(rate.getPerKm(), routeInfo.getDistanceKm());
+            }
         }
 
         TravelBooking booking = new TravelBooking();
+        booking.setOwnerId(tripOwner);
+        booking.setCarCategory(category);
         booking.setServiceMode(city ? TravelBooking.ServiceMode.CITY : TravelBooking.ServiceMode.TRIP);
         booking.setVehicleType(vehicle);
         booking.setCityId(cityId);
@@ -315,6 +329,11 @@ public class UserService {
             booking.setHoldExpiresAt(advancePolicy.holdUntil(LocalDateTime.now()));
         }
         return booking;
+    }
+
+    private static CarCategory tripCategory(String requested) {
+        CarCategory c = CarCategory.parse(requested);
+        return c != null ? c : CarCategory.SEDAN;
     }
 
     /** {@code NOT IN ()} is not valid SQL, so "nobody excluded" is a list holding an id no driver has. */
@@ -440,14 +459,17 @@ public class UserService {
         BigDecimal pricePerHourAtBooking = null;
         BigDecimal totalAmount;
 
+        // Re-priced at the same owner and car category it was booked with.
+        OwnerTripRate rate = tripRates.rate(booking.getOwnerId(),
+                booking.getCarCategory() != null ? booking.getCarCategory() : CarCategory.SEDAN);
         if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
             bookingType = TravelBooking.BookingType.HOUR_BASED;
             bookingHours = request.getBookingHours();
-            pricePerHourAtBooking = ownerService.getCurrentPricePerHour();
+            pricePerHourAtBooking = rate.getPerHour();
             totalAmount = Money.times(pricePerHourAtBooking, bookingHours);
         } else {
             // Rounded to paise once, here: distances carry metres (461.237 km), money does not.
-            totalAmount = Money.times(ownerService.getCurrentPricePerKm(), routeInfo.getDistanceKm());
+            totalAmount = Money.times(rate.getPerKm(), routeInfo.getDistanceKm());
         }
 
         booking.setUserName(request.getUserName());
