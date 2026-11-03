@@ -301,6 +301,50 @@ public class EmailService {
                 HTML_FOOTER);
     }
 
+    /**
+     * The approved owner's Owner ID and one-time password. Sent now, not queued: queuing would
+     * write the password into the outbox table. Returns false if it could not be sent, so the
+     * admin is told and can resend (which makes a new password).
+     */
+    public boolean sendOwnerCredentialsNow(String toEmail, String travelsName, String ownerCode, String password) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(toEmail);
+            helper.setSubject("You are approved - your Namma Journey owner login");
+            helper.setText(HTML_HEADER +
+                    "<h2>Welcome to Namma Journey!</h2>" +
+                    "<p>Dear " + esc(travelsName) + ",</p>" +
+                    "<p>Your documents are verified and your travels is approved. Sign in with:</p>" +
+                    "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                    "<p><strong>Owner ID:</strong> " + esc(ownerCode) + "</p>" +
+                    "<p><strong>Password:</strong> " + esc(password) + "</p>" +
+                    "</div>" +
+                    "<p><a href='" + esc(frontendBaseUrl + "/owner/login") + "'>Sign in</a>. You will be asked to " +
+                    "choose your own password the first time.</p>" +
+                    HTML_FOOTER, true);
+            if (deliver(message)) {
+                log.info("Owner credentials email sent for {}", ownerCode);
+            }
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to send owner credentials email for {}: {}", ownerCode, e.getMessage());
+            return false;
+        }
+    }
+
+    public void sendOwnerRejected(String toEmail, String travelsName, String reason, String resubmitUrl) {
+        queue(toEmail, "Your Namma Journey owner application needs changes", HTML_HEADER +
+                "<h2>Application not approved yet</h2>" +
+                "<p>Dear " + esc(travelsName) + ",</p>" +
+                "<p>We could not approve your application.</p>" +
+                "<p><strong>Reason:</strong> " + esc(reason) + "</p>" +
+                "<p><a href='" + esc(resubmitUrl) + "'>Fix your details and resubmit</a>. " +
+                "This link works once, for 14 days.</p>" +
+                HTML_FOOTER);
+    }
+
     private void queue(String to, String subject, String html) {
         if (to == null || to.isBlank()) {
             return;

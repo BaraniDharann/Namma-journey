@@ -41,6 +41,27 @@ public class AdminOwnerController {
         return ResponseEntity.ok(ownerReviewService.detail(id));
     }
 
+    @PostMapping("/{id}/approve")
+    public OwnerReviewService.ApprovalResult approve(@PathVariable Long id, Authentication authentication) {
+        return ownerReviewService.approve(id, adminId(authentication));
+    }
+
+    public record RejectRequest(@jakarta.validation.constraints.NotBlank
+                                @jakarta.validation.constraints.Size(max = 500) String reason) {
+    }
+
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<Void> reject(@PathVariable Long id, @Valid @RequestBody RejectRequest request,
+                                       Authentication authentication) {
+        ownerReviewService.reject(id, request.reason(), adminId(authentication));
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/resend-credentials")
+    public OwnerReviewService.ApprovalResult resendCredentials(@PathVariable Long id, Authentication authentication) {
+        return ownerReviewService.resendCredentials(id, adminId(authentication));
+    }
+
     static Long adminId(Authentication authentication) {
         return Long.valueOf(authentication.getName());
     }

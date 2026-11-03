@@ -29,6 +29,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class OwnerReviewServiceTest {
@@ -161,6 +162,155 @@ class OwnerReviewServiceTest {
         when(owners.findById(1L)).thenReturn(Optional.of(approved));
         assertThrows(IllegalStateException.class, () -> service.recordCheck(1L, OwnerVerificationCheck.Type.PAN,
                 new OwnerCheckRequest(OwnerVerificationCheck.Result.VERIFIED, null), 5L));
+    }
+
+    // ---- approve / reject / resend ----------------------------------------------------------
+
+    final org.springframework.security.crypto.password.PasswordEncoder encoder =
+            new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(4);
+    EmailService emails;
+
+    void wireDecisions() {
+        emails = mock(EmailService.class);
+        when(emails.sendOwnerCredentialsNow(anyString(), any(), anyString(), anyString())).thenReturn(true);
+        when(owners.save(any(Owner.class))).thenAnswer(i -> i.getArgument(0));
+        when(owners.nextOwnerCode()).thenReturn(7L);
+        ReflectionTestUtils.setField(service, "passwordEncoder", encoder);
+        ReflectionTestUtils.setField(service, "emailService", emails);
+        ReflectionTestUtils.setField(service, "frontendBaseUrl", "http://localhost:5173");
+    }
+
+    Owner withAllChecks(Owner o, OwnerVerificationCheck.Result bankResult) {
+        when(owners.findById(o.getId())).thenReturn(Optional.of(o));
+        for (OwnerVerificationCheck.Type t : OwnerVerificationCheck.Type.values()) {
+            OwnerVerificationCheck c = new OwnerVerificationCheck();
+            c.setOwnerId(o.getId());
+            c.setCheckType(t);
+            c.setResult(t == OwnerVerificationCheck.Type.BANK ? bankResult : OwnerVerificationCheck.Result.VERIFIED);
+            savedChecks.add(c);
+        }
+        return o;
+    }
+
+    @Test
+    @DisplayName("approve is refused, naming what is missing, until all four checks are VERIFIED")
+    void approveNeedsAllChecksVerified() {
+        wireDecisions();
+        withAllChecks(pending(1, LocalDateTime.now()), OwnerVerificationCheck.Result.FAILED);
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> service.approve(1L, 5L));
+        assertTrue(e.getMessage().contains("BANK"), e.getMessage());
+        verify(owners, never()).save(any());
+        verify(emails, never()).sendOwnerCredentialsNow(anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("approve assigns the next Owner ID and a one-time password, and emails both")
+    void approveAssignsCodeAndOneTimePassword() {
+        wireDecisions();
+        Owner o = withAllChecks(pending(1, LocalDateTime.now()), OwnerVerificationCheck.Result.VERIFIED);
+
+        OwnerReviewService.ApprovalResult r = service.approve(1L, 5L);
+
+        assertEquals("NJO-0007", r.ownerCode());
+        assertTrue(r.credentialsEmailed());
+        assertEquals(OwnerStatus.APPROVED, o.getStatus());
+        assertEquals("NJO-0007", o.getOwnerCode());
+        assertTrue(o.isMustChangePassword());
+        assertEquals(5L, o.getReviewedByAdminId());
+        assertNotNull(o.getReviewedAt());
+        ArgumentCaptor<String> password = ArgumentCaptor.forClass(String.class);
+        verify(emails).sendOwnerCredentialsNow(eq("o1@x.com"), eq("Travels 1"), eq("NJO-0007"), password.capture());
+        assertEquals(12, password.getValue().length());
+        assertTrue(encoder.matches(password.getValue(), o.getPassword()));
+    }
+
+    @Test
+    @DisplayName("an application already decided cannot be approved again")
+    void approveIsOnlyAllowedFromPending() {
+        wireDecisions();
+        Owner o = withAllChecks(pending(1, LocalDateTime.now()), OwnerVerificationCheck.Result.VERIFIED);
+        o.setStatus(OwnerStatus.APPROVED);
+        assertThrows(IllegalStateException.class, () -> service.approve(1L, 5L));
+        o.setStatus(OwnerStatus.REJECTED);
+        assertThrows(IllegalStateException.class, () -> service.approve(1L, 5L));
+        verify(owners, never()).nextOwnerCode();
+    }
+
+    @Test
+    @DisplayName("the approval is written (and its version checked) before the password is emailed")
+    void approveFlushesBeforeEmailing() {
+        wireDecisions();
+        withAllChecks(pending(1, LocalDateTime.now()), OwnerVerificationCheck.Result.VERIFIED);
+
+        service.approve(1L, 5L);
+
+        org.mockito.InOrder order = inOrder(owners, emails);
+        order.verify(owners).saveAndFlush(any(Owner.class));
+        order.verify(emails).sendOwnerCredentialsNow(anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("if the credentials email fails the approval stands, and the admin is told")
+    void approveSurvivesEmailFailure() {
+        wireDecisions();
+        when(emails.sendOwnerCredentialsNow(anyString(), any(), anyString(), anyString())).thenReturn(false);
+        Owner o = withAllChecks(pending(1, LocalDateTime.now()), OwnerVerificationCheck.Result.VERIFIED);
+
+        OwnerReviewService.ApprovalResult r = service.approve(1L, 5L);
+
+        assertFalse(r.credentialsEmailed());
+        assertEquals(OwnerStatus.APPROVED, o.getStatus());
+    }
+
+    @Test
+    @DisplayName("resend makes a new password - the old one is never stored to send again")
+    void resendGeneratesANewPassword() {
+        wireDecisions();
+        Owner o = withAllChecks(pending(1, LocalDateTime.now()), OwnerVerificationCheck.Result.VERIFIED);
+        service.approve(1L, 5L);
+        String firstHash = o.getPassword();
+
+        OwnerReviewService.ApprovalResult r = service.resendCredentials(1L, 5L);
+
+        assertNotEquals(firstHash, o.getPassword());
+        assertTrue(r.credentialsEmailed());
+        verify(emails, times(2)).sendOwnerCredentialsNow(anyString(), any(), eq("NJO-0007"), anyString());
+
+        o.setMustChangePassword(false);
+        assertThrows(IllegalStateException.class, () -> service.resendCredentials(1L, 5L));
+    }
+
+    @Test
+    @DisplayName("reject keeps the reason and emails a 14-day single-use resubmit link")
+    void rejectStoresReasonAndResubmitTokenHash() {
+        wireDecisions();
+        Owner o = pending(1, LocalDateTime.now());
+        when(owners.findById(1L)).thenReturn(Optional.of(o));
+
+        service.reject(1L, "PAN name does not match", 5L);
+
+        assertEquals(OwnerStatus.REJECTED, o.getStatus());
+        assertEquals("PAN name does not match", o.getRejectionReason());
+        assertEquals(5L, o.getReviewedByAdminId());
+        ArgumentCaptor<String> url = ArgumentCaptor.forClass(String.class);
+        verify(emails).sendOwnerRejected(eq("o1@x.com"), eq("Travels 1"), eq("PAN name does not match"), url.capture());
+        assertTrue(url.getValue().startsWith("http://localhost:5173/owner/signup?resubmit="), url.getValue());
+        String token = url.getValue().substring(url.getValue().indexOf('=') + 1);
+        assertEquals(OwnerCredentials.hash(token), o.getResubmitTokenHash());
+        assertTrue(o.getResubmitTokenExpiresAt().isAfter(LocalDateTime.now().plusDays(13)));
+        assertTrue(o.getResubmitTokenExpiresAt().isBefore(LocalDateTime.now().plusDays(15)));
+
+        assertThrows(IllegalArgumentException.class, () -> service.reject(1L, " ", 5L));
+    }
+
+    @Test
+    @DisplayName("generated passwords avoid look-alike characters; tokens are URL-safe")
+    void credentialsAlphabet() {
+        for (int i = 0; i < 50; i++) {
+            assertTrue(OwnerCredentials.newPassword().matches("^[A-HJ-NP-Za-km-z2-9]{12}$"));
+            assertTrue(OwnerCredentials.newResubmitToken().matches("^[A-Za-z0-9_-]{43}$"));
+        }
     }
 
     @Test

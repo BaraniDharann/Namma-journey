@@ -7,6 +7,7 @@ import com.travelplatform.entity.City;
 import com.travelplatform.entity.Owner;
 import com.travelplatform.entity.OwnerStatus;
 import com.travelplatform.entity.OwnerVerificationCheck;
+import com.travelplatform.exception.ConflictException;
 import com.travelplatform.exception.ResourceNotFoundException;
 import com.travelplatform.repository.OwnerAadhaarQrRepository;
 import com.travelplatform.repository.OwnerRepository;
@@ -47,6 +48,17 @@ public class OwnerReviewService {
 
     @Autowired
     private SignedUploadUrls signedUploadUrls;
+
+    @Autowired
+    private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private EmailService emailService;
+
+    @org.springframework.beans.factory.annotation.Value("${app.frontend-base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
+
+    static final Duration RESUBMIT_LINK_VALID = Duration.ofDays(14);
 
     @Transactional(readOnly = true)
     public List<AdminOwnerSummary> list(OwnerStatus status) {
@@ -93,7 +105,7 @@ public class OwnerReviewService {
     public void recordCheck(Long ownerId, OwnerVerificationCheck.Type type, OwnerCheckRequest request, Long adminId) {
         Owner o = find(ownerId);
         if (o.getStatus() != OwnerStatus.PENDING_REVIEW) {
-            throw new IllegalStateException("Only a pending application can be checked");
+            throw new ConflictException("Only a pending application can be checked");
         }
         String note = request.note() == null || request.note().isBlank() ? null : request.note().trim();
         if (request.result() == OwnerVerificationCheck.Result.FAILED && note == null) {
@@ -109,6 +121,76 @@ public class OwnerReviewService {
         checkRepository.save(c);
         // The audit line. The note can name the person, so it stays out of the log.
         log.info("Owner {} check {} = {} by admin {}", ownerId, type, request.result(), adminId);
+    }
+
+    public record ApprovalResult(String ownerCode, boolean credentialsEmailed) {
+    }
+
+    /**
+     * Approves a pending application whose four checks are all VERIFIED: assigns the next Owner
+     * ID, generates a one-time password and emails both. A concurrent second approval fails on
+     * the Owner's @Version instead of minting a second ID.
+     */
+    @Transactional
+    public ApprovalResult approve(Long ownerId, Long adminId) {
+        Owner o = find(ownerId);
+        if (o.getStatus() != OwnerStatus.PENDING_REVIEW) {
+            throw new ConflictException("This application was already " + o.getStatus().name().toLowerCase(java.util.Locale.ROOT));
+        }
+        List<OwnerVerificationCheck.Type> missing = unverified(ownerId);
+        if (!missing.isEmpty()) {
+            throw new ConflictException("Verify these checks before approving: " + missing);
+        }
+        o.setStatus(OwnerStatus.APPROVED);
+        o.setOwnerCode(String.format(java.util.Locale.ROOT, "NJO-%04d", ownerRepository.nextOwnerCode()));
+        o.setReviewedAt(LocalDateTime.now());
+        o.setReviewedByAdminId(adminId);
+        o.setRejectionReason(null);
+        log.info("Owner {} approved as {} by admin {}", ownerId, o.getOwnerCode(), adminId);
+        return issueCredentials(o);
+    }
+
+    /** A new password for an approved owner who has not signed in yet (the first email failed or got lost). */
+    @Transactional
+    public ApprovalResult resendCredentials(Long ownerId, Long adminId) {
+        Owner o = find(ownerId);
+        if (o.getStatus() != OwnerStatus.APPROVED || !o.isMustChangePassword()) {
+            throw new ConflictException("Credentials can only be resent before the owner's first sign-in");
+        }
+        log.info("Owner {} credentials re-issued by admin {}", ownerId, adminId);
+        return issueCredentials(o);
+    }
+
+    @Transactional
+    public void reject(Long ownerId, String reason, Long adminId) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("Give the owner a reason, so they know what to fix");
+        }
+        Owner o = find(ownerId);
+        if (o.getStatus() != OwnerStatus.PENDING_REVIEW) {
+            throw new ConflictException("This application was already " + o.getStatus().name().toLowerCase(java.util.Locale.ROOT));
+        }
+        String token = OwnerCredentials.newResubmitToken();
+        o.setStatus(OwnerStatus.REJECTED);
+        o.setRejectionReason(reason.trim());
+        o.setReviewedAt(LocalDateTime.now());
+        o.setReviewedByAdminId(adminId);
+        o.setResubmitTokenHash(OwnerCredentials.hash(token));
+        o.setResubmitTokenExpiresAt(LocalDateTime.now().plus(RESUBMIT_LINK_VALID));
+        ownerRepository.save(o);
+        log.info("Owner {} rejected by admin {}", ownerId, adminId);
+        emailService.sendOwnerRejected(o.getEmail(), o.getTravelsName(), o.getRejectionReason(),
+                frontendBaseUrl + "/owner/signup?resubmit=" + token);
+    }
+
+    private ApprovalResult issueCredentials(Owner o) {
+        String password = OwnerCredentials.newPassword();
+        o.setPassword(passwordEncoder.encode(password));
+        o.setMustChangePassword(true);
+        // Flushed first: a concurrent approval fails its @Version check here, before any password is sent.
+        ownerRepository.saveAndFlush(o);
+        boolean emailed = emailService.sendOwnerCredentialsNow(o.getEmail(), o.getTravelsName(), o.getOwnerCode(), password);
+        return new ApprovalResult(o.getOwnerCode(), emailed);
     }
 
     /** The checklist items not yet VERIFIED, in checklist order; empty means approval may go ahead. */
