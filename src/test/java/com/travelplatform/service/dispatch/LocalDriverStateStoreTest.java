@@ -77,7 +77,7 @@ class LocalDriverStateStoreTest {
 
         Map<Long, DriverCard> cards = store.cards(List.of(1L, 2L, 99L));
 
-        assertEquals(new DriverCard(1L, DriverState.IDLE, VehicleType.CAR, 4, true, true), cards.get(1L));
+        assertEquals(new DriverCard(1L, DriverState.IDLE, VehicleType.CAR, 4, true, true, Driver.Fleet.OWNER_FLEET), cards.get(1L));
         DriverCard auto = cards.get(2L);
         assertEquals(DriverState.BUSY, auto.state());
         assertEquals(VehicleType.AUTO, auto.vehicle());

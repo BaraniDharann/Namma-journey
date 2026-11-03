@@ -109,7 +109,7 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
      */
     @Query("SELECT d.id FROM Driver d WHERE d.id IN :driverIds AND d.status = 'ACTIVE' " +
            "AND d.verificationStatus = com.travelplatform.entity.Driver.Verification.APPROVED " +
-           "AND d.servesCity = true AND d.vehicleType = :vehicleType AND d.vehicleSeats >= :seats " +
+           "AND d.servesCity = true AND d.fleet = com.travelplatform.entity.Driver.Fleet.INDEPENDENT AND d.vehicleType = :vehicleType AND d.vehicleSeats >= :seats " +
            "AND NOT EXISTS " +
            "(SELECT 1 FROM TravelBooking tb WHERE tb.driverId = d.id " +
            "AND tb.fromDate <= :day AND tb.toDate >= :day " +

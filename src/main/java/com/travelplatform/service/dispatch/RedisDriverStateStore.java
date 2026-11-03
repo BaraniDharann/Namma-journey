@@ -52,14 +52,15 @@ public class RedisDriverStateStore implements DriverStateStore {
 
     private static final RedisScript<Long> PUT_PROFILE = new DefaultRedisScript<>(
             "if redis.call('EXISTS', KEYS[1]) == 1 then "
-                    + "redis.call('HSET', KEYS[1], 'vehicle', ARGV[1], 'seats', ARGV[2], 'servesCity', ARGV[3], 'active', ARGV[4]) "
+                    + "redis.call('HSET', KEYS[1], 'vehicle', ARGV[1], 'seats', ARGV[2], 'servesCity', ARGV[3], 'active', ARGV[4], "
+                    + "'fleet', ARGV[6]) "
                     + "redis.call('PEXPIRE', KEYS[1], ARGV[5]) return 1 end return 0", Long.class);
 
     /** Writes a whole card; with ARGV[7] = '1' only when there is none yet (a load racing a write loses). */
     private static final RedisScript<Long> PUT_CARD = new DefaultRedisScript<>(
             "if ARGV[7] == '1' and redis.call('EXISTS', KEYS[1]) == 1 then return 0 end "
                     + "redis.call('HSET', KEYS[1], 'state', ARGV[1], 'vehicle', ARGV[2], 'seats', ARGV[3], "
-                    + "'servesCity', ARGV[4], 'active', ARGV[5]) "
+                    + "'servesCity', ARGV[4], 'active', ARGV[5], 'fleet', ARGV[8]) "
                     + "redis.call('PEXPIRE', KEYS[1], ARGV[6]) return 1", Long.class);
 
     private final StringRedisTemplate redis;
@@ -115,7 +116,7 @@ public class RedisDriverStateStore implements DriverStateStore {
         }
         DriverCard p = DriverCardLoader.profile(driver, DriverState.IDLE);
         redis.execute(PUT_PROFILE, List.of(key(p.driverId())), p.vehicle().name(), Integer.toString(p.seats()),
-                flag(p.servesCity()), flag(p.active()), Long.toString(CARD_TTL_MS));
+                flag(p.servesCity()), flag(p.active()), Long.toString(CARD_TTL_MS), p.fleet().name());
     }
 
     @Override
@@ -173,7 +174,7 @@ public class RedisDriverStateStore implements DriverStateStore {
     private boolean write(DriverCard card, boolean onlyIfAbsent) {
         Long written = redis.execute(PUT_CARD, List.of(key(card.driverId())), card.state().name(),
                 card.vehicle().name(), Integer.toString(card.seats()), flag(card.servesCity()), flag(card.active()),
-                Long.toString(CARD_TTL_MS), onlyIfAbsent ? "1" : "0");
+                Long.toString(CARD_TTL_MS), onlyIfAbsent ? "1" : "0", card.fleet().name());
         return written != null && written == 1L;
     }
 
@@ -201,7 +202,9 @@ public class RedisDriverStateStore implements DriverStateStore {
                     VehicleType.valueOf(String.valueOf(hash.get("vehicle"))),
                     Integer.parseInt(String.valueOf(hash.get("seats"))),
                     "1".equals(hash.get("servesCity")),
-                    "1".equals(hash.get("active")));
+                    "1".equals(hash.get("active")),
+                    // A card written before V27 has no fleet: unreadable, so it is reloaded from the database.
+                    com.travelplatform.entity.Driver.Fleet.valueOf(String.valueOf(hash.get("fleet"))));
         } catch (RuntimeException e) {
             return null; // a damaged card is reloaded from the database
         }

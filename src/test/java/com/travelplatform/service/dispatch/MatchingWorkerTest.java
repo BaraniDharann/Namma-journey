@@ -187,6 +187,7 @@ class MatchingWorkerTest {
         d.setVehicleType(vehicle);
         d.setVehicleSeats(seats);
         d.setServesCity(true);
+        d.setFleet(Driver.Fleet.INDEPENDENT); // City rides are for independent drivers only
         d.setStatus(Driver.Status.ACTIVE);
         d.setVerificationStatus(Driver.Verification.APPROVED);
         drivers.put(id, d);
@@ -364,6 +365,20 @@ class MatchingWorkerTest {
         long offered = List.of(row(a), row(b)).stream().filter(x -> x.getDispatchState() == DispatchState.OFFERED).count();
         assertEquals(1, offered);
         verify(publisher, times(1)).publish(eq(1L), any(), eq(DriverOfferPublisher.Event.OFFER));
+    }
+
+    @Test
+    @DisplayName("a travels owner's driver is never offered a City ride, even the nearest one")
+    void ownerFleetDriverIsNeverACityCandidate() {
+        Driver fleet = car(1L, 0.1);
+        fleet.setFleet(Driver.Fleet.OWNER_FLEET);
+        fleet.setOwnerId(9L);
+        car(2L, 0.5);
+        TravelBooking b = ride(0, 0, VehicleType.CAR, 2);
+
+        round();
+
+        assertEquals(2L, row(b).getDriverId());
     }
 
     @Test

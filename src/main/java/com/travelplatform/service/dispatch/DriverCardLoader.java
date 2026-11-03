@@ -70,6 +70,6 @@ public class DriverCardLoader {
     /** The profile half of a card, with the given state. */
     static DriverCard profile(Driver d, DriverState state) {
         return new DriverCard(d.getId(), state, d.getVehicleType(), d.getVehicleSeats(), d.isServesCity(),
-                d.getStatus() == Driver.Status.ACTIVE && d.isApproved());
+                d.getStatus() == Driver.Status.ACTIVE && d.isApproved(), d.getFleet());
     }
 }

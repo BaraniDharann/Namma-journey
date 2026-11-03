@@ -37,7 +37,7 @@ class AdminDriverServiceTest {
     }
 
     private static VehicleRequest car(String plate) {
-        return new VehicleRequest("CAR", plate, null, null, null, true, false);
+        return new VehicleRequest("CAR", plate, null, null, null, null, true);
     }
 
     private Driver holder(long id) {
