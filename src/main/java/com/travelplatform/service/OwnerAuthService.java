@@ -89,7 +89,8 @@ public class OwnerAuthService {
     public AuthResponse changePassword(Long ownerId, String currentPassword, String newPassword) {
         Owner owner = ownerRepository.findById(ownerId).orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
         if (!CredentialCheck.matches(passwordEncoder, currentPassword, owner.getPassword())) {
-            throw new BadCredentialsException("Current password is wrong");
+            // 400, not 401: the web app reads 401 as "session expired" and would sign the owner out.
+            throw new IllegalArgumentException("Current password is wrong");
         }
         if (newPassword == null || newPassword.length() < MIN_PASSWORD) {
             throw new IllegalArgumentException("Choose a password of at least " + MIN_PASSWORD + " characters");

@@ -139,7 +139,8 @@ class OwnerLoginTest {
         assertEquals("ROLE_OWNER", r.getRole());
         assertFalse(owner.isMustChangePassword());
         assertTrue(encoder.matches("my-own-password", owner.getPassword()));
-        assertThrows(BadCredentialsException.class, () -> service.changePassword(9L, "wrong", "another-password"));
+        // 400, not 401: the web app treats any 401 as an expired session and signs the owner out.
+        assertThrows(IllegalArgumentException.class, () -> service.changePassword(9L, "wrong", "another-password"));
         assertThrows(IllegalArgumentException.class, () -> service.changePassword(9L, "my-own-password", "short"));
     }
 
