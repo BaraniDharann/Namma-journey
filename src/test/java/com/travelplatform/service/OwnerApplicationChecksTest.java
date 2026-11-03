@@ -7,6 +7,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class OwnerApplicationChecksTest {
 
+    @org.junit.jupiter.api.BeforeEach
+    void key() {
+        com.travelplatform.security.FieldEncryption.configure("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=");
+    }
+
     @Test
     @DisplayName("PAN: five letters, four digits, a letter - case and outer spaces ignored")
     void pan() {
@@ -32,6 +37,19 @@ class OwnerApplicationChecksTest {
         assertEquals(OwnerApplicationChecks.panHash("ABCDE1234F"), OwnerApplicationChecks.panHash(" abcde 1234f"));
         assertNotEquals(OwnerApplicationChecks.panHash("ABCDE1234F"), OwnerApplicationChecks.panHash("ABCDE1234G"));
         assertEquals(64, OwnerApplicationChecks.panHash("ABCDE1234F").length());
+    }
+
+    @Test
+    @DisplayName("the PAN hash is keyed: with only ~10^10 PANs, a plain SHA-256 is reversible by brute force")
+    void panHashIsKeyed() throws Exception {
+        com.travelplatform.security.FieldEncryption.configure("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=");
+        String plain = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest("ABCDE1234F".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        String keyed = OwnerApplicationChecks.panHash("ABCDE1234F");
+        assertNotEquals(plain, keyed);
+
+        com.travelplatform.security.FieldEncryption.configure("ZmVkY2JhOTg3NjU0MzIxMGZlZGNiYTk4NzY1NDMyMTA=");
+        assertNotEquals(keyed, OwnerApplicationChecks.panHash("ABCDE1234F"), "another key, another hash");
     }
 
     @Test

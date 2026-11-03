@@ -67,6 +67,27 @@ public class FieldEncryption {
         return key != null;
     }
 
+    /**
+     * A stable HMAC-SHA256 of {@code value} under the field key, for finding duplicates of an
+     * encrypted value (a PAN) without decrypting every row. Keyed because the inputs are few
+     * enough (about 10^10 PANs) that a plain hash is reversed by brute force. {@code purpose}
+     * keeps hashes of different kinds of value from ever being compared.
+     */
+    public static String keyedHash(String purpose, String value) {
+        SecretKeySpec k = key;
+        if (k == null) {
+            throw new IllegalStateException("APP_ENCRYPTION_KEY is not set");
+        }
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(k.getEncoded(), "HmacSHA256"));
+            mac.update((purpose + ":").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(mac.doFinal(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public static String encrypt(String plain) {
         if (plain == null) {
             return null;

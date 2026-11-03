@@ -1,9 +1,5 @@
 package com.travelplatform.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
@@ -37,16 +33,11 @@ public final class OwnerApplicationChecks {
 
     /**
      * What duplicates are found by: the PAN itself is stored encrypted with a random IV, so two
-     * encryptions of one PAN never compare equal.
+     * encryptions of one PAN never compare equal. Keyed (HMAC), since a plain SHA-256 of a PAN
+     * is reversed by trying them all.
      */
     public static String panHash(String raw) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(normalisePan(raw).getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
+        return com.travelplatform.security.FieldEncryption.keyedHash("pan", normalisePan(raw));
     }
 
     public static String maskPan(String pan) {
