@@ -37,10 +37,13 @@ public class StorageConfig {
     @Bean
     @ConditionalOnProperty(name = "app.storage.type", havingValue = "local", matchIfMissing = true)
     public FileStore localFileStore(@Value("${file.upload.dir:uploads/drivers}") String driverDir,
-                                    @Value("${app.storage.local.trips-dir:uploads/trips}") String tripsDir) {
+                                    @Value("${app.storage.local.trips-dir:uploads/trips}") String tripsDir,
+                                    @Value("${app.storage.local.owners-dir:uploads/owners}") String ownersDir) {
         Map<String, Path> roots = new LinkedHashMap<>();
         roots.put("uploads/drivers/", Path.of(driverDir));
         roots.put("uploads/trips/", Path.of(tripsDir));
+        // Travels owners' KYC documents; served only through signed links (SignedUploadUrls).
+        roots.put("uploads/owners/", Path.of(ownersDir));
         roots.put("driverphoto/", Path.of("driverphoto"));
         log.info("Uploads stored on local disk ({}, {}) - single instance only", driverDir, tripsDir);
         return new LocalFileStore(roots);
