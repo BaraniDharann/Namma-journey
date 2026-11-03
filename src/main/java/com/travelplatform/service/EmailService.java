@@ -334,6 +334,16 @@ public class EmailService {
         }
     }
 
+    public void sendAdminReviewReminder(com.travelplatform.entity.Owner owner, java.time.LocalDateTime deadline) {
+        queue(adminNotifyEmail, "Reminder: owner application due by " + WHEN.format(deadline), HTML_HEADER +
+                "<h2>An owner application is still waiting</h2>" +
+                "<p><strong>" + esc(owner.getTravelsName()) + "</strong> applied " +
+                esc(WHEN.format(owner.getSubmittedAt())) + ". We promised a decision by " +
+                esc(WHEN.format(deadline)) + ".</p>" +
+                "<p><a href='" + esc(frontendBaseUrl + "/admin/owners/" + owner.getId()) + "'>Review it now</a></p>" +
+                HTML_FOOTER);
+    }
+
     public void sendOwnerRejected(String toEmail, String travelsName, String reason, String resubmitUrl) {
         queue(toEmail, "Your Namma Journey owner application needs changes", HTML_HEADER +
                 "<h2>Application not approved yet</h2>" +

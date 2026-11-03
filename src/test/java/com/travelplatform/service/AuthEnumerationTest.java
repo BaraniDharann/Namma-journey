@@ -105,8 +105,9 @@ class AuthEnumerationTest {
         ReflectionTestUtils.setField(service, "passwordEncoder", encoder);
         Owner o = new Owner();
         o.setPassword(encoder.encode("right-password"));
-        when(owners.findByEmail("owner@x.com")).thenReturn(Optional.of(o));
-        when(owners.findByEmail("nobody@x.com")).thenReturn(Optional.empty());
+        o.setStatus(com.travelplatform.entity.OwnerStatus.APPROVED);
+        when(owners.findByEmailIgnoreCase("owner@x.com")).thenReturn(Optional.of(o));
+        when(owners.findByEmailIgnoreCase("nobody@x.com")).thenReturn(Optional.empty());
 
         OwnerLoginRequest unknown = new OwnerLoginRequest();
         unknown.setEmail("nobody@x.com");

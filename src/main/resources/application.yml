@@ -257,14 +257,11 @@ app:
       endpoint: ${OUTBOX_SQS_ENDPOINT:}
 
   bootstrap:
-    # One-time secret for POST /api/auth/owner/create-admin, which creates the first owner
-    # account on a new deployment. That endpoint cannot require authentication (there is no
-    # account yet) and it returns an owner token — full control of the platform — so without
-    # this it is a race between the operator and anyone scanning the internet. Empty disables
-    # the endpoint, which is what every environment that already has an owner should use.
-    owner-secret: ${OWNER_BOOTSTRAP_SECRET:}
     # One-time secret for POST /api/auth/admin/bootstrap, which creates the first NammaJourney
-    # admin (who approves travels owners). Same reasoning as above: empty disables it.
+    # admin (who approves travels owners). That endpoint cannot require authentication (there is
+    # no account yet) and it returns an admin token, so without this it is a race between the
+    # operator and anyone scanning the internet. Empty disables it; it also refuses once an admin
+    # exists. Owners are no longer bootstrapped: they apply at /owner/signup.
     admin-secret: ${ADMIN_BOOTSTRAP_SECRET:}
 
   # The web app's address, for links in emails (owner resubmit link, admin review link).

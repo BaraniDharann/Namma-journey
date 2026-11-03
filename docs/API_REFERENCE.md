@@ -236,20 +236,24 @@ Server runs on: `http://localhost:8080`
 
 ---
 
-## Creating the first owner account
+## Admins and travels owners
 
 ```bash
-# Set OWNER_BOOTSTRAP_SECRET in .env, restart, then:
-curl -X POST http://localhost:8080/api/auth/owner/create-admin \
+# Set ADMIN_BOOTSTRAP_SECRET in .env, restart, then create the first admin once:
+curl -X POST http://localhost:8080/api/auth/admin/bootstrap \
   -H "Content-Type: application/json" \
-  -H "X-Bootstrap-Secret: $OWNER_BOOTSTRAP_SECRET" \
-  -d '{"email":"owner@example.com","password":"YOUR_OWNER_PASSWORD","name":"Owner"}'
+  -H "X-Bootstrap-Secret: $ADMIN_BOOTSTRAP_SECRET" \
+  -d '{"email":"admin@example.com","password":"YOUR_ADMIN_PASSWORD"}'
 ```
 
-Clear `OWNER_BOOTSTRAP_SECRET` again afterwards — while it is set, that endpoint mints owner
-tokens, which is full control of the platform. Do not insert the row by hand: the password
-column holds a BCrypt hash, and copying one out of a guide gives every deployment that followed
-the same guide the same known password.
+Clear `ADMIN_BOOTSTRAP_SECRET` again afterwards. Admins sign in at `POST /api/auth/admin/login`
+and review applications under `/api/admin/owners`.
+
+Travels owners apply with `POST /api/auth/owner/signup` (multipart: business, PAN, Aadhaar, bank
+details and three document images). An admin approves them; the approval email carries the
+Owner ID (`NJO-0002`) and a one-time password. `POST /api/auth/owner/login` accepts the Owner ID
+or the email; the first sign-in returns a `ROLE_OWNER_SETUP` token that can only call
+`POST /api/owner/change-password`.
 
 ---
 

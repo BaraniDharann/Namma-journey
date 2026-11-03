@@ -1,6 +1,5 @@
 package com.travelplatform.dto;
 
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -11,8 +10,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class OwnerLoginRequest {
     
-    @NotBlank(message = "Email is required")
-    @Email(message = "Invalid email format")
+    /** The Owner ID (NJO-0002) or the email. Named email because that is what clients send. */
+    @NotBlank(message = "Owner ID or email is required")
     private String email;
 
     public String getEmail() {

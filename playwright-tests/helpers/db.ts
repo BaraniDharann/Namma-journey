@@ -81,9 +81,9 @@ export async function markDriverTelegramLinked(driverId: string | number) {
  * Provision a throwaway owner with a password we know, so the owner login form can be tested
  * for real rather than by injecting a minted token.
  *
- * <p>Written straight to the table on purpose. POST /api/auth/owner/create-admin refuses once
- * any owner exists, and the alternative — resetting the existing owner's password — would
- * change the credentials of the account the operator actually signs in with.
+ * <p>Written straight to the table on purpose. Owners now come only from signup plus admin
+ * approval, and the alternative — resetting the existing owner's password — would change the
+ * credentials of the account the operator actually signs in with.
  */
 // createTestOwner() used to live here and minted a fresh ROLE_OWNER row per run, which is how
 // the database ended up with 31 owner accounts all sharing one password from this repo. There is

@@ -94,6 +94,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/driver/location/**").authenticated()
                 .requestMatchers("/api/driver/**").hasRole("DRIVER")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                // An owner on the emailed one-time password (ROLE_OWNER_SETUP) can do this and nothing else.
+                .requestMatchers("/api/owner/change-password").hasAnyRole("OWNER", "OWNER_SETUP")
                 .requestMatchers("/api/owner/pricing/current").authenticated()
                 .requestMatchers("/api/owner/**").hasRole("OWNER")
                 .anyRequest().authenticated()

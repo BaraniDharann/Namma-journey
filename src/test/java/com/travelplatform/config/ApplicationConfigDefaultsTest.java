@@ -97,11 +97,11 @@ class ApplicationConfigDefaultsTest {
     }
 
     @Test
-    @DisplayName("the owner bootstrap secret is empty by default, keeping create-admin disabled")
-    void ownerBootstrapIsDisabledByDefault() {
-        String value = at(load(), "app.bootstrap.owner-secret");
-        assertEquals("${OWNER_BOOTSTRAP_SECRET:}", value,
-                "create-admin mints owner tokens; it must stay disabled unless explicitly enabled");
+    @DisplayName("the admin bootstrap secret is empty by default, keeping admin bootstrap disabled")
+    void adminBootstrapIsDisabledByDefault() {
+        String value = at(load(), "app.bootstrap.admin-secret");
+        assertEquals("${ADMIN_BOOTSTRAP_SECRET:}", value,
+                "admin bootstrap mints admin tokens; it must stay disabled unless explicitly enabled");
     }
 
     @Test

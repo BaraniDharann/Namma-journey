@@ -208,6 +208,33 @@ class SecurityEndpointsTest {
     }
 
     @Test
+    @DisplayName("an owner on their emailed password can only change it - nothing else")
+    void setupTokenOnlyReachesChangePassword() throws Exception {
+        Owner o = new Owner();
+        o.setEmail("setup-" + UUID.randomUUID() + "@x.com");
+        o.setPassword("x");
+        o.setStatus(com.travelplatform.entity.OwnerStatus.APPROVED);
+        o.setMustChangePassword(true);
+        o = owners.save(o);
+        String setup = "Bearer " + jwt.generateToken(o.getId().toString(), "ROLE_OWNER_SETUP", o.getTokenVersion());
+
+        mvc.perform(get("/api/owner/bookings").header("Authorization", setup)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/owner/change-password").header("Authorization", setup)
+                        .contentType("application/json").content("{}"))
+                .andExpect(r -> org.junit.jupiter.api.Assertions.assertTrue(
+                        r.getResponse().getStatus() != 401 && r.getResponse().getStatus() != 403,
+                        "setup token was refused: " + r.getResponse().getStatus()));
+    }
+
+    @Test
+    @DisplayName("the old owner bootstrap endpoint is gone")
+    void ownerBootstrapIsGone() throws Exception {
+        mvc.perform(post("/api/auth/owner/create-admin").contentType("application/json")
+                        .content("{\"email\":\"a@x.com\",\"password\":\"longpassword\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     @DisplayName("an admin token stops working once the admin's tokens are revoked")
     void adminTokenDiesWhenAdminRevoked() throws Exception {
         Admin a = admin();

@@ -131,18 +131,6 @@ public class AuthController {
     }
     
     /**
-     * CREATE ADMIN - Owner creates admin account
-     * POST /api/auth/owner/create-admin
-     */
-    @PostMapping("/owner/create-admin")
-    public ResponseEntity<AuthResponse> createAdmin(
-            @Valid @RequestBody AdminCreateRequest request,
-            @RequestHeader(value = "X-Bootstrap-Secret", required = false) String bootstrapSecret) {
-        AuthResponse response = authService.createAdmin(request, bootstrapSecret);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-    
-    /**
      * OWNER FORGOT PASSWORD - Reset password for owner
      * POST /api/auth/owner/forgot-password
      */

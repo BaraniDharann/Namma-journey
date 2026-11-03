@@ -123,17 +123,19 @@ Started TravelPlatformApplication in X seconds
 If not already created:
 
 ```bash
-# Set OWNER_BOOTSTRAP_SECRET in .env, restart, then:
-curl -X POST http://localhost:8080/api/auth/owner/create-admin \
+# Owners are no longer bootstrapped. Create the first admin once (set ADMIN_BOOTSTRAP_SECRET
+# in .env, restart), then apply as an owner at http://localhost:5173/owner/signup and approve
+# the application at http://localhost:5173/admin/owners:
+curl -X POST http://localhost:8080/api/auth/admin/bootstrap \
   -H "Content-Type: application/json" \
-  -H "X-Bootstrap-Secret: $OWNER_BOOTSTRAP_SECRET" \
-  -d '{"email":"owner@example.com","password":"YOUR_OWNER_PASSWORD","name":"Owner"}'
+  -H "X-Bootstrap-Secret: $ADMIN_BOOTSTRAP_SECRET" \
+  -d '{"email":"admin@example.com","password":"YOUR_ADMIN_PASSWORD"}'
 ```
 
-Clear `OWNER_BOOTSTRAP_SECRET` again afterwards — while it is set, that endpoint mints owner
-tokens, which is full control of the platform. Do not insert the row by hand: the password
-column holds a BCrypt hash, and copying one out of a guide gives every deployment that followed
-the same guide the same known password.
+Clear `ADMIN_BOOTSTRAP_SECRET` again afterwards. The approved owner's Owner ID and one-time
+password arrive by email; they choose their own password on first sign-in. Do not insert owner
+rows by hand: the password column holds a BCrypt hash, and copying one out of a guide gives
+every deployment that followed the same guide the same known password.
 
 Password: `YOUR_OWNER_PASSWORD`
 

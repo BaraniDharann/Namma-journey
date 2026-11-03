@@ -75,6 +75,7 @@ public class TokenVersionService {
         owner.setTokenVersion(owner.getTokenVersion() + 1);
         owners.save(owner);
         versions.invalidate("ROLE_OWNER:" + owner.getId());
+        versions.invalidate("ROLE_OWNER_SETUP:" + owner.getId());
     }
 
     public void revokeAdmin(Admin admin) {
@@ -88,7 +89,8 @@ public class TokenVersionService {
             return switch (role) {
                 case "ROLE_USER" -> users.findById(UUID.fromString(principal)).map(User::getTokenVersion).orElse(null);
                 case "ROLE_DRIVER" -> drivers.findById(Long.valueOf(principal)).map(Driver::getTokenVersion).orElse(null);
-                case "ROLE_OWNER" -> owners.findById(Long.valueOf(principal)).map(Owner::getTokenVersion).orElse(null);
+                // ROLE_OWNER_SETUP: an owner still on the emailed password, same account.
+                case "ROLE_OWNER", "ROLE_OWNER_SETUP" -> owners.findById(Long.valueOf(principal)).map(Owner::getTokenVersion).orElse(null);
                 case "ROLE_ADMIN" -> admins.findById(Long.valueOf(principal)).map(Admin::getTokenVersion).orElse(null);
                 default -> null;
             };
