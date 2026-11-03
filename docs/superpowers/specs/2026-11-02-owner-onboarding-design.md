@@ -69,7 +69,7 @@ The work is split into four sub-projects, each with its own spec and plan:
    - Aadhaar passes its check digit (reuse `DriverApplicationChecks`)
    - at least one city is given and every city exists
   - the Aadhaar consent box is ticked ("I consent to NammaJourney verifying my Aadhaar offline for owner registration"). The time is stored in `aadhaar_consent_at`.
-   - each document is an image or PDF of at most 5 MB
+   - each document is an image (JPEG, PNG or WebP) of at most 5 MB. PDFs are not accepted: uploads go through the existing image pipeline, and the Aadhaar QR check needs an image.
 2. Reject the signup if the email or PAN hash already belongs to an owner, unless that owner is `REJECTED` (see Resubmit).
 3. Store the documents and save the owner as `PENDING_REVIEW` with `submitted_at = now`.
 4. Queue two outbox emails:
