@@ -74,7 +74,24 @@ public class OwnerService {
                 o.getContactName(), o.getPhone(), o.getEmail(), cities, o.getBankAccountHolder(),
                 o.getBankAccountNumber() == null ? null : OwnerApplicationChecks.maskAccount(o.getBankAccountNumber()),
                 o.getBankIfsc(), o.getBankName(), o.getUpiId(),
-                o.getAssignmentMode() == null ? null : o.getAssignmentMode().name(), platform);
+                o.getAssignmentMode() == null ? null : o.getAssignmentMode().name(), platform,
+                (o.getFleetType() == null ? com.travelplatform.entity.Owner.FleetType.CARS : o.getFleetType()).name());
+    }
+
+    /** What the owner runs (V30): CARS, BUSES or BOTH; it decides which screens their menu shows. */
+    @Transactional
+    public com.travelplatform.entity.Owner.FleetType setFleetType(Long ownerId, String fleetType) {
+        com.travelplatform.entity.Owner.FleetType t;
+        try {
+            t = com.travelplatform.entity.Owner.FleetType.valueOf(String.valueOf(fleetType).trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Fleet type must be CARS, BUSES or BOTH");
+        }
+        com.travelplatform.entity.Owner owner = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Owner not found"));
+        owner.setFleetType(t);
+        ownerRepository.save(owner);
+        return t;
     }
 
     /** How this owner's Trips get a driver: AUTO (first free driver and car) or MANUAL (the owner assigns). */

@@ -59,7 +59,9 @@ public class SignedUploadUrls {
                 return true;
             }
         }
-        return false;
+        // A bus's RC, permit, insurance and fitness papers ("uploads/buses/{id}/doc_rc_..."); its
+        // photos in the same folder are shown to customers and stay plain links.
+        return key.startsWith("uploads/buses/") && key.contains("/doc_");
     }
 
     /** "/uploads/drivers/aadhaar_x.jpg" -> same path + "?exp=...&sig=..."; anything else unchanged. */

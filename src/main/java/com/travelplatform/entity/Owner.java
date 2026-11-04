@@ -65,6 +65,17 @@ public class Owner {
 
     public enum AssignmentMode { AUTO, MANUAL }
 
+    /** What the owner runs (V30): the owner menu shows car screens, bus screens or both. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "fleet_type", nullable = false, length = 6)
+    private FleetType fleetType = FleetType.CARS;
+
+    public enum FleetType { CARS, BUSES, BOTH }
+
+    /** The platform's share of this owner's bus fares (V30), set by the admin; 8 by default. */
+    @Column(name = "bus_commission_percent", nullable = false, precision = 5, scale = 2)
+    private java.math.BigDecimal busCommissionPercent = new java.math.BigDecimal("8.00");
+
     @Column(name = "travels_name")
     private String travelsName;
 

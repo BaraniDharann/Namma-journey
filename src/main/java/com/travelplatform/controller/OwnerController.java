@@ -228,6 +228,14 @@ public class OwnerController {
                 ownerService.setAssignmentMode(ownerScope.ownerId(), body == null ? null : body.get("mode")).name()));
     }
 
+    /** What I run, for my menu (V30). Body {fleetType: CARS | BUSES | BOTH}. */
+    @PutMapping("/fleet-type")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Map<String, String>> setFleetType(@RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(Map.of("fleetType",
+                ownerService.setFleetType(ownerScope.ownerId(), body == null ? null : body.get("fleetType")).name()));
+    }
+
     @GetMapping("/bookings/{bookingId}/driver-photo")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> getDriverPhoto(@PathVariable UUID bookingId) {

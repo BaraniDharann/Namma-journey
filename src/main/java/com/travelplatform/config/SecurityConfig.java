@@ -87,6 +87,8 @@ public class SecurityConfig {
                                         && OwnerScope.current().map(OwnerScope.Bound::platform).orElse(false)))
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/places/**").permitAll()
+                // Bus town autocomplete: customers search before they log in.
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/bus/places").permitAll()
                 .requestMatchers("/api/user/forgot-password").permitAll()
                 .requestMatchers("/api/user/route-preview").permitAll()
                 .requestMatchers("/api/public/**").permitAll()

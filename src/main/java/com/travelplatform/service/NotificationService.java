@@ -456,6 +456,19 @@ public class NotificationService {
         notificationRepository.save(user);
     }
 
+    /** A bus document runs out soon: after that date the bus gets no new trips. In-app, on the owner's feed. */
+    public void notifyBusDocumentExpiring(Long ownerId, String bus, String document, java.time.LocalDate expiresOn) {
+        Notification n = new Notification();
+        n.setRecipientId(ownerId.toString());
+        n.setRecipientRole("ROLE_OWNER");
+        n.setType("BUS_DOCUMENT_EXPIRING");
+        n.setTitle("Bus document expiring");
+        n.setMessage("The " + document + " of " + bus + " expires on " + expiresOn
+                + ". Upload the renewed one, or no trips will be created after that date.");
+        n.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(n);
+    }
+
     public List<Notification> getNotifications(String recipientId, String role) {
         return notificationRepository.findByRecipientIdAndRecipientRoleOrderByCreatedAtDesc(recipientId, role);
     }
