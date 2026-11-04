@@ -38,6 +38,12 @@ class OwnerScopeFilterTest {
                 new UsernamePasswordAuthenticationToken(id, null, List.of(new SimpleGrantedAuthority(role))));
     }
 
+    private static MockHttpServletRequest ownerRequest() {
+        MockHttpServletRequest r = new MockHttpServletRequest("GET", "/api/owner/bookings");
+        r.setRequestURI("/api/owner/bookings");
+        return r;
+    }
+
     private static Owner owner(long id, String code) {
         Owner o = new Owner();
         o.setId(id);
@@ -53,7 +59,7 @@ class OwnerScopeFilterTest {
         AtomicReference<OwnerScope.Bound> seen = new AtomicReference<>();
         FilterChain chain = (req, res) -> seen.set(OwnerScope.current().orElse(null));
 
-        filter.doFilter(new MockHttpServletRequest(), new MockHttpServletResponse(), chain);
+        filter.doFilter(ownerRequest(), new MockHttpServletResponse(), chain);
 
         assertEquals(new OwnerScope.Bound(7, false), seen.get());
         assertTrue(OwnerScope.current().isEmpty());
@@ -66,7 +72,7 @@ class OwnerScopeFilterTest {
         login("1", "ROLE_OWNER");
         AtomicReference<OwnerScope.Bound> seen = new AtomicReference<>();
 
-        filter.doFilter(new MockHttpServletRequest(), new MockHttpServletResponse(),
+        filter.doFilter(ownerRequest(), new MockHttpServletResponse(),
                 (req, res) -> seen.set(OwnerScope.current().orElse(null)));
 
         assertEquals(new OwnerScope.Bound(1, true), seen.get());
@@ -78,7 +84,7 @@ class OwnerScopeFilterTest {
         when(owners.findById(7L)).thenReturn(Optional.of(owner(7, "NJO-0007")));
         login("7", "ROLE_OWNER");
 
-        assertThrows(IllegalStateException.class, () -> filter.doFilter(new MockHttpServletRequest(),
+        assertThrows(IllegalStateException.class, () -> filter.doFilter(ownerRequest(),
                 new MockHttpServletResponse(), (req, res) -> {
                     throw new IllegalStateException("boom");
                 }));
@@ -91,9 +97,27 @@ class OwnerScopeFilterTest {
         login("u-1", "ROLE_USER");
         AtomicReference<Boolean> scoped = new AtomicReference<>();
 
-        filter.doFilter(new MockHttpServletRequest(), new MockHttpServletResponse(),
+        filter.doFilter(ownerRequest(), new MockHttpServletResponse(),
                 (req, res) -> scoped.set(OwnerScope.current().isPresent()));
 
         assertEquals(false, scoped.get());
+    }
+
+    @Test
+    @DisplayName("public pages get no owner scope even with an owner's token, so shared caches never hold one owner's view")
+    void publicPathsUnscoped() throws Exception {
+        when(owners.findById(7L)).thenReturn(Optional.of(owner(7, "NJO-0007")));
+        login("7", "ROLE_OWNER");
+        AtomicReference<Boolean> scoped = new AtomicReference<>();
+        for (String path : new String[]{"/api/public/trip-rates", "/api/public/packages", "/api/notifications"}) {
+            MockHttpServletRequest req = new MockHttpServletRequest("GET", path);
+            req.setRequestURI(path);
+            filter.doFilter(req, new MockHttpServletResponse(), (r, s) -> scoped.set(OwnerScope.current().isPresent()));
+            assertEquals(false, scoped.get(), path);
+        }
+        MockHttpServletRequest owner = new MockHttpServletRequest("GET", "/api/owner/bookings");
+        owner.setRequestURI("/api/owner/bookings");
+        filter.doFilter(owner, new MockHttpServletResponse(), (r, s) -> scoped.set(OwnerScope.current().isPresent()));
+        assertEquals(true, scoped.get());
     }
 }

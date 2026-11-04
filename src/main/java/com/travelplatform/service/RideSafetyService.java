@@ -739,7 +739,11 @@ public class RideSafetyService {
     private TripRateService tripRates;
 
     private String platformFeed() {
-        return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
+        try {
+            return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
+        } catch (IllegalStateException noPlatformOwnerYet) {
+            return "owner"; // a fresh database: the notice must not fail the work it reports
+        }
     }
 
     /** In-app notification to the owner, plus the Telegram safety group when configured. */

@@ -134,7 +134,7 @@ public class AdminDriverService {
 
     @Caching(evict = {
             @CacheEvict(value = "allDrivers", allEntries = true),
-            @CacheEvict(value = "driverById", key = "#driverId")
+            @CacheEvict(value = "driverById", allEntries = true)
     })
     public void deleteDriver(Long driverId) {
         Driver driver = actingOn(driverId);
@@ -246,7 +246,7 @@ public class AdminDriverService {
     /** The owner sets a driver's vehicle and City/Trip switches - e.g. for drivers added before V14. */
     @Caching(evict = {
             @CacheEvict(value = "allDrivers", allEntries = true),
-            @CacheEvict(value = "driverById", key = "#driverId")
+            @CacheEvict(value = "driverById", allEntries = true)
     })
     public Driver updateVehicle(Long driverId, com.travelplatform.dto.VehicleRequest vehicle) {
         Driver driver = actingOn(driverId);

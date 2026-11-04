@@ -58,7 +58,11 @@ public class BookingAccessGuard {
             if (booking.getOwnerId() != null) {
                 return booking.getOwnerId().toString().equals(principalId);
             }
-            return tripRates != null && tripRates.platformOwnerId().toString().equals(principalId);
+            try {
+                return tripRates != null && tripRates.platformOwnerId().toString().equals(principalId);
+            } catch (IllegalStateException noPlatformOwnerYet) {
+                return false;
+            }
         }
         return false;
     }

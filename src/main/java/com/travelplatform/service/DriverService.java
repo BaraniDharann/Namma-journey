@@ -129,7 +129,7 @@ public class DriverService {
     @Transactional
     @org.springframework.cache.annotation.Caching(evict = {
             @org.springframework.cache.annotation.CacheEvict(value = "allDrivers", allEntries = true),
-            @org.springframework.cache.annotation.CacheEvict(value = "driverById", key = "#driverId")
+            @org.springframework.cache.annotation.CacheEvict(value = "driverById", allEntries = true)
     })
     public DriverDetailsResponse updateModes(Long driverId, Boolean servesCity, Boolean servesTrip) {
         Driver driver = driverRepository.findById(driverId)

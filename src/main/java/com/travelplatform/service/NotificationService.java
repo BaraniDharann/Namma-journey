@@ -52,7 +52,15 @@ public class NotificationService {
 
     /** The platform owner's feed (City rides, independent drivers, dues, safety). */
     public String platformFeed() {
-        return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
+        if (tripRates == null) {
+            return "owner";
+        }
+        try {
+            return tripRates.platformOwnerId().toString();
+        } catch (IllegalStateException noPlatformOwnerYet) {
+            // Before any owner is NJO-0001 (a fresh database) a notice must not fail the booking it is about.
+            return "owner";
+        }
     }
 
     /**
