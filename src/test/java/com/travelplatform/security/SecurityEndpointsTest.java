@@ -110,8 +110,52 @@ class SecurityEndpointsTest {
         mvc.perform(get("/actuator/metrics")).andExpect(status().isUnauthorized());
         mvc.perform(get("/actuator/metrics").header("Authorization", aliceToken)).andExpect(status().isForbidden());
         mvc.perform(delete("/actuator/caches").header("Authorization", aliceToken)).andExpect(status().isForbidden());
-        mvc.perform(get("/actuator/metrics").header("Authorization", ownerToken)).andExpect(status().isOk());
+        // A travels owner is not the platform: server health is NJO-0001's only (V27).
+        mvc.perform(get("/actuator/metrics").header("Authorization", ownerToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/actuator/metrics").header("Authorization", platformToken())).andExpect(status().isOk());
         mvc.perform(get("/actuator/health")).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("platform screens (cities, City rides, independent drivers, payouts) are the platform owner's only")
+    void platformScreensArePlatformOnly() throws Exception {
+        for (String path : new String[]{"/api/owner/cities", "/api/owner/city-fares", "/api/owner/platform/city-rides",
+                "/api/owner/platform/drivers", "/api/owner/payouts", "/api/owner/dues/pending", "/api/owner/driver-applications"}) {
+            mvc.perform(get(path).header("Authorization", ownerToken)).andExpect(status().isForbidden());
+            mvc.perform(get(path).header("Authorization", platformToken())).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/owner/bookings").header("Authorization", ownerToken)).andExpect(status().isOk());
+        mvc.perform(get("/api/owner/me").header("Authorization", platformToken()))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.platform").value(true));
+        mvc.perform(get("/api/owner/me").header("Authorization", ownerToken))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.platform").value(false));
+    }
+
+    @Test
+    @DisplayName("an owner reads only their own notification feed")
+    void ownerReadsOnlyOwnFeed() throws Exception {
+        Owner me = owners.findById(Long.valueOf(jwt.extractUserId(ownerToken.substring(7)))).orElseThrow();
+        mvc.perform(get("/api/notifications").param("recipientId", me.getId().toString()).param("role", "ROLE_OWNER")
+                .header("Authorization", ownerToken)).andExpect(status().isOk());
+        mvc.perform(get("/api/notifications").param("recipientId", "owner").param("role", "ROLE_OWNER")
+                .header("Authorization", ownerToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/notifications").param("recipientId", String.valueOf(me.getId() + 1000)).param("role", "ROLE_OWNER")
+                .header("Authorization", ownerToken)).andExpect(status().isForbidden());
+    }
+
+    /** NJO-0001, the platform owner: created once per container (Owner IDs are unique). */
+    private String platformToken() {
+        Owner p = owners.findByOwnerCode("NJO-0001").orElseGet(() -> {
+            Owner o = new Owner();
+            o.setEmail("platform-" + UUID.randomUUID() + "@x.com");
+            o.setPassword("x");
+            o.setRole("ROLE_OWNER");
+            o.setOwnerCode("NJO-0001");
+            o.setStatus(com.travelplatform.entity.OwnerStatus.APPROVED);
+            return owners.save(o);
+        });
+        return "Bearer " + jwt.generateToken(p.getId().toString(), "ROLE_OWNER", p.getTokenVersion());
     }
 
     @Test

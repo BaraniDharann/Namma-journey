@@ -124,6 +124,7 @@ public class OwnerController {
     @GetMapping("/city-fares")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<com.travelplatform.entity.CityFare>> getCityFares() {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(cityFareService.all());
     }
 
@@ -133,6 +134,7 @@ public class OwnerController {
             @PathVariable String vehicleType,
             @RequestBody Map<String, BigDecimal> body,
             org.springframework.security.core.Authentication authentication) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         Long ownerId = null;
         try {
             ownerId = Long.valueOf(authentication.getName());
@@ -148,12 +150,14 @@ public class OwnerController {
     @GetMapping("/cities")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<com.travelplatform.entity.City>> getCities() {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(cityService.all());
     }
 
     @PostMapping("/cities")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.entity.City> createCity(@RequestBody com.travelplatform.entity.City city) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         // This endpoint only creates: never trust an id or timestamp from the body.
         city.setId(null);
         city.setCreatedAt(null);
@@ -164,6 +168,7 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.entity.City> updateCity(
             @PathVariable Long id, @RequestBody com.travelplatform.entity.City city) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(cityService.update(id, city));
     }
 
@@ -180,7 +185,23 @@ public class OwnerController {
     @GetMapping("/bookings")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<TravelBooking>> getAllBookings() {
-        return ResponseEntity.ok(ownerService.getAllBookings());
+        return ResponseEntity.ok(ownerService.getTripBookings(ownerScope.ownerId()));
+    }
+
+    /** The platform's City rides: a platform screen. */
+    @GetMapping("/platform/city-rides")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<TravelBooking>> getCityRides() {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(ownerService.getCityRides());
+    }
+
+    /** City-ride revenue for a year, month by month: a platform screen. */
+    @GetMapping("/platform/revenue/monthly-series")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Map<String, Object>> getCityRevenueSeries(@RequestParam int year) {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(ownerService.getMonthlyRevenueSeries(null, year));
     }
     
     /** My Trip prices, one row per car category I offer. */
@@ -217,7 +238,7 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> getDailyRevenue(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return ResponseEntity.ok(ownerService.getDailyRevenue(date));
+        return ResponseEntity.ok(ownerService.getDailyRevenue(ownerScope.ownerId(), date));
     }
     
     @GetMapping("/revenue/monthly")
@@ -225,7 +246,7 @@ public class OwnerController {
     public ResponseEntity<Map<String, Object>> getMonthlyRevenue(
             @RequestParam int year, 
             @RequestParam int month) {
-        return ResponseEntity.ok(ownerService.getMonthlyRevenue(year, month));
+        return ResponseEntity.ok(ownerService.getMonthlyRevenue(ownerScope.ownerId(), year, month));
     }
     
     /**
@@ -235,13 +256,13 @@ public class OwnerController {
     @GetMapping("/revenue/monthly-series")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> getMonthlyRevenueSeries(@RequestParam int year) {
-        return ResponseEntity.ok(ownerService.getMonthlyRevenueSeries(year));
+        return ResponseEntity.ok(ownerService.getMonthlyRevenueSeries(ownerScope.ownerId(), year));
     }
 
     @GetMapping("/revenue/yearly")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> getYearlyRevenue(@RequestParam int year) {
-        return ResponseEntity.ok(ownerService.getYearlyRevenue(year));
+        return ResponseEntity.ok(ownerService.getYearlyRevenue(ownerScope.ownerId(), year));
     }
     
     @GetMapping("/revenue/trip/{tripId}")
@@ -280,13 +301,22 @@ public class OwnerController {
     @GetMapping("/reviews")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<ReviewResponse>> getAllReviews() {
-        return ResponseEntity.ok(reviewService.getAllReviews());
+        return ResponseEntity.ok(reviewService.getReviewsFor(ownerScope.ownerId()));
+    }
+
+    /** City-ride reviews: a platform screen. */
+    @GetMapping("/platform/reviews")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<ReviewResponse>> getCityReviews() {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(reviewService.getReviewsFor(null));
     }
     
     /** Independent drivers, their payout UPI IDs (decrypted for the owner only) and balances. */
     @GetMapping("/payouts")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<com.travelplatform.service.DriverLedgerService.PayoutRow>> getPayouts() {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(ledgerService.payoutSummary());
     }
 
@@ -295,6 +325,7 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.entity.DriverLedgerEntry> recordPayout(
             @PathVariable Long driverId, @RequestBody Map<String, String> body, java.security.Principal principal) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         com.travelplatform.entity.DriverLedgerEntry.Type type;
         java.math.BigDecimal amount;
         try {
@@ -311,6 +342,7 @@ public class OwnerController {
     @GetMapping("/dues/pending")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<com.travelplatform.service.DriverDuesService.PendingRow>> getPendingDues() {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(duesService.pending());
     }
 
@@ -318,6 +350,7 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.service.DriverDuesService.PaymentRow> confirmDues(
             @PathVariable Long paymentId, java.security.Principal principal) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(duesService.confirm(paymentId, "owner:" + principal.getName()));
     }
 
@@ -325,13 +358,22 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.service.DriverDuesService.PaymentRow> rejectDues(
             @PathVariable Long paymentId, java.security.Principal principal) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(duesService.reject(paymentId, "owner:" + principal.getName()));
     }
 
     @GetMapping("/payments/pending")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<PaymentResponse>> getPendingPayments() {
-        return ResponseEntity.ok(paymentService.getPendingPayments());
+        return ResponseEntity.ok(paymentService.getPendingPayments(ownerScope.ownerId()));
+    }
+
+    /** City-ride UPI payments waiting for confirmation: a platform screen. */
+    @GetMapping("/platform/payments/pending")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<PaymentResponse>> getPendingCityPayments() {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(paymentService.getPendingPayments(null));
     }
     
     @PostMapping("/payments/{paymentId}/verify")
@@ -339,6 +381,7 @@ public class OwnerController {
     public ResponseEntity<PaymentResponse> verifyPayment(
             @PathVariable UUID paymentId,
             java.security.Principal principal) {
+        paymentService.requireVisibleTo(paymentId, ownerScope.ownerId(), ownerScope.isPlatform());
         // Verifying a payment settles a trip and books the fare into revenue, so the row records
         // which owner did it. Principal is the JWT subject, populated by JwtAuthenticationFilter.
         PaymentResponse response = paymentService.verifyPayment(paymentId, principal.getName());

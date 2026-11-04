@@ -21,6 +21,12 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
      *  to the end - a just-confirmed trip landed on the last page of the passenger's list. */
     List<TravelBooking> findByUserIdOrderByBookingDateDesc(UUID userId);
 
+    /** One owner's bookings of one mode, newest first (V27). */
+    List<TravelBooking> findByOwnerIdAndServiceModeOrderByBookingDateDesc(Long ownerId, TravelBooking.ServiceMode serviceMode);
+
+    /** The platform's bookings (no owner) of one mode, newest first: City rides. */
+    List<TravelBooking> findByOwnerIdIsNullAndServiceModeOrderByBookingDateDesc(TravelBooking.ServiceMode serviceMode);
+
     Page<TravelBooking> findByUserId(UUID userId, Pageable pageable);
 
     /**
@@ -44,14 +50,21 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
      */
     String FARE_COUNT = "SUM(CASE WHEN p.purpose = com.travelplatform.entity.Payment.PaymentPurpose.FARE THEN 1 ELSE 0 END)";
 
+    /**
+     * Whose money a revenue query counts: one owner's Trips, or with {@code ownerId} null the
+     * platform's City rides (bookings with no owner, V27).
+     */
+    String OWNER_FILTER = "((:ownerId IS NULL AND b.ownerId IS NULL) OR b.ownerId = :ownerId)";
+
     /** Totals for one period, summed by Postgres over NUMERIC money. */
     @Query("SELECT new com.travelplatform.dto.RevenueTotals(" + FARE_COUNT + ", SUM(p.amount), " +
            "SUM(CASE WHEN p.purpose = com.travelplatform.entity.Payment.PaymentPurpose.FARE THEN b.distanceKm ELSE 0.0 END), " +
            "SUM(CASE WHEN p.purpose = com.travelplatform.entity.Payment.PaymentPurpose.FARE THEN b.travelDays ELSE 0 END)) " +
            "FROM Payment p, TravelBooking b WHERE p.bookingId = b.id " +
            "AND p.status = com.travelplatform.entity.Payment.PaymentStatus.VERIFIED " +
-           "AND p.verifiedDate >= :start AND p.verifiedDate < :end")
-    RevenueTotals revenueTotals(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+           "AND " + OWNER_FILTER + " AND p.verifiedDate >= :start AND p.verifiedDate < :end")
+    RevenueTotals revenueTotals(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                @Param("ownerId") Long ownerId);
 
     /** One row per month that received money, in month order. Months with none are absent. */
     @Query("SELECT new com.travelplatform.dto.MonthlyRevenue(CAST(EXTRACT(MONTH FROM p.verifiedDate) AS Integer), " +
@@ -59,18 +72,20 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
            "SUM(CASE WHEN p.purpose = com.travelplatform.entity.Payment.PaymentPurpose.FARE THEN b.distanceKm ELSE 0.0 END)) " +
            "FROM Payment p, TravelBooking b WHERE p.bookingId = b.id " +
            "AND p.status = com.travelplatform.entity.Payment.PaymentStatus.VERIFIED " +
-           "AND p.verifiedDate >= :start AND p.verifiedDate < :end " +
+           "AND " + OWNER_FILTER + " AND p.verifiedDate >= :start AND p.verifiedDate < :end " +
            "GROUP BY EXTRACT(MONTH FROM p.verifiedDate) ORDER BY EXTRACT(MONTH FROM p.verifiedDate)")
-    List<MonthlyRevenue> monthlyRevenue(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    List<MonthlyRevenue> monthlyRevenue(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                        @Param("ownerId") Long ownerId);
 
     /** The per-trip lines of a revenue report, at the amount paid, in order of payment. */
     @Query("SELECT new com.travelplatform.dto.RevenueTrip(b.id, b.fromPlace, b.toPlace, b.distanceKm, b.travelDays, " +
            "p.amount, b.bookingDate) " +
            "FROM Payment p, TravelBooking b WHERE p.bookingId = b.id " +
            "AND p.status = com.travelplatform.entity.Payment.PaymentStatus.VERIFIED " +
-           "AND p.verifiedDate >= :start AND p.verifiedDate < :end " +
+           "AND " + OWNER_FILTER + " AND p.verifiedDate >= :start AND p.verifiedDate < :end " +
            "ORDER BY p.verifiedDate")
-    List<RevenueTrip> revenueTrips(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    List<RevenueTrip> revenueTrips(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end,
+                                   @Param("ownerId") Long ownerId);
 
     /** Trips whose unpaid advance hold has run out (AdvanceHoldSweeper); uses idx_travel_bookings_advance_hold. */
     @Query("SELECT b.id FROM TravelBooking b WHERE b.status = 'PENDING' AND b.advancePaidAt IS NULL " +

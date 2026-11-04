@@ -108,7 +108,7 @@ class RevenueQueriesTest {
         paidTrip("500.00", 10, 1, Payment.PaymentStatus.VERIFIED, LocalDateTime.of(2026, 4, 2, 9, 0)); // April
 
         RevenueTotals totals = bookings.revenueTotals(
-                LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0));
+                LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0), null);
 
         assertEquals(3, totals.trips());
         assertEquals(new BigDecimal("6457.62"), totals.revenue(), "0.10 + 0.20 + 6457.32, exactly");
@@ -116,7 +116,7 @@ class RevenueQueriesTest {
         assertEquals(4, totals.travelDays());
 
         List<RevenueTrip> trips = bookings.revenueTrips(
-                LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0));
+                LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0), null);
         assertEquals(3, trips.size());
         assertEquals(new BigDecimal("0.10"), trips.get(0).totalAmount(), "the amount paid, not the booking total");
     }
@@ -137,14 +137,14 @@ class RevenueQueriesTest {
         payments.save(advance);
 
         RevenueTotals totals = bookings.revenueTotals(
-                LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0));
+                LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0), null);
 
         assertEquals(1, totals.trips());
         assertEquals(new BigDecimal("1000.00"), totals.revenue());
         assertEquals(120.0, totals.distanceKm(), 1e-9);
         assertEquals(2, totals.travelDays());
         assertEquals(1, bookings.monthlyRevenue(
-                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2027, 1, 1, 0, 0)).get(0).trips());
+                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2027, 1, 1, 0, 0), null).get(0).trips());
     }
 
     @Test
@@ -152,9 +152,9 @@ class RevenueQueriesTest {
     void periodEndIsExclusive() {
         paidTrip("100.00", 1, 1, Payment.PaymentStatus.VERIFIED, LocalDateTime.of(2026, 4, 1, 0, 0));
 
-        assertEquals(0, bookings.revenueTotals(LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0)).trips());
-        assertEquals(BigDecimal.ZERO, bookings.revenueTotals(LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0)).revenue());
-        assertEquals(1, bookings.revenueTotals(LocalDateTime.of(2026, 4, 1, 0, 0), LocalDateTime.of(2026, 5, 1, 0, 0)).trips());
+        assertEquals(0, bookings.revenueTotals(LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0), null).trips());
+        assertEquals(BigDecimal.ZERO, bookings.revenueTotals(LocalDateTime.of(2026, 3, 1, 0, 0), LocalDateTime.of(2026, 4, 1, 0, 0), null).revenue());
+        assertEquals(1, bookings.revenueTotals(LocalDateTime.of(2026, 4, 1, 0, 0), LocalDateTime.of(2026, 5, 1, 0, 0), null).trips());
     }
 
     @Test
@@ -166,7 +166,7 @@ class RevenueQueriesTest {
         paidTrip("10.00", 1, 1, Payment.PaymentStatus.VERIFIED, LocalDateTime.of(2027, 1, 1, 0, 0));
 
         List<MonthlyRevenue> months = bookings.monthlyRevenue(
-                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2027, 1, 1, 0, 0));
+                LocalDateTime.of(2026, 1, 1, 0, 0), LocalDateTime.of(2027, 1, 1, 0, 0), null);
 
         assertEquals(2, months.size());
         assertEquals(1, months.get(0).month());
@@ -174,5 +174,35 @@ class RevenueQueriesTest {
         assertEquals(new BigDecimal("350.50"), months.get(0).revenue());
         assertEquals(12, months.get(1).month());
         assertEquals(new BigDecimal("75.25"), months.get(1).revenue());
+    }
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    private void ownedBy(UUID trip, Long owner) {
+        TravelBooking booking = bookings.findById(trip).orElseThrow();
+        booking.setOwnerId(owner);
+        bookings.saveAndFlush(booking);
+    }
+
+    @Test
+    @DisplayName("each owner's revenue is their own Trips; no owner means the platform's City rides")
+    void revenueIsPerOwner() {
+        jdbc.update("DELETE FROM owners");
+        Long a = jdbc.queryForObject("INSERT INTO owners (email, role, created_at) VALUES ('a@x.com', 'ROLE_OWNER', now()) RETURNING id", Long.class);
+        Long b = jdbc.queryForObject("INSERT INTO owners (email, role, created_at) VALUES ('b@x.com', 'ROLE_OWNER', now()) RETURNING id", Long.class);
+        UUID tripA = paidTrip("100.00", 10, 1, Payment.PaymentStatus.VERIFIED, march(5));
+        UUID tripB = paidTrip("250.00", 20, 1, Payment.PaymentStatus.VERIFIED, march(6));
+        paidTrip("40.00", 3, 1, Payment.PaymentStatus.VERIFIED, march(7)); // a City ride: no owner
+        ownedBy(tripA, a);
+        ownedBy(tripB, b);
+        LocalDateTime start = LocalDateTime.of(2026, 3, 1, 0, 0);
+        LocalDateTime end = LocalDateTime.of(2026, 4, 1, 0, 0);
+
+        assertEquals(new BigDecimal("100.00"), bookings.revenueTotals(start, end, a).revenue());
+        assertEquals(new BigDecimal("250.00"), bookings.revenueTotals(start, end, b).revenue());
+        assertEquals(new BigDecimal("40.00"), bookings.revenueTotals(start, end, null).revenue());
+        assertEquals(1, bookings.revenueTrips(start, end, a).size());
+        assertEquals(new BigDecimal("100.00"), bookings.monthlyRevenue(start, end, a).get(0).revenue());
     }
 }

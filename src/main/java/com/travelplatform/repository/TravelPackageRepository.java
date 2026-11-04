@@ -10,6 +10,9 @@ public interface TravelPackageRepository extends JpaRepository<TravelPackage, Lo
 
     List<TravelPackage> findByActiveTrueOrderByCreatedAtDesc();
 
+    /** One owner's packages, newest first (their Packages screen, V27). */
+    List<TravelPackage> findByOwnerIdOrderByCreatedAtDesc(Long ownerId);
+
     List<TravelPackage> findByCategoryAndActiveTrue(TravelPackage.PackageCategory category);
 
     List<TravelPackage> findByStateIgnoreCaseAndActiveTrue(String state);

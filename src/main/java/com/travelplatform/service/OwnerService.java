@@ -53,10 +53,30 @@ public class OwnerService {
     // Stateless: reads the request's owner (OwnerScopeFilter), so tests bind OwnerScope directly.
     private final com.travelplatform.config.OwnerScope ownerScope = new com.travelplatform.config.OwnerScope();
 
-    public List<TravelBooking> getAllBookings() {
-        return travelBookingRepository.findAll();
+    /** One owner's Trips, newest first (their Bookings screen). */
+    public List<TravelBooking> getTripBookings(Long ownerId) {
+        return travelBookingRepository.findByOwnerIdAndServiceModeOrderByBookingDateDesc(ownerId, TravelBooking.ServiceMode.TRIP);
+    }
+
+    /** The platform's City rides, newest first (a platform screen). */
+    public List<TravelBooking> getCityRides() {
+        return travelBookingRepository.findByOwnerIdIsNullAndServiceModeOrderByBookingDateDesc(TravelBooking.ServiceMode.CITY);
     }
     
+    /** The calling owner's own profile, with whether they are the platform owner (NJO-0001). */
+    @Transactional(readOnly = true)
+    public com.travelplatform.dto.OwnerProfileView profile(Long ownerId, boolean platform) {
+        com.travelplatform.entity.Owner o = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Owner not found"));
+        List<String> cities = o.getCities() == null ? List.of()
+                : o.getCities().stream().map(com.travelplatform.entity.City::getName).sorted().toList();
+        return new com.travelplatform.dto.OwnerProfileView(o.getId(), o.getOwnerCode(), o.getTravelsName(),
+                o.getContactName(), o.getPhone(), o.getEmail(), cities, o.getBankAccountHolder(),
+                o.getBankAccountNumber() == null ? null : OwnerApplicationChecks.maskAccount(o.getBankAccountNumber()),
+                o.getBankIfsc(), o.getBankName(), o.getUpiId(),
+                o.getAssignmentMode() == null ? null : o.getAssignmentMode().name(), platform);
+    }
+
     /** How this owner's Trips get a driver: AUTO (first free driver and car) or MANUAL (the owner assigns). */
     @Transactional
     public com.travelplatform.entity.Owner.AssignmentMode setAssignmentMode(Long ownerId, String mode) {
@@ -74,6 +94,7 @@ public class OwnerService {
     }
 
     public Map<String, Object> getDriverPhotoForBooking(UUID bookingId) {
+        ownBooking(bookingId, ownerScope.ownerId());
         TripDriverPhoto photo = tripDriverPhotoRepository.findByBookingId(bookingId)
             .orElseThrow(() -> new RuntimeException("No driver photo found for this booking"));
         Map<String, Object> response = new HashMap<>();
@@ -92,15 +113,18 @@ public class OwnerService {
      * is counted once, in the new period. The JSON shape is unchanged.
      */
 
-    @Cacheable(value = "dailyRevenue", key = "#date.toString()")
-    public Map<String, Object> getDailyRevenue(LocalDate date) {
-        return revenueReport(date.atStartOfDay(), date.plusDays(1).atStartOfDay(), "Daily", date.toString());
+    // Revenue is per owner (their Trips), or with ownerId null the platform's City rides. Every
+    // cache key starts with whose revenue it is, so one owner's figures never answer another.
+
+    @Cacheable(value = "dailyRevenue", key = "(#ownerId == null ? 'platform' : #ownerId) + ':' + #date.toString()")
+    public Map<String, Object> getDailyRevenue(Long ownerId, LocalDate date) {
+        return revenueReport(ownerId, date.atStartOfDay(), date.plusDays(1).atStartOfDay(), "Daily", date.toString());
     }
 
-    @Cacheable(value = "monthlyRevenue", key = "#year + '-' + #month")
-    public Map<String, Object> getMonthlyRevenue(int year, int month) {
+    @Cacheable(value = "monthlyRevenue", key = "(#ownerId == null ? 'platform' : #ownerId) + ':' + #year + '-' + #month")
+    public Map<String, Object> getMonthlyRevenue(Long ownerId, int year, int month) {
         LocalDate startDate = LocalDate.of(year, month, 1);
-        return revenueReport(startDate.atStartOfDay(), startDate.plusMonths(1).atStartOfDay(),
+        return revenueReport(ownerId, startDate.atStartOfDay(), startDate.plusMonths(1).atStartOfDay(),
                 "Monthly", year + "-" + String.format("%02d", month));
     }
 
@@ -109,12 +133,12 @@ public class OwnerService {
      * trips. The revenue screen's twelve-bar chart used to cost 12 HTTP requests, then a full
      * year of entities in memory; now it is a dozen rows at most.
      */
-    @Cacheable(value = "monthlyRevenueSeries", key = "#year")
-    public Map<String, Object> getMonthlyRevenueSeries(int year) {
+    @Cacheable(value = "monthlyRevenueSeries", key = "(#ownerId == null ? 'platform' : #ownerId) + ':' + #year")
+    public Map<String, Object> getMonthlyRevenueSeries(Long ownerId, int year) {
         LocalDateTime start = LocalDate.of(year, 1, 1).atStartOfDay();
         LocalDateTime end = LocalDate.of(year + 1, 1, 1).atStartOfDay();
         Map<Integer, MonthlyRevenue> byMonth = new HashMap<>();
-        for (MonthlyRevenue row : travelBookingRepository.monthlyRevenue(start, end)) {
+        for (MonthlyRevenue row : travelBookingRepository.monthlyRevenue(start, end, ownerId)) {
             byMonth.put(row.month(), row);
         }
 
@@ -144,15 +168,14 @@ public class OwnerService {
         return response;
     }
 
-    @Cacheable(value = "yearlyRevenue", key = "#year")
-    public Map<String, Object> getYearlyRevenue(int year) {
-        return revenueReport(LocalDate.of(year, 1, 1).atStartOfDay(), LocalDate.of(year + 1, 1, 1).atStartOfDay(),
+    @Cacheable(value = "yearlyRevenue", key = "(#ownerId == null ? 'platform' : #ownerId) + ':' + #year")
+    public Map<String, Object> getYearlyRevenue(Long ownerId, int year) {
+        return revenueReport(ownerId, LocalDate.of(year, 1, 1).atStartOfDay(), LocalDate.of(year + 1, 1, 1).atStartOfDay(),
                 "Yearly", String.valueOf(year));
     }
     
     public Map<String, Object> getTripRevenue(UUID tripId) {
-        TravelBooking booking = travelBookingRepository.findById(tripId)
-            .orElseThrow(() -> new RuntimeException("Trip not found"));
+        TravelBooking booking = ownBooking(tripId, ownerScope.ownerId());
         Map<String, Object> response = new HashMap<>();
         response.put("tripId", booking.getId());
         response.put("fromPlace", booking.getFromPlace());
@@ -165,8 +188,8 @@ public class OwnerService {
         return response;
     }
     
-    private Map<String, Object> revenueReport(LocalDateTime start, LocalDateTime end, String period, String periodValue) {
-        RevenueTotals totals = travelBookingRepository.revenueTotals(start, end);
+    private Map<String, Object> revenueReport(Long ownerId, LocalDateTime start, LocalDateTime end, String period, String periodValue) {
+        RevenueTotals totals = travelBookingRepository.revenueTotals(start, end, ownerId);
 
         Map<String, Object> response = new HashMap<>();
         response.put("period", period);
@@ -175,7 +198,7 @@ public class OwnerService {
         response.put("totalDistance", totals.distanceKm());
         response.put("totalRevenue", totals.revenue());
         response.put("totalTravelDays", totals.travelDays());
-        response.put("trips", travelBookingRepository.revenueTrips(start, end).stream().map(t -> {
+        response.put("trips", travelBookingRepository.revenueTrips(start, end, ownerId).stream().map(t -> {
             Map<String, Object> trip = new HashMap<>();
             trip.put("id", t.id());
             trip.put("fromPlace", t.fromPlace());

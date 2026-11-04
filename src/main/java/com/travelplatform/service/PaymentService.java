@@ -43,6 +43,9 @@ public class PaymentService {
     
     @Value("${payment.upi.id}")
     private String ownerUpiId;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.OwnerRepository ownerRepository;
     
     @Value("${payment.upi.name:Namma Journey}")
     private String ownerName;
@@ -294,6 +297,13 @@ public class PaymentService {
             @CacheEvict(value = "yearlyRevenue",  allEntries = true),
             @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
     })
+    /** A payment an owner may act on: their own Trip's, or for the platform owner a City ride's. Else not found. */
+    public void requireVisibleTo(UUID paymentId, Long ownerId, boolean platform) {
+        paymentRepository.findById(paymentId)
+                .filter(p -> p.getOwnerId() != null ? p.getOwnerId().equals(ownerId) : platform)
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Payment not found"));
+    }
+
     public PaymentResponse verifyPayment(UUID paymentId, String verifiedBy) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));
@@ -364,12 +374,17 @@ public class PaymentService {
         return response;
     }
     
-    public List<PaymentResponse> getPendingPayments() {
+    /**
+     * Payments waiting for one owner to confirm: their Trips' payments, or with {@code ownerId}
+     * null the platform's City-ride payments (V27).
+     */
+    public List<PaymentResponse> getPendingPayments(Long ownerId) {
         // Online payments confirm themselves by signature; they never wait on the owner, and the
         // owner's verify refuses them anyway.
         return paymentRepository.findByStatus(Payment.PaymentStatus.PENDING)
                 .stream()
                 .filter(p -> p.getPaymentMethod() != Payment.PaymentMethod.RAZORPAY)
+                .filter(p -> java.util.Objects.equals(p.getOwnerId(), ownerId))
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -508,13 +523,38 @@ public class PaymentService {
         if (amount == null || amount.signum() <= 0) {
             throw new IllegalStateException("Refusing to build a UPI link for a non-positive amount");
         }
+        // A Trip is paid straight to its travels owner when they have given a UPI ID (V27);
+        // City rides and owners without one pay the platform's configured ID.
+        String payee = ownerUpiId;
+        String payeeName = ownerName;
+        com.travelplatform.entity.Owner owner = bookingOwner(bookingRef);
+        if (owner != null && owner.getUpiId() != null && !owner.getUpiId().isBlank()) {
+            payee = owner.getUpiId().trim();
+            if (owner.getTravelsName() != null && !owner.getTravelsName().isBlank()) {
+                payeeName = owner.getTravelsName().trim();
+            }
+        }
         return String.format(
                 Locale.ROOT,
                 "upi://pay?pa=%s&pn=%s&am=%.2f&cu=INR&tn=%s",
-                encode(ownerUpiId),
-                encode(ownerName),
+                encode(payee),
+                encode(payeeName),
                 amount,
                 encode("Booking:" + bookingRef));
+    }
+
+    private com.travelplatform.entity.Owner bookingOwner(String bookingRef) {
+        if (ownerRepository == null) {
+            return null;
+        }
+        try {
+            return bookingRepository.findById(UUID.fromString(bookingRef))
+                    .map(TravelBooking::getOwnerId)
+                    .flatMap(ownerRepository::findById)
+                    .orElse(null);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private static String encode(String value) {

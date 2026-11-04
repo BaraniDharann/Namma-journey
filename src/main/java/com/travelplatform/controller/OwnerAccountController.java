@@ -22,6 +22,17 @@ public class OwnerAccountController {
     public record ChangePasswordRequest(@NotBlank String currentPassword, @NotBlank String newPassword) {
     }
 
+    @Autowired
+    private com.travelplatform.service.OwnerService ownerService;
+
+    /** My own profile, and whether I am the platform owner (which shows the platform screens). */
+    @org.springframework.web.bind.annotation.GetMapping("/me")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('OWNER')")
+    public com.travelplatform.dto.OwnerProfileView me() {
+        com.travelplatform.config.OwnerScope scope = new com.travelplatform.config.OwnerScope();
+        return ownerService.profile(scope.ownerId(), scope.isPlatform());
+    }
+
     @PostMapping("/change-password")
     public AuthResponse changePassword(@Valid @RequestBody ChangePasswordRequest request, Authentication authentication) {
         return ownerAuthService.changePassword(Long.valueOf(authentication.getName()),

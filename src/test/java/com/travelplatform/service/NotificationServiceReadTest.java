@@ -37,13 +37,16 @@ class NotificationServiceReadTest {
     }
 
     @Test
-    @DisplayName("only the owner may mark owner notifications read")
-    void ownerBucketNeedsTheOwner() {
-        Notification n = stored("owner");
+    @DisplayName("only that owner may mark their own feed read - not another owner, not a user with the same id")
+    void ownerFeedNeedsThatOwner() {
+        Notification n = stored("7");
+        n.setRecipientRole("ROLE_OWNER");
         assertThrows(AccessDeniedException.class, () -> service.markAsRead(n.getId(), "u-1", false));
+        assertThrows(AccessDeniedException.class, () -> service.markAsRead(n.getId(), "8", true));
+        assertThrows(AccessDeniedException.class, () -> service.markAsRead(n.getId(), "7", false));
         assertFalse(n.isRead());
 
-        assertDoesNotThrow(() -> service.markAsRead(n.getId(), "1", true));
+        assertDoesNotThrow(() -> service.markAsRead(n.getId(), "7", true));
         assertTrue(n.isRead());
     }
 

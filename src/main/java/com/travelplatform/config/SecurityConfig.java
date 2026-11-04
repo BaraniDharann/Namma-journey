@@ -79,7 +79,12 @@ public class SecurityConfig {
                 // Everything else under /actuator (metrics, caches - which accepts DELETE) is for
                 // the owner. It fell through to anyRequest().authenticated(), so any self-signed-up
                 // passenger could read internal metrics or evict every cache.
-                .requestMatchers("/actuator/**").hasRole("OWNER")
+                // ...and only the platform owner (NJO-0001): server health is not a travels owner's business.
+                .requestMatchers("/actuator/**").access((authentication, context) ->
+                        new org.springframework.security.authorization.AuthorizationDecision(
+                                authentication.get() != null && authentication.get().getAuthorities().stream()
+                                        .anyMatch(a -> "ROLE_OWNER".equals(a.getAuthority()))
+                                        && OwnerScope.current().map(OwnerScope.Bound::platform).orElse(false)))
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/places/**").permitAll()
                 .requestMatchers("/api/user/forgot-password").permitAll()

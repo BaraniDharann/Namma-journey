@@ -61,8 +61,9 @@ public class TravelPackageService {
     }
 
     // Owner methods
+    /** The calling owner's own packages. Customers see every owner's active packages. */
     public List<TravelPackageResponse> getAllPackages() {
-        return packageRepository.findAll().stream()
+        return packageRepository.findByOwnerIdOrderByCreatedAtDesc(ownerScope.ownerId()).stream()
                 .map(this::toResponse).collect(Collectors.toList());
     }
 
@@ -73,10 +74,12 @@ public class TravelPackageService {
             @CacheEvict(value = "packagesByState", allEntries = true),
             @CacheEvict(value = "packagesByCatState", allEntries = true)
     })
-    public TravelPackageResponse createPackage(TravelPackageRequest request, Long ownerId) {
+    public TravelPackageResponse createPackage(TravelPackageRequest request) {
+        Long ownerId = ownerScope.ownerId(); // from the login, never from the request
         TravelPackage pkg = new TravelPackage();
         mapRequestToEntity(request, pkg);
         pkg.setCreatedBy(ownerId);
+        pkg.setOwnerId(ownerId);
         pkg.setActive(true);
         return toResponse(packageRepository.save(pkg));
     }
@@ -90,8 +93,7 @@ public class TravelPackageService {
             @CacheEvict(value = "packagesByCatState", allEntries = true)
     })
     public TravelPackageResponse updatePackage(Long id, TravelPackageRequest request) {
-        TravelPackage pkg = packageRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Package not found"));
+        TravelPackage pkg = mine(id);
         mapRequestToEntity(request, pkg);
         return toResponse(packageRepository.save(pkg));
     }
@@ -105,8 +107,7 @@ public class TravelPackageService {
             @CacheEvict(value = "packagesByCatState", allEntries = true)
     })
     public void togglePackageStatus(Long id) {
-        TravelPackage pkg = packageRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Package not found"));
+        TravelPackage pkg = mine(id);
         pkg.setActive(!pkg.getActive());
         packageRepository.save(pkg);
     }
@@ -120,7 +121,16 @@ public class TravelPackageService {
             @CacheEvict(value = "packagesByCatState", allEntries = true)
     })
     public void deletePackage(Long id) {
-        packageRepository.deleteById(id);
+        packageRepository.delete(mine(id));
+    }
+
+    private final com.travelplatform.config.OwnerScope ownerScope = new com.travelplatform.config.OwnerScope();
+
+    /** One of the calling owner's packages; anyone else's is "not found". */
+    private TravelPackage mine(Long id) {
+        Long me = ownerScope.ownerId();
+        return packageRepository.findById(id).filter(p -> me.equals(p.getOwnerId()))
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Package not found"));
     }
 
     private void mapRequestToEntity(TravelPackageRequest req, TravelPackage pkg) {

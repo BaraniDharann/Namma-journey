@@ -51,7 +51,7 @@ public class NotificationService {
     }
 
     /** The platform owner's feed (City rides, independent drivers, dues, safety). */
-    String platformFeed() {
+    public String platformFeed() {
         return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
     }
 
@@ -80,7 +80,7 @@ public class NotificationService {
 
     public void notifyBookingCreated(TravelBooking booking) {
         Notification notification = new Notification();
-        notification.setRecipientId("owner");
+        notification.setRecipientId(ownerFeed(booking));
         notification.setRecipientRole("ROLE_OWNER");
         notification.setType("BOOKING_CREATED");
         notification.setTitle("New Booking Received");
@@ -96,7 +96,7 @@ public class NotificationService {
     /** Tells the owner a driver applied (or re-uploaded after a rejection) and is waiting for review. */
     public void notifyDriverApplication(Driver d, boolean resubmitted) {
         Notification notification = new Notification();
-        notification.setRecipientId("owner");
+        notification.setRecipientId(platformFeed());
         notification.setRecipientRole("ROLE_OWNER");
         notification.setType("DRIVER_APPLICATION");
         notification.setTitle(resubmitted ? "Driver documents re-submitted" : "New driver application");
@@ -199,7 +199,7 @@ public class NotificationService {
         String route = booking.getFromPlace() + " to " + booking.getToPlace();
 
         Notification owner = new Notification();
-        owner.setRecipientId("owner");
+        owner.setRecipientId(ownerFeed(booking));
         owner.setRecipientRole("ROLE_OWNER");
         owner.setType("RIDE_NO_DRIVER");
         owner.setTitle("Ride Now needs a driver");
@@ -282,7 +282,7 @@ public class NotificationService {
 
         // Notify owner
         Notification ownerNotification = new Notification();
-        ownerNotification.setRecipientId("owner");
+        ownerNotification.setRecipientId(ownerFeed(booking));
         ownerNotification.setRecipientRole("ROLE_OWNER");
         ownerNotification.setType("TRIP_REJECTED");
         ownerNotification.setTitle(replacement != null ? "Trip Reassigned Automatically" : "Trip Needs a Driver");
@@ -341,7 +341,7 @@ public class NotificationService {
 
         // Notify owner
         Notification ownerNotification = new Notification();
-        ownerNotification.setRecipientId("owner");
+        ownerNotification.setRecipientId(ownerFeed(booking));
         ownerNotification.setRecipientRole("ROLE_OWNER");
         ownerNotification.setType("TRIP_ENDED");
         ownerNotification.setTitle("Trip Ended — Awaiting Payment");
@@ -358,7 +358,7 @@ public class NotificationService {
     public void notifyBookingCancelled(TravelBooking booking) {
         String route = booking.getFromPlace() + " to " + booking.getToPlace();
         Notification owner = new Notification();
-        owner.setRecipientId("owner");
+        owner.setRecipientId(ownerFeed(booking));
         owner.setRecipientRole("ROLE_OWNER");
         owner.setType("BOOKING_CANCELLED");
         owner.setTitle("Booking Cancelled");
@@ -382,7 +382,7 @@ public class NotificationService {
 
     public void notifyPaymentReceived(TravelBooking booking) {
         Notification notification = new Notification();
-        notification.setRecipientId("owner");
+        notification.setRecipientId(ownerFeed(booking));
         notification.setRecipientRole("ROLE_OWNER");
         notification.setType("PAYMENT_RECEIVED");
         notification.setTitle("Payment Received");
@@ -417,7 +417,7 @@ public class NotificationService {
     public void notifyAdvanceReceived(TravelBooking booking, java.math.BigDecimal advance) {
         String amount = String.format(java.util.Locale.ROOT, "%.2f", advance);
         Notification owner = new Notification();
-        owner.setRecipientId("owner");
+        owner.setRecipientId(ownerFeed(booking));
         owner.setRecipientRole("ROLE_OWNER");
         owner.setType("ADVANCE_RECEIVED");
         owner.setTitle("Advance received");
@@ -471,9 +471,10 @@ public class NotificationService {
             // driver used to be able to clear the owner's alerts. Everyone else may only mark
             // notifications addressed to them.
             String recipient = notification.getRecipientId();
-            boolean isOwnerBucket = "owner".equalsIgnoreCase(recipient);
-            boolean allowed = isOwnerBucket ? requesterIsOwner
-                    : recipient != null && recipient.equals(requesterPrincipal);
+            // Each owner has their own feed (V27). Ids come from different tables, so the row's
+            // role must be the requester's as well as the id.
+            boolean ownerRow = "ROLE_OWNER".equalsIgnoreCase(notification.getRecipientRole());
+            boolean allowed = recipient != null && recipient.equals(requesterPrincipal) && ownerRow == requesterIsOwner;
             if (!allowed) {
                 throw new org.springframework.security.access.AccessDeniedException(
                         "Cannot mark another user's notification as read");

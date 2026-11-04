@@ -734,10 +734,19 @@ public class RideSafetyService {
         }
     }
 
+// Owner notices go to the platform owner's own feed (V27); "owner" only in hand-built tests.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripRateService tripRates;
+
+    private String platformFeed() {
+        return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
+    }
+
     /** In-app notification to the owner, plus the Telegram safety group when configured. */
     private void opsAlert(TravelBooking booking, String html, String type, String title, String plain) {
         Notification n = new Notification();
-        n.setRecipientId("owner");
+        // A Trip's travels owner hears of it; a City ride's alert goes to the platform (V27).
+        n.setRecipientId(booking != null && booking.getOwnerId() != null ? booking.getOwnerId().toString() : platformFeed());
         n.setRecipientRole("ROLE_OWNER");
         n.setType(type);
         n.setTitle(title);

@@ -55,31 +55,22 @@ public class NotificationController {
     }
 
     /**
-     * Without this check any logged-in user could read another user's notifications
-     * by passing their recipientId as a query param. Owner notifications use the
-     * literal "owner" bucket and require the OWNER role.
+     * Without this check any logged-in user could read another user's notifications by passing
+     * their recipientId as a query param. Everyone - each travels owner included, since every owner
+     * has their own feed (V27) - reads only the feed with their own id and their own role.
      */
     private void assertOwnRecipient(String recipientId, String role) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
             throw new AccessDeniedException("Not authenticated");
         }
-        boolean isOwner = auth.getAuthorities().stream()
-                .anyMatch(a -> "ROLE_OWNER".equals(a.getAuthority()));
-        if ("owner".equalsIgnoreCase(recipientId) || "ROLE_OWNER".equalsIgnoreCase(role)) {
-            if (!isOwner) {
-                throw new AccessDeniedException("Owner role required");
-            }
-            return;
-        }
-        // Owners can also read any user's bucket (admin view); regular users/drivers must match.
-        if (!isOwner && !auth.getName().equals(recipientId)) {
+        if (!auth.getName().equals(recipientId)) {
             throw new AccessDeniedException("Cannot read another user's notifications");
         }
-        // Ids come from different tables (drivers, admins, owners on a setup token), so the same
-        // id is not the same person: the bucket's role must be the caller's own.
+        // Ids come from different tables (users, drivers, owners), so the same id is not the same
+        // person: the feed's role must be the caller's own.
         boolean ownRole = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equalsIgnoreCase(role));
-        if (!isOwner && !ownRole) {
+        if (!ownRole) {
             throw new AccessDeniedException("Cannot read another user's notifications");
         }
     }

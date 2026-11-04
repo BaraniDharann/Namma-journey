@@ -158,9 +158,17 @@ public class DriverAutoApprovalService {
         }
     }
 
+// Owner notices go to the platform owner's own feed (V27); "owner" only in hand-built tests.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripRateService tripRates;
+
+    private String platformFeed() {
+        return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
+    }
+
     private void ownerNotice(String type, String title, String message) {
         Notification n = new Notification();
-        n.setRecipientId("owner");
+        n.setRecipientId(platformFeed());
         n.setRecipientRole("ROLE_OWNER");
         n.setType(type);
         n.setTitle(title);

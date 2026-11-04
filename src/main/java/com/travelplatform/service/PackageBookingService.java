@@ -66,7 +66,8 @@ public class PackageBookingService {
         // Notify owner
         try {
             Notification n = new Notification();
-            n.setRecipientId("owner");
+            // The package's own owner (V27).
+            n.setRecipientId(String.valueOf(pkg.getOwnerId()));
             n.setRecipientRole("ROLE_OWNER");
             n.setType("PACKAGE_BOOKING");
             n.setTitle("New Package Booking");
@@ -84,21 +85,21 @@ public class PackageBookingService {
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
+    /** The calling owner's package bookings. */
     public List<PackageBookingResponse> getAllBookings() {
-        return bookingRepository.findAllByOrderByBookingDateDesc()
+        return bookingRepository.findByOwnerIdOrderByBookingDateDesc(ownerScope.ownerId())
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     public List<PackageBookingResponse> getBookingsByStatus(String status) {
         PackageBooking.BookingStatus bookingStatus = PackageBooking.BookingStatus.valueOf(status.toUpperCase());
-        return bookingRepository.findByStatusOrderByBookingDateDesc(bookingStatus)
+        return bookingRepository.findByOwnerIdAndStatusOrderByBookingDateDesc(ownerScope.ownerId(), bookingStatus)
                 .stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     @Transactional
     public PackageBookingResponse confirmBooking(UUID bookingId) {
-        PackageBooking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        PackageBooking booking = ownersBooking(bookingId);
         requireStatus(booking, "confirmed", PackageBooking.BookingStatus.PENDING);
         booking.setStatus(PackageBooking.BookingStatus.CONFIRMED);
         booking.setConfirmedAt(LocalDateTime.now());
@@ -134,8 +135,7 @@ public class PackageBookingService {
 
     @Transactional
     public PackageBookingResponse cancelByOwner(UUID bookingId, String reason) {
-        PackageBooking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        PackageBooking booking = ownersBooking(bookingId);
         return cancel(booking, reason);
     }
 
@@ -149,11 +149,19 @@ public class PackageBookingService {
 
     @Transactional
     public PackageBookingResponse completeBooking(UUID bookingId) {
-        PackageBooking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        PackageBooking booking = ownersBooking(bookingId);
         requireStatus(booking, "completed", PackageBooking.BookingStatus.CONFIRMED);
         booking.setStatus(PackageBooking.BookingStatus.COMPLETED);
         return toResponse(bookingRepository.save(booking));
+    }
+
+    private final com.travelplatform.config.OwnerScope ownerScope = new com.travelplatform.config.OwnerScope();
+
+    /** A booking of one of the calling owner's packages; anyone else's is "not found". */
+    private PackageBooking ownersBooking(UUID bookingId) {
+        Long me = ownerScope.ownerId();
+        return bookingRepository.findById(bookingId).filter(b -> me.equals(b.getOwnerId()))
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Booking not found"));
     }
 
     /** States only move forward: PENDING -> CONFIRMED -> COMPLETED, or to CANCELLED before completion. */
