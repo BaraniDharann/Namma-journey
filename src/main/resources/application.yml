@@ -268,12 +268,9 @@ app:
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
 
   owners:
-    # The original owner, who runs the platform today.
+    # The platform owner: their own Trip fleet plus the platform screens (City rides, cities,
+    # independent drivers, payouts, dues, server health).
     platform-owner-code: ${PLATFORM_OWNER_CODE:NJO-0001}
-    # false until every owner screen is scoped to its own owner (sub-project 2). Until then an
-    # owner token sees ALL bookings, drivers and payouts, so newly approved owners can finish
-    # setup but get "the portal opens soon" instead of an owner token. Do not turn on before then.
-    portal-open-to-all: ${OWNER_PORTAL_OPEN_TO_ALL:false}
 
   admin:
     # Where admin alerts go: new owner applications, and the 36-hour review reminder.

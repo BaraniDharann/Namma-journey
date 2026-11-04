@@ -253,7 +253,35 @@ Travels owners apply with `POST /api/auth/owner/signup` (multipart: business, PA
 details and three document images). An admin approves them; the approval email carries the
 Owner ID (`NJO-0002`) and a one-time password. `POST /api/auth/owner/login` accepts the Owner ID
 or the email; the first sign-in returns a `ROLE_OWNER_SETUP` token that can only call
-`POST /api/owner/change-password`.
+`POST /api/owner/change-password`, which then returns a full `ROLE_OWNER` token.
+
+### Each owner's own fleet
+
+Every `/api/owner/**` screen shows only the caller's own data; another owner's record is `404`.
+The database enforces this as well (row-level security, V28).
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/owner/me` | Profile (bank masked) and `platform` (true only for NJO-0001) |
+| `GET/POST /api/owner/vehicles`, `PUT /api/owner/vehicles/{id}`, `POST .../{id}/deactivate`, `.../{id}/activate` | Cars: category `HATCHBACK`/`SEDAN`/`SUV`/`TEMPO_TRAVELLER`, plate, model, seats, AC, RC photo (multipart on create) |
+| `GET /api/owner/trip-rates`, `PUT /api/owner/trip-rates/{category}` `{perKm, perHour}` | Trip prices per car category |
+| `PUT /api/owner/assignment-mode` `{mode: AUTO\|MANUAL}` | AUTO gives each Trip to the first free driver and car; MANUAL leaves it for the owner |
+| `POST /api/owner/drivers` (+ `defaultVehicleId`) | Adds a driver to the fleet, pending, Trips only; no login yet |
+| `GET /api/owner/drivers/{id}/checks`, `PUT .../checks/{LICENCE\|RC}` `{result, note}` | The owner's licence (Sarathi) and RC (Vahan) checks |
+| `POST /api/owner/drivers/{id}/approve` / `reject` `{reason}` | Approval needs both checks VERIFIED (else 409) and emails the driver's login |
+| `PUT /api/owner/drivers/{id}/default-vehicle` `{vehicleId}` | The driver's usual car |
+| `GET /api/owner/bookings/{id}/assign-options`, `POST .../assign-driver` `{driverId, vehicleId?}` | Free drivers and suitable cars; assign (busy driver or car: 409) |
+| `GET /api/public/trip-rates` | Bookable car categories and prices (customers); a Trip booking sends `carCategory` |
+
+Platform screens, NJO-0001 only (403 for other owners): `/api/owner/cities`, `/city-fares`,
+`/driver-applications`, `/payouts`, `/dues/**`, `/platform/drivers`, `/platform/city-rides`,
+`/platform/payments/pending`, `/platform/reviews`, `/platform/revenue/monthly-series` and
+`/actuator/**`. City rides go to independent drivers only.
+
+Removed: `POST /api/owner/pricing/set`, `POST /api/owner/pricing/set-hourly`,
+`GET /api/owner/pricing/current` and `GET /api/public/pricing` (replaced by the trip rates above),
+and the `OWNER_PORTAL_OPEN_TO_ALL` setting. Owner notifications use `recipientId` = the owner's
+id with role `ROLE_OWNER`.
 
 ---
 

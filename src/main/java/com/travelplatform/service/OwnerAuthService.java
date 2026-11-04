@@ -47,19 +47,6 @@ public class OwnerAuthService {
     @Autowired
     private com.travelplatform.security.TokenVersionService tokenVersionService;
 
-    static final String PORTAL_NOT_OPEN =
-            "Your account is approved. The owner portal for new travels owners opens soon - we will email you.";
-
-    /** The original owner, who runs the platform today. */
-    @org.springframework.beans.factory.annotation.Value("${app.owners.platform-owner-code:NJO-0001}")
-    private String platformOwnerCode;
-
-    /**
-     * Off until owner screens are scoped per owner (sub-project 2): ROLE_OWNER today sees every
-     * booking, driver and payout on the platform, so no other owner may hold it yet.
-     */
-    @org.springframework.beans.factory.annotation.Value("${app.owners.portal-open-to-all:false}")
-    private boolean portalOpenToAllOwners;
 
     /** Signs in with the Owner ID (NJO-0002) or the email, plus the password. */
     public AuthResponse login(OwnerLoginRequest request) {
@@ -74,9 +61,6 @@ public class OwnerAuthService {
         }
         if (owner.getStatus() == OwnerStatus.REJECTED) {
             throw new OwnerNotApprovedException("Your application was rejected: " + owner.getRejectionReason());
-        }
-        if (!owner.isMustChangePassword() && !mayUsePortal(owner)) {
-            throw new OwnerNotApprovedException(PORTAL_NOT_OPEN);
         }
         return tokenFor(owner);
     }
@@ -101,7 +85,7 @@ public class OwnerAuthService {
         owner.setPassword(passwordEncoder.encode(newPassword));
         owner.setMustChangePassword(false);
         tokenVersionService.revokeOwner(owner); // saves
-        return tokenOrWait(owner);
+        return tokenFor(owner);
     }
 
     @Transactional
@@ -124,26 +108,7 @@ public class OwnerAuthService {
         owner.setPassword(passwordEncoder.encode(request.getNewPassword()));
         owner.setMustChangePassword(false);
         tokenVersionService.revokeOwner(owner); // saves; ends every session issued before the reset
-        return tokenOrWait(owner);
-    }
-
-    private boolean mayUsePortal(Owner owner) {
-        return portalOpenToAllOwners || platformOwnerCode.equalsIgnoreCase(owner.getOwnerCode());
-    }
-
-    /**
-     * After a password is saved: a token if this owner may use the portal, otherwise no token and
-     * the reason - returned rather than thrown, so the new password is not rolled back.
-     */
-    private AuthResponse tokenOrWait(Owner owner) {
-        if (mayUsePortal(owner)) {
-            return tokenFor(owner);
-        }
-        AuthResponse response = new AuthResponse();
-        response.setMessage(PORTAL_NOT_OPEN);
-        response.setOwnerCode(owner.getOwnerCode());
-        response.setMustChangePassword(false);
-        return response;
+        return tokenFor(owner);
     }
 
     private Optional<Owner> find(String login) {
