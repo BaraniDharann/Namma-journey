@@ -392,6 +392,11 @@ razorpay:
   webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
   merchant-name: ${OWNER_UPI_NAME:Namma Journey}
 
+# Bus tickets: GST added to the owners' fares at checkout, and how long seats are held for payment.
+bus:
+  gst-percent: ${BUS_GST_PERCENT:5}
+  hold-minutes: ${BUS_HOLD_MINUTES:10}
+
 logging:
   level:
     com.travelplatform: INFO

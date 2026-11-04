@@ -164,6 +164,7 @@ public class BusTripService {
     @Transactional
     public TripDetail block(Long id, List<String> labels) {
         BusTrip t = scheduled(id);
+        trips.lockById(t.getId()); // one writer of seats per trip at a time, like customer holds
         Map<String, BusSeat> layout = seatsByKey(t.getBusId());
         List<BusSeat> wanted = resolve(layout, labels);
         int lastSeq = stops.findByRouteIdOrderBySeqAsc(t.getRouteId()).size() - 1;
@@ -234,14 +235,23 @@ public class BusTripService {
         return detail(t);
     }
 
+    // Field-injected so the tests that build this service by hand are unaffected.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private BusTicketService ticketService;
+
+    void setTicketService(BusTicketService ticketService) {
+        this.ticketService = ticketService;
+    }
+
     /**
-     * Hook for the owner cancelling a trip: a full refund (fare + GST) for each paid ticket and a
-     * message to every passenger. Filled in by part 3 of the bus module (after booking); until then
-     * the tickets are only marked SERVICE_CANCELLED.
+     * The owner cancelled a trip: a full refund (fare + GST) for each paid ticket and a message to
+     * every ticket's contacts (BusTicketService.tripCancelled), in this transaction through the outbox.
      */
     protected void refundAndNotifyCancelledTrip(BusTrip trip, List<BusTicket> cancelledTickets) {
-        if (!cancelledTickets.isEmpty()) {
-            log.warn("Bus trip {} cancelled with {} ticket(s); refunds and messages are not automated yet",
+        if (ticketService != null) {
+            ticketService.tripCancelled(trip, cancelledTickets);
+        } else if (!cancelledTickets.isEmpty()) {
+            log.warn("Bus trip {} cancelled with {} ticket(s) but no ticket service to refund them",
                     trip.getId(), cancelledTickets.size());
         }
     }

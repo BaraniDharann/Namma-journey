@@ -74,6 +74,18 @@ public class RazorpayPaymentService {
     private com.travelplatform.repository.DriverRepository driverRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.outbox.Outbox outbox;
+    // The bus module's payments live in their own tables (bus_payments, bus_refunds); the one
+    // Razorpay webhook passes it the orders and payments this class does not know.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.bus.BusBookingService busBooking;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.bus.BusRefunds busRefunds;
+
+    void setBusModule(com.travelplatform.service.bus.BusBookingService busBooking,
+                      com.travelplatform.service.bus.BusRefunds busRefunds) {
+        this.busBooking = busBooking;
+        this.busRefunds = busRefunds;
+    }
 
     /**
      * Opens checkout for whatever the passenger owes next. While a Trip's advance is due that is
@@ -216,15 +228,35 @@ public class RazorpayPaymentService {
 
         switch (event) {
             case "payment.captured", "order.paid" -> settleFromWebhook(event, entity);
-            case "refund.processed" -> refundProcessed(root.path("payload").path("refund").path("entity"));
+            case "refund.processed" -> {
+                JsonNode refund = root.path("payload").path("refund").path("entity");
+                if (isBusPayment(refund)) {
+                    busRefunds.processed(refund.path("payment_id").asText(), refund.path("id").asText(null),
+                            refund.path("amount").asLong(-1));
+                } else {
+                    refundProcessed(refund);
+                }
+            }
             case "refund.failed" -> {
                 JsonNode refund = root.path("payload").path("refund").path("entity");
-                log.error("Razorpay refund {} for payment {} FAILED: refund it by hand from the dashboard",
-                        refund.path("id").asText(), refund.path("payment_id").asText());
+                if (isBusPayment(refund)) {
+                    busRefunds.failed(refund.path("payment_id").asText(), refund.path("id").asText(null),
+                            refund.path("amount").asLong(-1));
+                } else {
+                    log.error("Razorpay refund {} for payment {} FAILED: refund it by hand from the dashboard",
+                            refund.path("id").asText(), refund.path("payment_id").asText());
+                }
             }
-            case "payment.failed" -> log.info("Razorpay payment {} failed for order {}: {}",
-                    entity.path("id").asText(), entity.path("order_id").asText(),
-                    entity.path("error_description").asText(""));
+            case "payment.failed" -> {
+                log.info("Razorpay payment {} failed for order {}: {}",
+                        entity.path("id").asText(), entity.path("order_id").asText(),
+                        entity.path("error_description").asText(""));
+                String orderId = entity.path("order_id").asText(null);
+                if (busBooking != null && orderId != null && paymentRepository.findByRazorpayOrderId(orderId).isEmpty()) {
+                    // A bus checkout that failed: its seats go back on sale now rather than when the hold runs out.
+                    busBooking.onPaymentFailed(orderId);
+                }
+            }
             default -> log.debug("Ignoring Razorpay webhook event {}", event);
         }
     }
@@ -239,6 +271,9 @@ public class RazorpayPaymentService {
         }
 
         Optional<Payment> found = paymentRepository.findByRazorpayOrderId(orderId);
+        if (found.isEmpty() && busBooking != null && busBooking.onPaymentCaptured(orderId, razorpayPaymentId, paidPaise)) {
+            return; // a bus ticket's order: settled (or refunded) by the bus module
+        }
         if (found.isEmpty()) {
             // Money arrived for an order we hold no record of. Loud, because someone was charged.
             log.error("Razorpay {} for unknown order {} (payment {}): reconcile manually", event, orderId, razorpayPaymentId);
@@ -260,6 +295,14 @@ public class RazorpayPaymentService {
             return;
         }
         apply(payment, booking.get(), razorpayPaymentId);
+    }
+
+    /** A refund event for a payment of the bus module (not in the car {@code payments} table). */
+    private boolean isBusPayment(JsonNode refund) {
+        String razorpayPaymentId = refund.path("payment_id").asText(null);
+        return busRefunds != null && razorpayPaymentId != null
+                && paymentRepository.findByRazorpayPaymentId(razorpayPaymentId).isEmpty()
+                && busRefunds.isBusPayment(razorpayPaymentId);
     }
 
     /** The money is back with the passenger: close the payment out. Repeats are no-ops. */

@@ -16,6 +16,8 @@ public interface BusTicketPassengerRepository extends JpaRepository<BusTicketPas
 
     List<BusTicketPassenger> findByTicketIdIn(Collection<UUID> ticketIds);
 
+    List<BusTicketPassenger> findByTicketIdOrderByIdAsc(UUID ticketId);
+
     /**
      * Per trip: passengers still travelling on tickets in these states and the sum of their fares
      * (without GST), as [tripId, count, fares] rows.

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 
 @Repository
 public interface BusSeatAllocationRepository extends JpaRepository<BusSeatAllocation, Long> {
@@ -30,4 +31,15 @@ public interface BusSeatAllocationRepository extends JpaRepository<BusSeatAlloca
             + "WHERE a.tripId = :tripId AND a.status IN (com.travelplatform.entity.BusSeatAllocation.Status.HELD, "
             + "com.travelplatform.entity.BusSeatAllocation.Status.CONFIRMED, com.travelplatform.entity.BusSeatAllocation.Status.BLOCKED)")
     int cancelLive(@Param("tripId") Long tripId);
+
+    /** Allocations of several trips at once (the search results), in these states. */
+    List<BusSeatAllocation> findByTripIdInAndStatusIn(Collection<Long> tripIds, Collection<BusSeatAllocation.Status> statuses);
+
+    List<BusSeatAllocation> findByTicketId(UUID ticketId);
+
+    /** Every hold that ran out, on any trip, becomes EXPIRED (the sweeper). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE BusSeatAllocation a SET a.status = com.travelplatform.entity.BusSeatAllocation.Status.EXPIRED "
+            + "WHERE a.status = com.travelplatform.entity.BusSeatAllocation.Status.HELD AND a.expiresAt < :now")
+    int expireAllStaleHolds(@Param("now") LocalDateTime now);
 }

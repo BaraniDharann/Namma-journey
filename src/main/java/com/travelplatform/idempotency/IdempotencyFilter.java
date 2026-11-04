@@ -59,7 +59,10 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     private static final List<Pattern> PROTECTED = List.of(
             Pattern.compile("^/api/user/[^/]+/bookings$"),
             Pattern.compile("^/api/user/[^/]+/bookings/[^/]+/payment$"),
-            Pattern.compile("^/api/user/[^/]+/package-bookings$"));
+            Pattern.compile("^/api/user/[^/]+/package-bookings$"),
+            // Bus seat holds: a double tap must not hold the seats twice (BusBookingService also
+            // returns the ticket stored under the same key, for retries after this store forgot it).
+            Pattern.compile("^/api/bus/holds$"));
 
     private final IdempotencyStore store;
 

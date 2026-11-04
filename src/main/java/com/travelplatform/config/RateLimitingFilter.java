@@ -194,7 +194,11 @@ public class RateLimitingFilter implements Filter {
                 || path.endsWith("/razorpay/verify")
                 || path.endsWith("/cash-payment")
                 || path.endsWith("/end-trip")
-                || path.contains("/payments/");
+                || path.contains("/payments/")
+                // Bus seat holds draw on the payment budget too: holding seats in a loop is how
+                // a seat-lock attack empties a bus without paying (redBus bug bounty).
+                || path.equals("/api/bus/holds")
+                || (path.startsWith("/api/bus/tickets/") && (path.endsWith("/pay") || path.endsWith("/verify")));
     }
 
     /** Which budget a request draws on. Part of the bucket key, so budgets never collide. */

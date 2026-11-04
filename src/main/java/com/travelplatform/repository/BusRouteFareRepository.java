@@ -16,6 +16,11 @@ public interface BusRouteFareRepository extends JpaRepository<BusRouteFare, BusR
 
     long countByRouteId(Long routeId);
 
+    List<BusRouteFare> findByRouteIdIn(java.util.Collection<Long> routeIds);
+
+    /** The fares for one stop pair, one per seat class that is sold for it. */
+    List<BusRouteFare> findByRouteIdAndFromSeqAndToSeq(Long routeId, int fromSeq, int toSeq);
+
     /** Runs at once (not at flush), so the new fares can reuse the same keys. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("DELETE FROM BusRouteFare f WHERE f.routeId = :routeId")

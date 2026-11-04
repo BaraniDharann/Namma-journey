@@ -98,6 +98,10 @@ public class BusTicket {
     @Column(name = "confirmed_at")
     private LocalDateTime confirmedAt;
 
+    /** When the "about 2 hours to boarding" reminder went out (V31); null until then. */
+    @Column(name = "reminder_sent_at")
+    private LocalDateTime reminderSentAt;
+
     /** A payment confirming and a sweeper expiring at once: only one of them wins. */
     @Version
     @Column(nullable = false)

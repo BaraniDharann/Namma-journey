@@ -15,4 +15,6 @@ public interface BusOwnerPayoutRepository extends JpaRepository<BusOwnerPayout, 
     List<BusOwnerPayout> findByStatusOrderByCreatedAtAsc(BusOwnerPayout.Status status);
 
     Optional<BusOwnerPayout> findByTripId(Long tripId);
+
+    List<BusOwnerPayout> findAllByOrderByCreatedAtDesc();
 }

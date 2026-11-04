@@ -45,6 +45,13 @@ public class OwnerBusController {
     private final BusService busService;
     private final BusRouteService routeService;
     private final BusTripService tripService;
+    private final com.travelplatform.service.bus.BusPayoutService payoutService;
+
+    /** What the platform owes me per completed trip (bank details are not repeated here). */
+    @GetMapping("/payouts")
+    public List<com.travelplatform.dto.bus.BusBookingViews.PayoutView> payouts() {
+        return payoutService.mine();
+    }
 
     // ---------------------------------------------------------------------------------------------
     // Buses

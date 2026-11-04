@@ -27,6 +27,21 @@ import java.util.Map;
 public class AdminBusController {
 
     private final BusAdminService busAdminService;
+    private final com.travelplatform.service.bus.BusPayoutService payoutService;
+
+    /** ?status=DUE for the payouts to make (with the owner's UPI and bank details), PAID for the record. */
+    @GetMapping("/payouts")
+    public List<com.travelplatform.dto.bus.BusBookingViews.PayoutView> payouts(@RequestParam(required = false) String status) {
+        return payoutService.all(status);
+    }
+
+    /** JSON {utr}: the transfer was made. */
+    @PostMapping("/payouts/{id}/paid")
+    public com.travelplatform.dto.bus.BusBookingViews.PayoutView markPaid(
+            @PathVariable Long id, @RequestBody(required = false) com.travelplatform.dto.bus.BusBookingForms.UtrForm form,
+            Authentication authentication) {
+        return payoutService.markPaid(id, form == null ? null : form.utr(), AdminOwnerController.adminId(authentication));
+    }
 
     /** ?status=PENDING for the review queue; no status for every bus. */
     @GetMapping("/buses")

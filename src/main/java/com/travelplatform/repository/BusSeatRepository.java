@@ -17,6 +17,8 @@ public interface BusSeatRepository extends JpaRepository<BusSeat, Long> {
 
     long countByBusId(Long busId);
 
+    List<BusSeat> findByBusIdIn(Collection<Long> busIds);
+
     /** Seats per bus, as [busId, count] rows. */
     @Query("SELECT s.busId, COUNT(s) FROM BusSeat s WHERE s.busId IN :busIds GROUP BY s.busId")
     List<Object[]> countByBusIds(@Param("busIds") Collection<Long> busIds);
