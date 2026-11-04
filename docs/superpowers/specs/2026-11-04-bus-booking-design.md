@@ -249,3 +249,75 @@ React 18 + Vite + Tailwind 4, following existing pages and `DashboardLayout`.
 1. Owner side (migration, buses, layout, admin approval, routes, trips, owner trips screen).
 2. Customer booking (search, seat map, hold, payment, ticket, sweeper, reminder).
 3. After booking (cancel, trip cancel, status job, payouts, reviews).
+
+## Appendix: JSON contract for parts 2 and 3
+
+Field names are exact. Dates are `yyyy-MM-dd`, date-times ISO local `yyyy-MM-ddTHH:mm:ss`, money
+in rupees as numbers. Part 1 shapes (Bus, Seat, Route, Trip) are in the owner section above and
+in the frontend code under `frontend/src/utils/busApi.js`.
+
+**Search:** `GET /api/bus/search?from={placeId}&to={placeId}&date=` returns an array of:
+```
+{tripId, ownerId, travelsName, busName, typeLabel, ac, hasSleeper, hasSeater,
+ fromSeq, toSeq, departureAt, arrivalAt, durationMinutes, ratingAvg, ratingCount,
+ minFare, seatsLeft, singleSeatsLeft, amenities:[string],
+ boardingPoints:[{id, name, at}], droppingPoints:[{id, name, at}]}
+```
+`departureAt` is the earliest boarding time at `from`, `arrivalAt` the latest dropping time at `to`.
+`seatsLeft` counts seats free for the pair; `singleSeatsLeft` counts free seats with no pair.
+
+**Seat map:** `GET /api/bus/trips/{id}?from={placeId}&to={placeId}` returns:
+```
+{tripId, travelsName, busName, typeLabel, travelDate, fromSeq, toSeq, fromPlace, toPlace,
+ departureAt, arrivalAt, maxSeatsPerBooking, gstPercent, amenities, photos:[{id, path}],
+ ratingAvg, ratingCount, stops:[{seq, placeName}],
+ boardingPoints:[{id, name, address, landmark, at}], droppingPoints:[{id, name, address, landmark, at}],
+ seats:[{label, deck, row, col, kind, berth, seatClass, pairLabel, fare, state}],
+ cancellationSlabs:[{minHours, percent, until}]}
+```
+- `state` is one of `AVAILABLE|SOLD|BOOKED_F|BOOKED_M|FEMALE_ONLY|MALE_ONLY`.
+- `fare` is null when the pair has no price for that seat's class, and the seat then shows as SOLD.
+- In `cancellationSlabs`, `until` is the latest clock time this slab applies, measured against the
+  earliest boarding point. It is null for the last slab.
+
+**Hold:** `POST /api/bus/holds` (ROLE_USER, `Idempotency-Key` header).
+```
+{tripId, fromPlaceId, toPlaceId, boardingPointId, droppingPointId, contactPhone, contactEmail,
+ extraPhone, passengers:[{seatLabel, name, age, gender:"M"|"F"}]}  -> Ticket (status PENDING)
+```
+
+**Ticket:**
+```
+{id, ticketNo, status, tripId, tripStatus, travelsName, busName, typeLabel, travelDate,
+ fromPlace, toPlace, boardingPoint:{id, name, address, landmark, at},
+ droppingPoint:{id, name, address, landmark, at}, holdExpiresAt,
+ fareTotal, gstPercent, gstTotal, totalAmount, contactPhone, contactEmail, extraPhone,
+ passengers:[{seatLabel, seatClass, name, age, gender, fare, gst, status, cancelCharge, refundAmount}],
+ cancellationSlabs:[{minHours, percent, until}], refunds:[{id, amount, status, createdAt}],
+ registrationNumber, driverName, driverPhone, conductorName, conductorPhone,
+ canCancel, canReview, review:{rating, comment}|null, createdAt, confirmedAt}
+```
+- `ticketNo` is set at hold time.
+- `cancellationSlabs.until` here is measured against the ticket's boarding point.
+
+**Customer ticket endpoints:**
+- `GET /api/bus/tickets` returns a list of Ticket. `GET /api/bus/tickets/{id}` returns a Ticket.
+- `POST /api/bus/tickets/{id}/pay` returns:
+  `{paymentId, ticketId, keyId, orderId, amount, amountPaise, currency, merchantName, description, timeoutSeconds}`.
+  It is opened with the existing `frontend/src/utils/razorpay.js` helper.
+- `POST /api/bus/tickets/{id}/verify {razorpayOrderId, razorpayPaymentId, razorpaySignature}` returns a Ticket.
+- `POST /api/bus/tickets/{id}/release` returns a Ticket.
+- `GET /api/bus/tickets/{id}/cancel-quote?seats=U3,U4` returns
+  `{seats:[{seatLabel, fare, gst, chargePercent, charge, refund}], totalRefund, hoursBeforeBoarding}`.
+- `POST /api/bus/tickets/{id}/cancel {seats:[label]}` returns a Ticket.
+- `POST /api/bus/tickets/{id}/review {rating, comment}` returns a Ticket.
+
+**Payout:**
+```
+{id, tripId, travelDate, routeName, busName, faresTravelled, chargesKept, gross,
+ commissionPercent, commission, net, status:"DUE"|"PAID", utr, paidAt, createdAt,
+ ownerId, ownerCode, travelsName, upiId, bankAccountHolder, bankAccountNumber, bankIfsc, bankName}
+```
+- `GET /api/owner/bus/payouts` returns the owner's payouts; the bank fields are null in the owner view.
+- `GET /api/admin/bus/payouts?status=DUE|PAID` returns all payouts.
+- `POST /api/admin/bus/payouts/{id}/paid {utr}` returns a Payout.
