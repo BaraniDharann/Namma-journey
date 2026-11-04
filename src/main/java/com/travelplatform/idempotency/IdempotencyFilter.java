@@ -1,5 +1,6 @@
 package com.travelplatform.idempotency;
 
+import com.travelplatform.exception.ServiceUnavailable;
 import io.micrometer.core.instrument.Metrics;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -91,7 +92,20 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         byte[] body = request.getInputStream().readAllBytes();
         String scope = principal() + "|POST|" + request.getRequestURI();
 
-        IdempotencyStore.Claim claim = store.claim(scope, key, sha256(body));
+        IdempotencyStore.Claim claim;
+        try {
+            claim = store.claim(scope, key, sha256(body));
+        } catch (RuntimeException e) {
+            // A busy database here escaped the filter as a 500. Nothing ran yet, so 503 is honest
+            // and safe: the client may resend with the same key.
+            Throwable busy = ServiceUnavailable.transientCause(e);
+            if (busy == null) {
+                throw e;
+            }
+            ServiceUnavailable.log(log, "idempotency", busy);
+            ServiceUnavailable.write(response);
+            return;
+        }
         // namma_idempotency_requests_total{outcome}: "replay" is a double tap or retry that would
         // otherwise have become a second booking.
         Metrics.counter("namma.idempotency.requests", "outcome", claim.kind().name().toLowerCase()).increment();

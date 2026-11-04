@@ -130,8 +130,40 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(error);
     }
 
+    /**
+     * Pool exhausted, statement or lock timeout, Redis unreachable, bulkhead full: the request was
+     * fine, the server is just busy. 503 + Retry-After instead of 500, so clients retry rather
+     * than report a bug. Listed explicitly so Spring picks this over the RuntimeException handler
+     * (closest match wins); wrapped occurrences are caught by the unwrapping in the two catch-alls.
+     */
+    @ExceptionHandler({
+            org.springframework.dao.DataAccessResourceFailureException.class, // incl. CannotGetJdbcConnectionException, RedisConnectionFailureException
+            org.springframework.dao.TransientDataAccessResourceException.class,
+            org.springframework.dao.QueryTimeoutException.class,
+            org.springframework.dao.PessimisticLockingFailureException.class,
+            org.springframework.transaction.CannotCreateTransactionException.class,
+            java.sql.SQLTransientConnectionException.class,
+            io.github.resilience4j.bulkhead.BulkheadFullException.class,
+            io.github.resilience4j.circuitbreaker.CallNotPermittedException.class,
+    })
+    public ResponseEntity<Map<String, String>> handleServiceUnavailable(Exception ex) {
+        Throwable cause = ServiceUnavailable.transientCause(ex);
+        if (cause == null) {
+            // CannotCreateTransactionException for a reason other than reaching the database
+            // (e.g. a misconfigured transaction manager) is a real failure.
+            return handleGenericException(ex);
+        }
+        ServiceUnavailable.log(log, "request", cause);
+        return ServiceUnavailable.response();
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
+        Throwable busy = ServiceUnavailable.transientCause(ex);
+        if (busy != null) {
+            ServiceUnavailable.log(log, "request", busy);
+            return ServiceUnavailable.response();
+        }
         // Many service methods throw RuntimeException with human-readable messages
         // ("Booking not found", "Unauthorized access", etc). Treat those as 400-class
         // failures rather than 500 so the frontend can surface the real reason.
@@ -166,6 +198,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleGenericException(Exception ex) {
+        Throwable busy = ServiceUnavailable.transientCause(ex);
+        if (busy != null) {
+            ServiceUnavailable.log(log, "request", busy);
+            return ServiceUnavailable.response();
+        }
         // Log full detail server-side but never echo it to the client.
         log.error("Unexpected exception", ex);
         Map<String, String> error = new HashMap<>();

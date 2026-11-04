@@ -169,4 +169,22 @@ class IdempotencyFilterTest {
         assertEquals(400, res.getStatus());
         assertEquals(0, handlerRuns.get());
     }
+
+    @Test
+    @DisplayName("a busy database while claiming the key answers 503 + Retry-After and runs nothing")
+    void busyDatabaseOnClaimIs503() throws Exception {
+        filter = new IdempotencyFilter(new InMemoryIdempotencyStore() {
+            @Override
+            public synchronized Claim claim(String scope, String key, String requestHash) {
+                throw new org.springframework.jdbc.CannotGetJdbcConnectionException("Failed to obtain JDBC Connection",
+                        new java.sql.SQLTransientConnectionException("HikariPool-1 - Connection is not available"));
+            }
+        });
+
+        MockHttpServletResponse res = run(post(BOOKINGS, "k-busy", "{}"), bookingHandler(200));
+
+        assertEquals(503, res.getStatus());
+        assertEquals("5", res.getHeader("Retry-After"));
+        assertEquals(0, handlerRuns.get());
+    }
 }
