@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -61,6 +62,7 @@ class DriverServiceRejectionTest {
         TravelBooking booking = booking();
         when(bookingRepository.findById(BOOKING_ID)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(TravelBooking.class))).thenAnswer(i -> i.getArgument(0));
+        when(driverRepository.findById(any())).thenAnswer(i -> Optional.ofNullable(pairedDrivers.get(i.<Long>getArgument(0))));
         when(driverRepository.findById(REJECTING_DRIVER_ID))
                 .thenReturn(Optional.of(driver(REJECTING_DRIVER_ID, "Murugan")));
         when(photoRepository.findByBookingId(any())).thenReturn(Optional.empty());
@@ -95,8 +97,8 @@ class DriverServiceRejectionTest {
     @DisplayName("rejecting hands the trip to the next available driver, still awaiting their acceptance")
     void reassignsToNextAvailableDriver() {
         Driver replacement = driver(9L, "Selvi");
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
-                .thenReturn(Optional.of(replacement));
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), anyCollection()))
+                .thenReturn(pair(replacement));
 
         service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
 
@@ -113,15 +115,14 @@ class DriverServiceRejectionTest {
     @Test
     @DisplayName("the driver who just refused is excluded from the replacement search")
     void excludesTheRejectingDriver() {
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), anyCollection()))
                 .thenReturn(Optional.empty());
 
         service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<java.util.Collection<Long>> excluded = ArgumentCaptor.forClass(java.util.Collection.class);
-        verify(driverRepository).findFirstFreeTripDriver(
-                eq(LocalDate.of(2026, 8, 1)), eq(LocalDate.of(2026, 8, 3)), anyBoolean(), excluded.capture());
+        verify(driverRepository).findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), eq(LocalDate.of(2026, 8, 1)), eq(LocalDate.of(2026, 8, 3)), excluded.capture());
         assertTrue(excluded.getValue().contains(REJECTING_DRIVER_ID),
                 "the refusal is worthless if the same driver can be picked again");
     }
@@ -131,7 +132,7 @@ class DriverServiceRejectionTest {
     void recordsTheRejection() {
         when(rejectionRepository.existsByBookingIdAndDriverId(BOOKING_ID, REJECTING_DRIVER_ID))
                 .thenReturn(false);
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), anyCollection()))
                 .thenReturn(Optional.empty());
 
         service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
@@ -146,7 +147,7 @@ class DriverServiceRejectionTest {
     @Test
     @DisplayName("with nobody left to offer it to, the trip falls back to the owner unassigned")
     void fallsBackToTheOwnerWhenNobodyIsAvailable() {
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), anyCollection()))
                 .thenReturn(Optional.empty());
 
         service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
@@ -159,5 +160,55 @@ class DriverServiceRejectionTest {
         // A null replacement is what switches the owner's notification to "assign one manually".
         verify(notificationService).notifyTripRejected(any(), any(), isNull());
         verify(notificationService, never()).notifyDriverAssigned(any(), any());
+    }
+
+    @Test
+    @DisplayName("a MANUAL owner gets a refused Trip back, with no driver and no car, and nobody else is offered it")
+    void manualOwnerGetsTheTripBack() {
+        TravelBooking booking = bookingRepository.findById(BOOKING_ID).orElseThrow();
+        booking.setOwnerId(7L);
+        booking.setVehicleId(500L);
+        com.travelplatform.repository.OwnerRepository owners = mock(com.travelplatform.repository.OwnerRepository.class);
+        com.travelplatform.entity.Owner owner = new com.travelplatform.entity.Owner();
+        owner.setId(7L);
+        owner.setAssignmentMode(com.travelplatform.entity.Owner.AssignmentMode.MANUAL);
+        when(owners.findById(7L)).thenReturn(Optional.of(owner));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "ownerRepository", owners);
+
+        service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
+
+        assertNull(booking.getDriverId());
+        assertNull(booking.getVehicleId());
+        assertEquals(TravelBooking.BookingStatus.PENDING, booking.getStatus());
+        verify(driverRepository, never()).findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), any());
+        verify(notificationService).notifyTripRejected(any(), any(), isNull());
+    }
+
+    @Test
+    @DisplayName("an AUTO owner's refused Trip goes to their next free driver, in that driver's car")
+    void autoOwnerReoffersWithCar() {
+        TravelBooking booking = bookingRepository.findById(BOOKING_ID).orElseThrow();
+        booking.setOwnerId(7L);
+        com.travelplatform.repository.OwnerRepository owners = mock(com.travelplatform.repository.OwnerRepository.class);
+        com.travelplatform.entity.Owner owner = new com.travelplatform.entity.Owner();
+        owner.setId(7L);
+        owner.setAssignmentMode(com.travelplatform.entity.Owner.AssignmentMode.AUTO);
+        when(owners.findById(7L)).thenReturn(Optional.of(owner));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "ownerRepository", owners);
+        when(driverRepository.findFirstFreeTripPair(eq(7L), any(), anyInt(), anyBoolean(), any(), any(), anyCollection()))
+                .thenReturn(pair(driver(9L, "Selvi")));
+
+        service.rejectBooking(REJECTING_DRIVER_ID, BOOKING_ID.toString());
+
+        assertEquals(9L, booking.getDriverId());
+        assertEquals(1009L, booking.getVehicleId());
+    }
+
+    private final java.util.Map<Long, Driver> pairedDrivers = new java.util.HashMap<>();
+
+    /** The assignment query returns ids and the driver it names is then looked up: remember them. */
+    private Optional<com.travelplatform.repository.DriverRepository.TripPair> pair(Driver d) {
+        pairedDrivers.put(d.getId(), d);
+        return Optional.of(TestTripRates.tripPair(d.getId(), 1000L + d.getId()));
     }
 }

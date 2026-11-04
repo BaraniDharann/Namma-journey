@@ -285,6 +285,22 @@ public class EmailService {
                 HTML_FOOTER);
     }
 
+    /** A Trip with no driver yet: the owner assigns one (MANUAL), or none of theirs was free. */
+    public void sendOwnerTripNeedsDriver(String toEmail, String travelsName, com.travelplatform.entity.TravelBooking booking) {
+        queue(toEmail, "Trip needs a driver: " + booking.getFromPlace() + " to " + booking.getToPlace(), HTML_HEADER +
+                "<h2>A trip needs a driver</h2>" +
+                "<p>Dear " + esc(travelsName == null ? "owner" : travelsName) + ",</p>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>Route:</strong> " + esc(booking.getFromPlace()) + " to " + esc(booking.getToPlace()) + "</p>" +
+                "<p><strong>Dates:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</p>" +
+                (booking.getCarCategory() == null ? "" : "<p><strong>Car:</strong> "
+                        + esc(booking.getCarCategory().name().replace('_', ' ')) + "</p>") +
+                "<p><strong>Travellers:</strong> " + booking.getTravelMembers() + "</p>" +
+                "</div>" +
+                "<p><a href='" + esc(frontendBaseUrl + "/owner/bookings") + "'>Assign a driver and car</a></p>" +
+                HTML_FOOTER);
+    }
+
     public void sendAdminNewOwnerApplication(com.travelplatform.entity.Owner owner, java.time.LocalDateTime reviewBy) {
         String cities = owner.getCities() == null ? "" : owner.getCities().stream()
                 .map(com.travelplatform.entity.City::getName).sorted()

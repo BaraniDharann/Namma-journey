@@ -47,6 +47,12 @@ public class OwnerService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DispatchService dispatchService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.VehicleRepository vehicleRepository;
+
+    // Stateless: reads the request's owner (OwnerScopeFilter), so tests bind OwnerScope directly.
+    private final com.travelplatform.config.OwnerScope ownerScope = new com.travelplatform.config.OwnerScope();
+
     public List<TravelBooking> getAllBookings() {
         return travelBookingRepository.findAll();
     }
@@ -227,8 +233,25 @@ public class OwnerService {
             @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
     })
     public TravelBookingResponse assignDriver(UUID bookingId, Long driverId) {
-        TravelBooking booking = travelBookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        return assignDriver(bookingId, driverId, null);
+    }
+
+    /**
+     * Puts one of my drivers and one of my cars on one of my Trips ({@code vehicleId} null: the
+     * driver's usual car). City rides are the platform's: only NJO-0001 assigns them, and only to
+     * an independent driver. Another owner's booking, driver or car is "not found".
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "dailyRevenue",   allEntries = true),
+            @CacheEvict(value = "monthlyRevenue", allEntries = true),
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true),
+            @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
+    })
+    public TravelBookingResponse assignDriver(UUID bookingId, Long driverId, Long vehicleId) {
+        Long me = ownerScope.ownerId();
+        TravelBooking booking = ownBooking(bookingId, me);
+        boolean trip = booking.getServiceMode() == TravelBooking.ServiceMode.TRIP;
 
         // Only before the trip starts. Reassigning a STARTED trip threw it back to CONFIRMED with a
         // new driver while the old one was still driving the passenger.
@@ -242,7 +265,8 @@ public class OwnerService {
         }
 
         Driver driver = driverRepository.findById(driverId)
-                .orElseThrow(() -> new RuntimeException("Driver not found"));
+                .filter(d -> trip ? me.equals(d.getOwnerId()) : d.getOwnerId() == null || me.equals(d.getOwnerId()))
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Driver not found"));
 
         if (driver.getStatus() != Driver.Status.ACTIVE) {
             throw new RuntimeException("Driver is not active and cannot be assigned");
@@ -250,27 +274,31 @@ public class OwnerService {
         if (!driver.isApproved()) {
             throw new IllegalArgumentException(driver.getName() + " has not been approved yet.");
         }
-        if (booking.getServiceMode() == TravelBooking.ServiceMode.TRIP && driver.getFleet() != Driver.Fleet.OWNER_FLEET) {
+        if (trip && driver.getFleet() != Driver.Fleet.OWNER_FLEET) {
             throw new IllegalArgumentException("Trips go to your own fleet; " + driver.getName() + " is an independent driver.");
         }
-        // The owner may override a driver's City/Trip switches, but not their vehicle: a bike ride
-        // is not driven by car, and a Trip is never given to a bike or auto.
-        if (booking.getVehicleType() != null && driver.getVehicleType() != booking.getVehicleType()) {
-            throw new IllegalArgumentException("This " + (booking.getServiceMode() == TravelBooking.ServiceMode.TRIP
-                    ? "trip needs a car" : "ride needs a " + vehicleName(booking.getVehicleType()))
+        if (!trip && driver.getFleet() != Driver.Fleet.INDEPENDENT) {
+            throw new IllegalArgumentException("City rides go to independent drivers; " + driver.getName()
+                    + " is a travels owner's driver.");
+        }
+        // A City ride needs the driver's own vehicle type: a bike ride is not driven by car.
+        if (!trip && booking.getVehicleType() != null && driver.getVehicleType() != booking.getVehicleType()) {
+            throw new IllegalArgumentException("This ride needs a " + vehicleName(booking.getVehicleType())
                     + ", and " + driver.getName() + " drives a " + vehicleName(driver.getVehicleType()) + ".");
         }
+        Long carId = trip ? suitableCar(booking, driver, vehicleId).getId() : null;
 
         long overlapping = driverRepository.countOverlappingActiveBookings(
                 driverId, booking.getFromDate(), booking.getToDate(), bookingId);
         if (overlapping > 0) {
-            throw new RuntimeException(
-                    "Driver already has an active trip overlapping these dates ("
+            throw new com.travelplatform.exception.ConflictException(
+                    driver.getName() + " already has an active trip overlapping these dates ("
                             + booking.getFromDate() + " to " + booking.getToDate() + ")");
         }
 
         Long previousDriverId = booking.getDriverId();
         booking.setDriverId(driverId);
+        booking.setVehicleId(carId);
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         // The owner's choice ends a Ride Now search: out of the matching queue, the new driver
         // busy, and a different driver who held its offer freed and told it is gone.
@@ -307,6 +335,89 @@ public class OwnerService {
         return mapToResponse(updatedBooking, driver);
     }
     
+    /** My free drivers and my free cars that suit this Trip, for the assign screen. */
+    @Transactional(readOnly = true)
+    public com.travelplatform.dto.AssignOptions assignOptions(UUID bookingId) {
+        Long me = ownerScope.ownerId();
+        TravelBooking booking = ownBooking(bookingId, me);
+        if (booking.getServiceMode() != TravelBooking.ServiceMode.TRIP) {
+            throw new IllegalArgumentException("Only Trips are assigned from here");
+        }
+        List<com.travelplatform.dto.AssignOptions.DriverOption> freeDrivers = driverRepository
+                .findFreeOwnerTripDrivers(me, booking.getFromDate(), booking.getToDate(), bookingId).stream()
+                .map(d -> new com.travelplatform.dto.AssignOptions.DriverOption(d.getId(), d.getName(), d.getDefaultVehicleId()))
+                .toList();
+        List<com.travelplatform.dto.AssignOptions.VehicleOption> freeCars = vehicleRepository
+                .findFreeVehicles(me, categoryOf(booking), seatsOf(booking), needsAc(booking),
+                        booking.getFromDate(), booking.getToDate(), bookingId).stream()
+                .map(v -> new com.travelplatform.dto.AssignOptions.VehicleOption(
+                        v.getId(), v.getRegistrationNumber(), v.getModel(), v.getSeats(), v.isAc()))
+                .toList();
+        return new com.travelplatform.dto.AssignOptions(freeDrivers, freeCars);
+    }
+
+    /**
+     * A booking the calling owner may act on: their own Trip, or - for the platform owner - a
+     * City ride. Anything else is "not found", never "forbidden", so ids reveal nothing.
+     */
+    private TravelBooking ownBooking(UUID bookingId, Long me) {
+        return travelBookingRepository.findById(bookingId)
+                .filter(b -> b.getOwnerId() != null ? me.equals(b.getOwnerId()) : ownerScope.isPlatform())
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Booking not found"));
+    }
+
+    /** The car for a Trip: the one chosen, else the driver's usual one; mine, active and suitable. */
+    private com.travelplatform.entity.Vehicle suitableCar(TravelBooking booking, Driver driver, Long vehicleId) {
+        Long id = vehicleId != null ? vehicleId : driver.getDefaultVehicleId();
+        if (id == null) {
+            throw new IllegalArgumentException("Choose a car for this trip");
+        }
+        com.travelplatform.entity.Vehicle car = vehicleRepository.findById(id)
+                .filter(v -> booking.getOwnerId().equals(v.getOwnerId()))
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Car not found"));
+        String plate = car.getRegistrationNumber();
+        if (!car.isActive()) {
+            throw new IllegalArgumentException(plate + " is not in use. Choose another car.");
+        }
+        if (car.getCategory() != categoryOf(booking)) {
+            throw new IllegalArgumentException("This trip was booked as " + label(categoryOf(booking))
+                    + ", and " + plate + " is " + label(car.getCategory()) + ".");
+        }
+        if (car.getSeats() < seatsOf(booking)) {
+            throw new IllegalArgumentException(plate + " seats " + car.getSeats() + "; this trip is for "
+                    + seatsOf(booking) + ".");
+        }
+        if (needsAc(booking) && !car.isAc()) {
+            throw new IllegalArgumentException("This is an AC trip, and " + plate + " has no AC.");
+        }
+        if (vehicleRepository.countOverlappingActiveBookings(car.getId(), booking.getFromDate(), booking.getToDate(),
+                booking.getId()) > 0) {
+            throw new com.travelplatform.exception.ConflictException(plate + " is already on a trip on these dates.");
+        }
+        return car;
+    }
+
+    private static com.travelplatform.entity.CarCategory categoryOf(TravelBooking b) {
+        return b.getCarCategory() != null ? b.getCarCategory() : com.travelplatform.entity.CarCategory.SEDAN;
+    }
+
+    private static int seatsOf(TravelBooking b) {
+        return b.getTravelMembers() == null ? 1 : Math.max(1, b.getTravelMembers());
+    }
+
+    private static boolean needsAc(TravelBooking b) {
+        return "AC".equalsIgnoreCase(b.getAcType());
+    }
+
+    private static String label(com.travelplatform.entity.CarCategory c) {
+        return switch (c) {
+            case HATCHBACK -> "a hatchback";
+            case SEDAN -> "a sedan";
+            case SUV -> "an SUV";
+            case TEMPO_TRAVELLER -> "a tempo traveller";
+        };
+    }
+
     private static String vehicleName(com.travelplatform.entity.VehicleType type) {
         return type == null ? "vehicle" : type.name().toLowerCase(java.util.Locale.ROOT);
     }

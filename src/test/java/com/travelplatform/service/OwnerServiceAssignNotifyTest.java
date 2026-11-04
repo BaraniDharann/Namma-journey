@@ -42,9 +42,22 @@ class OwnerServiceAssignNotifyTest {
         notificationService = mock(NotificationService.class);
         service = new OwnerService(bookingRepository, mock(com.travelplatform.repository.OwnerRepository.class), driverRepository,
                 mock(TripDriverPhotoRepository.class), notificationService);
+        // The owner's own Trip, driver and usual car (V27).
+        com.travelplatform.config.OwnerScope.bind(OWNER, false);
+        com.travelplatform.repository.VehicleRepository vehicles = mock(com.travelplatform.repository.VehicleRepository.class);
+        com.travelplatform.entity.Vehicle car = new com.travelplatform.entity.Vehicle();
+        car.setId(CAR);
+        car.setOwnerId(OWNER);
+        car.setCategory(com.travelplatform.entity.CarCategory.SEDAN);
+        car.setSeats(4);
+        car.setRegistrationNumber("KA01AB1234");
+        when(vehicles.findById(CAR)).thenReturn(Optional.of(car));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "vehicleRepository", vehicles);
 
         booking = new TravelBooking();
         booking.setId(BOOKING_ID);
+        booking.setOwnerId(OWNER);
+        booking.setCarCategory(com.travelplatform.entity.CarCategory.SEDAN);
         booking.setStatus(TravelBooking.BookingStatus.PENDING);
         booking.setFromDate(LocalDate.of(2026, 10, 11));
         booking.setToDate(LocalDate.of(2026, 10, 11));
@@ -53,9 +66,19 @@ class OwnerServiceAssignNotifyTest {
         when(bookingRepository.save(any(TravelBooking.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void unbind() {
+        com.travelplatform.config.OwnerScope.clear();
+    }
+
+    private static final long OWNER = 1L;
+    private static final long CAR = 500L;
+
     private Driver driver(long id) {
         Driver d = new Driver();
         d.setId(id);
+        d.setOwnerId(OWNER);
+        d.setDefaultVehicleId(CAR);
         d.setName("Driver " + id);
         d.setStatus(Driver.Status.ACTIVE);
         when(driverRepository.findById(id)).thenReturn(Optional.of(d));
@@ -72,17 +95,16 @@ class OwnerServiceAssignNotifyTest {
     }
 
     @Test
-    @DisplayName("the owner cannot give a Trip to an auto, or a bike ride to a car")
+    @DisplayName("the platform cannot give a bike ride to a car driver")
     void vehicleMustMatch() {
-        Driver auto = driver(91L);
-        auto.setVehicleType(com.travelplatform.entity.VehicleType.AUTO);
-        IllegalArgumentException ex = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
-                () -> service.assignDriver(BOOKING_ID, 91L));
-        org.junit.jupiter.api.Assertions.assertTrue(ex.getMessage().contains("needs a car"));
-
+        // City rides are the platform's, and go to independent drivers.
+        com.travelplatform.config.OwnerScope.bind(OWNER, true);
+        booking.setOwnerId(null);
         booking.setServiceMode(TravelBooking.ServiceMode.CITY);
         booking.setVehicleType(com.travelplatform.entity.VehicleType.BIKE);
-        driver(92L);
+        Driver car = driver(92L);
+        car.setOwnerId(null);
+        car.setFleet(Driver.Fleet.INDEPENDENT);
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
                 () -> service.assignDriver(BOOKING_ID, 92L));
         verify(notificationService, never()).notifyDriverAssigned(any(), any());
@@ -114,10 +136,10 @@ class OwnerServiceAssignNotifyTest {
         booking.setServiceMode(TravelBooking.ServiceMode.TRIP);
         Driver d = driver(94L);
         d.setFleet(Driver.Fleet.INDEPENDENT);
-        IllegalArgumentException ex = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+        d.setOwnerId(null);
+        // Not one of my drivers, so not found - the same as any other owner's driver.
+        org.junit.jupiter.api.Assertions.assertThrows(com.travelplatform.exception.ResourceNotFoundException.class,
                 () -> service.assignDriver(BOOKING_ID, 94L));
-        org.junit.jupiter.api.Assertions.assertEquals(
-                "Trips go to your own fleet; Driver 94 is an independent driver.", ex.getMessage());
         verify(notificationService, never()).notifyDriverAssigned(any(), any());
     }
 }

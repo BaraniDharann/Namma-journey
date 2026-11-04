@@ -35,6 +35,49 @@ public class NotificationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private OwnerTelegramAlerts ownerTelegramAlerts;
 
+    // Each travels owner has their own feed (V27); platform notices go to the platform owner's.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.OwnerRepository ownerRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripRateService tripRates;
+
+    /** The feed a booking's owner reads: its owner's id, or the platform owner's for a City ride. */
+    String ownerFeed(TravelBooking booking) {
+        if (booking != null && booking.getOwnerId() != null) {
+            return booking.getOwnerId().toString();
+        }
+        return platformFeed();
+    }
+
+    /** The platform owner's feed (City rides, independent drivers, dues, safety). */
+    String platformFeed() {
+        return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
+    }
+
+    /**
+     * A Trip with no driver: the owner assigns by hand (MANUAL), or nobody of theirs was free.
+     * In-app on their own feed, and by email so it is not missed.
+     */
+    public void notifyTripNeedsDriver(TravelBooking booking) {
+        String route = booking.getFromPlace() + " to " + booking.getToPlace();
+        Notification n = new Notification();
+        n.setRecipientId(ownerFeed(booking));
+        n.setRecipientRole("ROLE_OWNER");
+        n.setType("TRIP_NEEDS_DRIVER");
+        n.setTitle("Trip Needs a Driver");
+        n.setMessage("New trip from " + route + " on " + booking.getFromDate()
+                + (booking.getCarCategory() == null ? "" : " (" + booking.getCarCategory().name().replace('_', ' ') + ")")
+                + ". Assign a driver and car from your bookings.");
+        n.setBookingId(booking.getId().toString());
+        n.setCreatedAt(LocalDateTime.now());
+        notificationRepository.save(n);
+        if (ownerRepository != null && booking.getOwnerId() != null) {
+            ownerRepository.findById(booking.getOwnerId())
+                    .ifPresent(o -> emailService.sendOwnerTripNeedsDriver(o.getEmail(), o.getTravelsName(), booking));
+        }
+    }
+
     public void notifyBookingCreated(TravelBooking booking) {
         Notification notification = new Notification();
         notification.setRecipientId("owner");

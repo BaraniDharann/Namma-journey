@@ -29,4 +29,19 @@ final class TestTripRates {
         });
         return rates;
     }
+
+    /** What the assignment query returns: a driver id and a car id. */
+    static com.travelplatform.repository.DriverRepository.TripPair tripPair(long driverId, long vehicleId) {
+        return new com.travelplatform.repository.DriverRepository.TripPair() {
+            @Override
+            public Long getDriverId() {
+                return driverId;
+            }
+
+            @Override
+            public Long getVehicleId() {
+                return vehicleId;
+            }
+        };
+    }
 }

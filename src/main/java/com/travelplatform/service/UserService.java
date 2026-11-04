@@ -87,6 +87,8 @@ public class UserService {
     // Trip prices per owner and car category (V27).
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private TripRateService tripRates;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.OwnerRepository ownerRepository;
 
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -191,6 +193,10 @@ public class UserService {
             // Saved with nobody; DispatchService offers it to the nearest online driver once it commits.
             return saveWithDriver(userId, request, routeInfo, lostDrivers, false, cityId);
         }
+        // A MANUAL owner assigns every Trip by hand; it is saved with nobody and they are told.
+        if (!autoAssigns(tripRates.platformOwnerId())) {
+            return saveWithDriver(userId, request, routeInfo, lostDrivers, false, cityId);
+        }
         for (int attempt = 0; attempt < MAX_DRIVER_ATTEMPTS; attempt++) {
             try {
                 return saveWithDriver(userId, request, routeInfo, lostDrivers, true, cityId);
@@ -212,10 +218,17 @@ public class UserService {
                                                  List<Long> lostDrivers, boolean assign, Long cityId) {
         return transactionTemplate.execute(tx -> {
             Driver driver = null;
+            Long vehicleId = null;
             if (assign) {
-                driver = driverRepository.findFirstFreeTripDriver(request.getFromDate(), request.getToDate(),
-                                "AC".equalsIgnoreCase(request.getAcType()), excludedOrNobody(lostDrivers))
-                        .orElse(null);
+                // The booked owner's first free driver and car of the category (the usual car first).
+                DriverRepository.TripPair pair = driverRepository.findFirstFreeTripPair(tripRates.platformOwnerId(),
+                        tripCategory(request.getCarCategory()).name(), seatsFor(request),
+                        "AC".equalsIgnoreCase(request.getAcType()), request.getFromDate(), request.getToDate(),
+                        excludedOrNobody(lostDrivers)).orElse(null);
+                if (pair != null) {
+                    driver = driverRepository.findById(pair.getDriverId()).orElse(null);
+                    vehicleId = driver == null ? null : pair.getVehicleId();
+                }
             }
 
             TravelBooking savedBooking;
@@ -223,7 +236,7 @@ public class UserService {
                 // saveAndFlush, not save: the INSERT has to reach Postgres here, inside the try,
                 // or the constraint would only fire at commit where it can no longer be caught
                 // per attempt.
-                savedBooking = bookingRepository.saveAndFlush(buildBooking(userId, request, routeInfo, driver, cityId));
+                savedBooking = bookingRepository.saveAndFlush(buildBooking(userId, request, routeInfo, driver, vehicleId, cityId));
             } catch (DataIntegrityViolationException ex) {
                 if (driver != null && isDriverOverlap(ex)) {
                     throw new DriverTakenException(driver.getId());
@@ -245,6 +258,11 @@ public class UserService {
             if (driver != null && !savedBooking.isAdvanceDue()) {
                 notificationService.notifyDriverAssigned(savedBooking, driver);
             }
+            // No driver for a Trip (MANUAL owner, or nobody free): the owner has to pick one.
+            if (driver == null && savedBooking.getServiceMode() == TravelBooking.ServiceMode.TRIP
+                    && !savedBooking.isAdvanceDue()) {
+                notificationService.notifyTripNeedsDriver(savedBooking);
+            }
             if (driver != null && driverStates != null) {
                 driverStates.took(savedBooking); // a Trip for today holds the car, paid or not (no_driver_overlap)
             }
@@ -257,7 +275,8 @@ public class UserService {
         });
     }
 
-    private TravelBooking buildBooking(UUID userId, TravelBookingRequest request, RouteInfo routeInfo, Driver driver, Long cityId) {
+    private TravelBooking buildBooking(UUID userId, TravelBookingRequest request, RouteInfo routeInfo, Driver driver,
+                                       Long vehicleId, Long cityId) {
         int travelDays = (int) ChronoUnit.DAYS.between(request.getFromDate(), request.getToDate()) + 1;
 
         // Determine booking type and calculate amount
@@ -318,6 +337,7 @@ public class UserService {
         booking.setPricePerHourAtBooking(pricePerHourAtBooking);
         booking.setBookingDate(LocalDateTime.now());
         booking.setDriverId(driver != null ? driver.getId() : null);
+        booking.setVehicleId(driver != null ? vehicleId : null);
         booking.setStatus(TravelBooking.BookingStatus.PENDING);
         if (city) {
             booking.setDispatchMode(TravelBooking.DispatchMode.RIDE_NOW);
@@ -329,6 +349,17 @@ public class UserService {
             booking.setHoldExpiresAt(advancePolicy.holdUntil(LocalDateTime.now()));
         }
         return booking;
+    }
+
+    /** Whether this owner's Trips get a driver automatically. Without an owner table (unit tests), today's AUTO. */
+    private boolean autoAssigns(Long ownerId) {
+        return ownerRepository == null || ownerRepository.findById(ownerId)
+                .map(o -> o.getAssignmentMode() == com.travelplatform.entity.Owner.AssignmentMode.AUTO)
+                .orElse(false);
+    }
+
+    private static int seatsFor(TravelBookingRequest request) {
+        return request.getTravelMembers() == null ? 1 : Math.max(1, request.getTravelMembers());
     }
 
     private static CarCategory tripCategory(String requested) {

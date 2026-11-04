@@ -306,8 +306,15 @@ public class OwnerController {
     public ResponseEntity<TravelBookingResponse> assignDriver(
             @PathVariable UUID bookingId,
             @Valid @RequestBody AssignDriverRequest request) {
-        TravelBookingResponse response = ownerService.assignDriver(bookingId, request.getDriverId());
+        TravelBookingResponse response = ownerService.assignDriver(bookingId, request.getDriverId(), request.getVehicleId());
         return ResponseEntity.ok(response);
+    }
+
+    /** My free drivers and suitable free cars for one of my Trips (each driver's usual car marked). */
+    @GetMapping("/bookings/{bookingId}/assign-options")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.dto.AssignOptions> assignOptions(@PathVariable UUID bookingId) {
+        return ResponseEntity.ok(ownerService.assignOptions(bookingId));
     }
 
     @GetMapping("/drivers")

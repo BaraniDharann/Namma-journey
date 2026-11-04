@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -87,7 +88,7 @@ class UserServiceDriverAssignmentTest {
                 .thenReturn(new RouteInfo(460.0, 480L, "NH38"));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "tripRates", TestTripRates.flat("14.0", "150.00"));
         when(photoRepository.findByBookingId(any())).thenReturn(Optional.empty());
-        when(driverRepository.findById(any())).thenReturn(Optional.empty());
+        when(driverRepository.findById(any())).thenAnswer(i -> Optional.ofNullable(pairedDrivers.get(i.<Long>getArgument(0))));
     }
 
     private static TravelBookingRequest request() {
@@ -139,9 +140,9 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("losing the race for a driver moves on to the next free one")
     void retriesWithNextDriverWhenTheFirstIsTaken() {
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.of(driver(1)));
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(List.of(1L))))
-                .thenReturn(Optional.of(driver(2)));
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(NOBODY))).thenReturn(pair(driver(1)));
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(List.of(1L))))
+                .thenReturn(pair(driver(2)));
         savesFailingForDrivers(1L);
 
         service.createBooking(USER_ID, request());
@@ -154,9 +155,9 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("a deadlock while racing for a driver is treated as losing the race, not as an error")
     void retriesWhenPostgresBreaksADeadlock() {
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.of(driver(1)));
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(List.of(1L))))
-                .thenReturn(Optional.of(driver(2)));
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(NOBODY))).thenReturn(pair(driver(1)));
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(List.of(1L))))
+                .thenReturn(pair(driver(2)));
         when(bookingRepository.saveAndFlush(any(TravelBooking.class))).thenAnswer(inv -> {
             TravelBooking b = inv.getArgument(0);
             driverIdsAtSave.add(b.getDriverId());
@@ -177,10 +178,10 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("when every candidate is taken the booking still goes through, unassigned for the owner")
     void fallsBackToUnassignedWhenEveryDriverIsTaken() {
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), anyCollection()))
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), anyCollection()))
                 .thenAnswer(inv -> {
-                    java.util.Collection<Long> excluded = inv.getArgument(3);
-                    return Optional.of(driver(excluded.contains(-1L) ? 1L : excluded.size() + 1L));
+                    java.util.Collection<Long> excluded = inv.getArgument(6);
+                    return pair(driver(excluded.contains(-1L) ? 1L : excluded.size() + 1L));
                 });
         savesFailingForDrivers(1L, 2L, 3L, 4L, 5L);
 
@@ -213,7 +214,7 @@ class UserServiceDriverAssignmentTest {
         // money anyone can pay. It used to be stored as-is, while the UPI link showed 6457.32.
         when(routingService.calculateRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble()))
                 .thenReturn(new RouteInfo(461.237, 480L, "NH38"));
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.empty());
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(NOBODY))).thenReturn(Optional.empty());
         savesFailingForDrivers();
 
         service.createBooking(USER_ID, request());
@@ -231,9 +232,9 @@ class UserServiceDriverAssignmentTest {
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
         io.micrometer.core.instrument.Metrics.addRegistry(registry);
         try {
-            when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.of(driver(1)));
-            when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(List.of(1L))))
-                    .thenReturn(Optional.of(driver(2)));
+            when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(NOBODY))).thenReturn(pair(driver(1)));
+            when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(List.of(1L))))
+                    .thenReturn(pair(driver(2)));
             savesFailingForDrivers(1L);
 
             service.createBooking(USER_ID, request());
@@ -248,7 +249,7 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("an unrelated constraint failure is not mistaken for a driver clash")
     void unrelatedIntegrityErrorsPropagate() {
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.of(driver(1)));
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(NOBODY))).thenReturn(pair(driver(1)));
         when(bookingRepository.saveAndFlush(any(TravelBooking.class)))
                 .thenThrow(new DataIntegrityViolationException("null value in column \"user_name\""));
 
@@ -258,7 +259,7 @@ class UserServiceDriverAssignmentTest {
     @Test
     @DisplayName("the route is fetched before the transaction opens, so a slow map API holds no DB connection")
     void routingHappensOutsideTheTransaction() {
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(NOBODY))).thenReturn(Optional.empty());
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(NOBODY))).thenReturn(Optional.empty());
         savesFailingForDrivers();
 
         service.createBooking(USER_ID, request());
@@ -266,5 +267,50 @@ class UserServiceDriverAssignmentTest {
         InOrder order = inOrder(routingService, txManager);
         order.verify(routingService).calculateRoute(anyDouble(), anyDouble(), anyDouble(), anyDouble());
         order.verify(txManager).getTransaction(any());
+    }
+
+    @Test
+    @DisplayName("a MANUAL owner's Trip is saved with nobody, and the owner is told it needs a driver")
+    void manualOwnerAssignsByHand() {
+        com.travelplatform.repository.OwnerRepository owners = mock(com.travelplatform.repository.OwnerRepository.class);
+        com.travelplatform.entity.Owner owner = new com.travelplatform.entity.Owner();
+        owner.setId(TestTripRates.PLATFORM_OWNER);
+        owner.setAssignmentMode(com.travelplatform.entity.Owner.AssignmentMode.MANUAL);
+        when(owners.findById(TestTripRates.PLATFORM_OWNER)).thenReturn(Optional.of(owner));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "ownerRepository", owners);
+        savesFailingForDrivers();
+
+        service.createBooking(USER_ID, request());
+
+        assertEquals(java.util.Arrays.asList((Long) null), driverIdsAtSave);
+        verify(driverRepository, never()).findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), any());
+        verify(notificationService).notifyTripNeedsDriver(any());
+    }
+
+    @Test
+    @DisplayName("an AUTO owner's Trip carries the picked driver's car")
+    void autoOwnerTripCarriesCar() {
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(NOBODY)))
+                .thenReturn(pair(driver(1)));
+        List<Long> cars = new java.util.ArrayList<>();
+        when(bookingRepository.saveAndFlush(any(TravelBooking.class))).thenAnswer(inv -> {
+            TravelBooking b = inv.getArgument(0);
+            cars.add(b.getVehicleId());
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+
+        service.createBooking(USER_ID, request());
+
+        assertEquals(List.of(1001L), cars);
+        verify(notificationService, never()).notifyTripNeedsDriver(any());
+    }
+
+    private final java.util.Map<Long, Driver> pairedDrivers = new java.util.HashMap<>();
+
+    /** The assignment query returns ids and the driver it names is then looked up: remember them. */
+    private Optional<com.travelplatform.repository.DriverRepository.TripPair> pair(Driver d) {
+        pairedDrivers.put(d.getId(), d);
+        return Optional.of(TestTripRates.tripPair(d.getId(), 1000L + d.getId()));
     }
 }
