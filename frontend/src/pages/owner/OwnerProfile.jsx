@@ -3,6 +3,7 @@ import DashboardLayout from '../../components/DashboardLayout'
 import { useAuth } from '../../context/AuthContext'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead } from '../../components/dash/ui'
+import FleetTypePanel from '../../components/bus/FleetTypePanel'
 
 const navItems = [
   { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
@@ -55,6 +56,7 @@ export default function OwnerProfile() {
             ))}
           </div>
         </Panel>
+        <FleetTypePanel span={6} />
       </div>
     </DashboardLayout>
   )

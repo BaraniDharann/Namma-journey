@@ -7,6 +7,9 @@ import { TipLayer } from './dash/ui'
 import ApplicationGate from './driver/ApplicationGate'
 import TelegramGate from './driver/TelegramGate'
 import DriverDispatch from './driver/DriverDispatch'
+import useOwnerFleet from '../hooks/useOwnerFleet'
+import { ownerMenu } from '../utils/ownerFleet'
+import { userMenu } from '../utils/userMenu'
 
 function timeAgo(dateStr) {
   const now = new Date()
@@ -34,8 +37,11 @@ const ROLE_LABEL = { ROLE_USER: 'Traveller', ROLE_DRIVER: 'Driver', ROLE_OWNER: 
  * line icons (mapped from each page's routes, so pages keep passing their nav items as is),
  * a top bar with notifications, and a drawer on narrow screens.
  */
-export default function DashboardLayout({ children, navItems, role }) {
+export default function DashboardLayout({ children, navItems: pageNavItems, role }) {
   const { logout, user } = useAuth()
+  // Owners see car items, bus items or both, by what they run (chosen on their Profile page).
+  const fleetType = useOwnerFleet(role === 'ROLE_OWNER' ? (user?.userId ?? 'owner') : null)
+  const navItems = role === 'ROLE_OWNER' ? ownerMenu(pageNavItems, fleetType) : role === 'ROLE_USER' ? userMenu(pageNavItems) : pageNavItems
   const location = useLocation()
   const navigate = useNavigate()
   const [railOpen, setRailOpen] = useState(false)

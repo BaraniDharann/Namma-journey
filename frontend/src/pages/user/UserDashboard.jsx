@@ -8,6 +8,7 @@ import RoadTripStory from '../../components/journey/RoadTripStory'
 import Icon from '../../components/dash/Icon'
 import { Panel, PanelLink, PageHead, SummaryStrip, StatusPill, Empty, Skeleton, ErrorNote } from '../../components/dash/ui'
 import AnalyticsCard from '../../components/dash/AnalyticsCard'
+import BusSearchForm from '../../components/bus/BusSearchForm'
 import { inr, shortPlace, spendByMonth, tripLengthSegments, totalKm, topDestinations, daysUntil, localDate } from '../../dash/metrics'
 
 const navItems = [
@@ -78,6 +79,10 @@ export default function UserDashboard() {
       <RoadTripStory />
 
       <div className="pc-grid">
+        <Panel span={12} title="Book a bus" className="bus-form-panel" action={<PanelLink to="/user/bus-tickets">My bus tickets</PanelLink>}>
+          <BusSearchForm idPrefix="dash-bus" />
+        </Panel>
+
         <Panel span={7} title={next ? `${next.status === 'STARTED' ? 'On the road' : 'Upcoming'} · ${niceDate(next.fromDate)}` : 'Upcoming trip'} meta={next && <StatusPill status={next.status} label={next.status === 'PENDING' ? 'Finding a driver' : next.status === 'CONFIRMED' ? 'Driver assigned' : undefined} />}>
           {state.loading ? <Skeleton rows={4} /> : !state.ok ? <ErrorNote onRetry={load} /> : !next ? (
             <Empty icon="route" title="No trip planned" action={<Link to="/user/bookings/new" className="pc-btn pc-btn-sm"><Icon name="plus" size={15} />Book a trip</Link>}>

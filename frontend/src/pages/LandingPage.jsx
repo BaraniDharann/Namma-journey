@@ -14,6 +14,7 @@ import { fleet, tripTypes } from '../data/journeyData'
 import { BIOMES } from '../landing/biomes'
 import { useIsCompact, useOnScreen } from '../components/motion/primitives'
 import { EASE, SectionHead, rise } from '../landing/sectionParts'
+import BusHero from '../landing/BusHero'
 import {
   CityCta, CityFacts, CityFeatures, CityPlaces, CityRates, CitySteps, DEFAULT_MAX_KM, RideTimeline, useCityFares,
 } from '../landing/CitySections'
@@ -157,6 +158,7 @@ function Nav({ user, onDashboard, items }) {
 const HERO_MODES = [
   { key: 'city', icon: 'bike', label: 'City ride' },
   { key: 'trip', icon: 'car', label: 'Trip' },
+  { key: 'bus', icon: 'bus', label: 'Bus' },
 ]
 
 function ModeSwitch({ mode, onChange }) {
@@ -175,6 +177,7 @@ function ModeSwitch({ mode, onChange }) {
 
 function Hero({ ready, mode, onMode, dropSeed }) {
   const switcher = <ModeSwitch mode={mode} onChange={onMode} />
+  if (mode === 'bus') return <BusHero switcher={switcher} />
   return mode === 'city' ? <CityHero ready={ready} switcher={switcher} dropSeed={dropSeed} /> : <TripHero ready={ready} switcher={switcher} />
 }
 
@@ -360,12 +363,12 @@ export default function LandingPage() {
   const [category, setCategory] = useState('ALL')
   // City ride is the default; ?mode=trip keeps Trip across a reload, a shared link and the back button.
   const [params, setParams] = useSearchParams()
-  const mode = params.get('mode') === 'trip' ? 'trip' : 'city'
+  const mode = ['trip', 'bus'].includes(params.get('mode')) ? params.get('mode') : 'city'
   const trip = mode === 'trip'
   const setMode = useCallback((next) => {
     setParams((p) => {
       const out = new URLSearchParams(p)
-      if (next === 'trip') out.set('mode', 'trip')
+      if (next === 'trip' || next === 'bus') out.set('mode', next)
       else out.delete('mode')
       return out
     }, { replace: true })
