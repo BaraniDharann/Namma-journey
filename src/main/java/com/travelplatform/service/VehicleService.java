@@ -32,6 +32,9 @@ public class VehicleService {
     private final FileStorageService files;
     private final OwnerScope ownerScope = new OwnerScope();
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private UnscopedLookups lookups;
+
     public VehicleService(VehicleRepository vehicles, FileStorageService files) {
         this.vehicles = vehicles;
         this.files = files;
@@ -102,9 +105,10 @@ public class VehicleService {
             if (!PLATE.matcher(plate).matches()) {
                 throw new IllegalArgumentException("Registration number looks wrong. Use the number plate, e.g. KA 01 AB 1234");
             }
-            vehicles.findByRegistrationKey(plate)
-                    .filter(other -> v.getId() == null || !v.getId().equals(other.getId()))
-                    .ifPresent(other -> {
+            // Through UnscopedLookups: the row filter hides other owners' plates from this owner.
+            (lookups != null ? lookups.vehiclePlateHolder(plate) : vehicles.findByRegistrationKey(plate).map(Vehicle::getId))
+                    .filter(otherId -> v.getId() == null || !v.getId().equals(otherId))
+                    .ifPresent(otherId -> {
                         throw new IllegalArgumentException("Registration number already added");
                     });
             v.setRegistrationNumber(plate);
