@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
-import { getDailyRevenue, getMonthlyRevenue, getMonthlyRevenueSeries, getYearlyRevenue, setPricing, setHourlyPricing, getCurrentPricing, getOwnerBookings, getOwnerDrivers } from '../../utils/api'
-import { useAuth } from '../../context/AuthContext'
-import CityFaresPanel from '../../components/owner/CityFaresPanel'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
+import { getDailyRevenue, getMonthlyRevenue, getMonthlyRevenueSeries, getYearlyRevenue, getOwnerBookings, getOwnerDrivers } from '../../utils/api'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { AreaChart, BarChart, Donut } from '../../components/dash/charts'
@@ -10,21 +9,6 @@ import { inr, shortPlace, STATUS_META } from '../../dash/metrics'
 // Lazy-load heavy libs on first download
 const getJsPDF = () => Promise.all([import('jspdf'), import('jspdf-autotable')]).then(([m]) => m.default)
 const getXLSX = () => import('xlsx')
-
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -132,17 +116,9 @@ async function downloadPDF(title, subtitle, headers, rows, filename, summaryInfo
 }
 
 export default function OwnerRevenue() {
-  const { user } = useAuth()
   const [tab, setTab] = useState('monthly')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [pricing, setPricingData] = useState(null)
-  const [newPrice, setNewPrice] = useState('')
-  const [newHourlyPrice, setNewHourlyPrice] = useState('')
-  const [priceLoading, setPriceLoading] = useState(false)
-  const [priceSuccess, setPriceSuccess] = useState(false)
-  const [hourlyPriceLoading, setHourlyPriceLoading] = useState(false)
-  const [hourlyPriceSuccess, setHourlyPriceSuccess] = useState(false)
   const [monthlyBars, setMonthlyBars] = useState(Array(12).fill(0))
   const [allBookings, setAllBookings] = useState([])
   const [drivers, setDrivers] = useState([])
@@ -157,7 +133,6 @@ export default function OwnerRevenue() {
   })
 
   useEffect(() => {
-    getCurrentPricing().then(r => setPricingData(r.data)).catch(() => {})
     getOwnerBookings().then(r => setAllBookings(r.data || [])).catch(() => {})
     getOwnerDrivers().then(r => setDrivers(r.data || [])).catch(() => {})
   }, [])
@@ -194,30 +169,6 @@ export default function OwnerRevenue() {
     }
     fetchBars()
   }, [params.year])
-
-  const handleSetPrice = async () => {
-    if (!newPrice) return
-    setPriceLoading(true)
-    try {
-      await setPricing(Number(newPrice), user.userId)
-      setPriceSuccess(true)
-      getCurrentPricing().then(r => setPricingData(r.data)).catch(() => {})
-      setTimeout(() => setPriceSuccess(false), 3000)
-    } catch { /* ignore */ }
-    setPriceLoading(false)
-  }
-
-  const handleSetHourlyPrice = async () => {
-    if (!newHourlyPrice) return
-    setHourlyPriceLoading(true)
-    try {
-      await setHourlyPricing(Number(newHourlyPrice), user.userId)
-      setHourlyPriceSuccess(true)
-      getCurrentPricing().then(r => setPricingData(r.data)).catch(() => {})
-      setTimeout(() => setHourlyPriceSuccess(false), 3000)
-    } catch { /* ignore */ }
-    setHourlyPriceLoading(false)
-  }
 
   const yearOptions = []
   for (let y = 2023; y <= currentYear; y++) yearOptions.push(y)
@@ -337,14 +288,13 @@ export default function OwnerRevenue() {
     setParams(p => ({ ...p, month: i + 1 }))
   }
 
-  const rate = (v) => (v ? `₹${Number(v).toLocaleString('en-IN')}` : '—')
   const statusSlices = ['COMPLETED', 'STARTED', 'CONFIRMED', 'PENDING', 'CANCELLED']
     .filter(k => statusCounts[k] > 0)
     .map(k => [STATUS_META[k].label, statusCounts[k], STATUS_META[k].slot])
   const toggleClass = (on) => (on ? 'pc-btn pc-btn-sm' : 'pc-btn pc-btn-ghost pc-btn-sm')
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       <PageHead title="Revenue Analytics" sub="Track earnings, view reports and download data" />
 
       <div className="pc-grid">
@@ -354,8 +304,6 @@ export default function OwnerRevenue() {
             { icon: 'calendar', label: 'Total Bookings', value: allBookings.length.toLocaleString('en-IN'), sub: `${statusCounts.PENDING} pending · ${statusCounts.CONFIRMED} confirmed` },
             { icon: 'check', label: 'Completed Trips', value: statusCounts.COMPLETED.toLocaleString('en-IN'), sub: `${statusCounts.CANCELLED} cancelled` },
             { icon: 'wallet', label: `${params.year} Revenue`, value: inr(totalYearRevenue), sub: 'all months this year' },
-            { icon: 'route', label: 'Price/km', value: rate(pricing?.pricePerKm), sub: 'current rate' },
-            { icon: 'clock', label: 'Price/hour', value: rate(pricing?.pricePerHour), sub: 'current rate' },
           ]}
         />
 
@@ -384,7 +332,7 @@ export default function OwnerRevenue() {
 
         {/* Monthly Breakdown */}
         <Panel
-          span={8}
+          span={12}
           title={`Monthly Breakdown — ${params.year}`}
           action={(
             <div className="pc-chips" role="group" aria-label="Revenue period" style={{ gap: 4 }}>
@@ -410,34 +358,6 @@ export default function OwnerRevenue() {
           )}
           {loading && <div style={{ marginTop: 16 }}><Skeleton rows={2} /></div>}
         </Panel>
-
-        {/* Pricing Config */}
-        <Panel span={4} title="Trip pricing">
-          <div className="pc-rows">
-            <div style={{ padding: '4px 0 14px' }}>
-              <div style={{ fontSize: 12, color: 'var(--pc-muted)', fontWeight: 700, marginBottom: 4 }}>Current Price/km</div>
-              <div className="pc-figure" style={{ fontSize: 24, color: 'var(--pc-ink)', marginBottom: 10 }}>{rate(pricing?.pricePerKm)}</div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input aria-label="New price per km" className="input-field" style={{ flex: 1, minWidth: 0 }} type="number" placeholder="New price/km" value={newPrice} onChange={e => setNewPrice(e.target.value)} />
-                <button type="button" className={priceSuccess ? 'pc-btn pc-btn-teal' : 'pc-btn'} onClick={handleSetPrice} disabled={priceLoading || !newPrice}>
-                  {priceLoading ? '...' : priceSuccess ? <><Icon name="check" size={16} />Saved</> : 'Set'}
-                </button>
-              </div>
-            </div>
-            <div style={{ padding: '14px 0 2px', borderTop: '1px solid var(--pc-line)' }}>
-              <div style={{ fontSize: 12, color: 'var(--pc-muted)', fontWeight: 700, marginBottom: 4 }}>Current Price/hour</div>
-              <div className="pc-figure" style={{ fontSize: 24, color: 'var(--pc-ink)', marginBottom: 10 }}>{rate(pricing?.pricePerHour)}</div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input aria-label="New price per hour" className="input-field" style={{ flex: 1, minWidth: 0 }} type="number" placeholder="New price/hour" value={newHourlyPrice} onChange={e => setNewHourlyPrice(e.target.value)} />
-                <button type="button" className={hourlyPriceSuccess ? 'pc-btn pc-btn-teal' : 'pc-btn'} onClick={handleSetHourlyPrice} disabled={hourlyPriceLoading || !newHourlyPrice}>
-                  {hourlyPriceLoading ? '...' : hourlyPriceSuccess ? <><Icon name="check" size={16} />Saved</> : 'Set'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </Panel>
-
-        <CityFaresPanel span={12} />
 
         {/* Full Report Table + Download */}
         <Panel span={12} pad={false} title="Complete Trip Report" meta={`${filteredBookings.length} trips found`}>

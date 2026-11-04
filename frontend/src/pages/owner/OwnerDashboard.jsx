@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
 import { useAuth } from '../../context/AuthContext'
 import {
   getOwnerBookings, getPendingPayments, getAllReviews, getMonthlyRevenue, getMonthlyRevenueSeries, getOwnerDrivers,
@@ -13,21 +14,6 @@ import {
   inr, shortPlace, statusSegments, topRoutes, bookingHeatmap, fleetBusy, waitingForDriver, monthSeries, pctChange,
   WEEKDAYS, TIME_BANDS,
 } from '../../dash/metrics'
-
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
 
 const greeting = (d = new Date()) => (d.getHours() < 12 ? 'Good morning' : d.getHours() < 17 ? 'Good afternoon' : 'Good evening')
 const longDate = (d = new Date()) => d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -109,7 +95,7 @@ export default function OwnerDashboard() {
     : <><span className={m.change >= 0 ? 'pc-up' : 'pc-down'}>{m.change >= 0 ? '▲' : '▼'} {Math.abs(m.change).toFixed(1)}%</span> vs last month</>
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       <PageHead title={user?.name ? `${greeting()}, ${String(user.name).trim().split(/\s+/)[0]}` : greeting()} sub={`${longDate()} · ${m.fleet.busy} of ${m.fleet.total} drivers out on a trip`}>
         <Link to="/owner/revenue" className="pc-btn pc-btn-ghost"><Icon name="chart" />Revenue report</Link>
         <Link to="/owner/drivers" className="pc-btn"><Icon name="plus" />Add driver</Link>

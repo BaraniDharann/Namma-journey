@@ -1,26 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
 import Pagination, { usePagination } from '../../components/Pagination'
-import { getPendingPayments, verifyPayment } from '../../utils/api'
+import { getPendingPayments, getPendingCityPayments, verifyPayment } from '../../utils/api'
+import useOwnerMe from '../../hooks/useOwnerMe'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, Empty, Skeleton } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
 import { useCelebrate } from '../../components/celebrate/Celebration'
-
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
 
 const mono = { fontFamily: 'monospace', fontSize: 12, color: 'var(--pc-ink-2)' }
 
@@ -30,16 +17,19 @@ export default function OwnerPayments() {
   const [loading, setLoading] = useState(true)
   const [verifying, setVerifying] = useState(null)
   const [verified, setVerified] = useState([])
+  // The platform owner also confirms City-ride UPI payments; other owners only see their Trips.
+  const me = useOwnerMe()
+  const [scope, setScope] = useState('trips')
 
   const load = async () => {
     try {
-      const res = await getPendingPayments()
+      const res = scope === 'city' ? await getPendingCityPayments() : await getPendingPayments()
       setPayments(res.data || [])
     } catch { /* ignore */ }
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { setLoading(true); load() }, [scope]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleVerify = async (paymentId) => {
     setVerifying(paymentId)
@@ -58,8 +48,14 @@ export default function OwnerPayments() {
   const totalPending = payments.reduce((s, p) => s + (p.amount || 0), 0)
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       <PageHead title="Payments" sub="Verify and manage payments" />
+      {me?.platform && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button type="button" className={`pc-btn pc-btn-sm ${scope === 'trips' ? 'pc-btn-teal' : ''}`} onClick={() => setScope('trips')}>My Trips</button>
+          <button type="button" className={`pc-btn pc-btn-sm ${scope === 'city' ? 'pc-btn-teal' : ''}`} onClick={() => setScope('city')}>City rides</button>
+        </div>
+      )}
 
       <div className="pc-grid">
         <SummaryStrip

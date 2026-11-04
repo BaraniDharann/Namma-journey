@@ -1,69 +1,28 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
 import Pagination, { usePagination } from '../../components/Pagination'
-import { getOwnerBookings, assignDriver, getDriverTripPhoto } from '../../utils/api'
-import { modeLabel, vehicleIcon, vehicleLabel } from '../../dash/vehicles'
+import { getOwnerBookings, getCityRides, getDriverTripPhoto } from '../../utils/api'
+import useOwnerMe from '../../hooks/useOwnerMe'
+import { categoryLabel } from '../../utils/carCategories'
+import AssignDriverModal from '../../components/owner/AssignDriverModal'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
-
 const FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']
 const FILTER_LABEL = { ALL: 'All', PENDING: 'Pending', CONFIRMED: 'Confirmed', COMPLETED: 'Completed', CANCELLED: 'Cancelled' }
 
 const muted = { fontSize: 12, color: 'var(--pc-muted)' }
+// A MANUAL owner's new Trip, or one AUTO found no free driver and car for.
+const needsDriver = (b) => b.status === 'PENDING' && !b.driverId
 
 function ModalHead({ id, title, sub }) {
   return (
     <div style={{ padding: '22px 24px 14px', borderBottom: '1px solid var(--pc-line)' }}>
       <h3 id={id} style={{ fontWeight: 700, fontSize: 18, color: 'var(--pc-ink)', marginBottom: 4 }}>{title}</h3>
       <p style={{ fontSize: 13, color: 'var(--pc-ink-2)' }}>{sub}</p>
-    </div>
-  )
-}
-
-function AssignModal({ booking, onClose, onAssign }) {
-  const [driverId, setDriverId] = useState('')
-  const [loading, setLoading] = useState(false)
-  const handleAssign = async () => {
-    if (!driverId) return
-    setLoading(true)
-    await onAssign(booking.id, Number(driverId))
-    setLoading(false)
-    onClose()
-  }
-  return (
-    <div className="modal-overlay">
-      <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="assign-driver-title" style={{ overflow: 'hidden', padding: 0 }}>
-        <ModalHead id="assign-driver-title" title="Assign Driver" sub={`${modeLabel(booking)} · needs a ${vehicleLabel(booking.vehicleType).toLowerCase()} · ${booking.fromPlace} → ${booking.toPlace}`} />
-        <div style={{ padding: 24 }}>
-          <div style={{ marginBottom: 20 }}>
-            <label htmlFor="assign-driver-id" style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }}>Driver ID</label>
-            <input id="assign-driver-id" className="input-field" placeholder="Enter driver ID" value={driverId} onChange={e => setDriverId(e.target.value)} type="number" />
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button type="button" onClick={onClose} className="pc-btn pc-btn-ghost" style={{ flex: 1 }}>Cancel</button>
-            <button type="button" onClick={handleAssign} disabled={loading || !driverId} className="pc-btn" style={{ flex: 1 }}>
-              <Icon name="user" />{loading ? 'Assigning...' : 'Assign Driver'}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
@@ -116,49 +75,57 @@ export default function OwnerBookings() {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('ALL')
-  const [mode, setMode] = useState('ALL')
+  const [needsDriverOnly, setNeedsDriverOnly] = useState(false)
   const [assignBooking, setAssignBooking] = useState(null)
   const [search, setSearch] = useState('')
   const [photoBookingId, setPhotoBookingId] = useState(null)
 
+  // The platform owner can also look at City rides (read-only here: independent drivers take them).
+  const me = useOwnerMe()
+  const [scope, setScope] = useState('trips')
+
   const load = async () => {
     try {
-      const res = await getOwnerBookings()
+      const res = scope === 'city' ? await getCityRides() : await getOwnerBookings()
       setBookings(res.data || [])
     } catch { /* ignore */ }
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { setLoading(true); load() }, [scope]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = bookings
     .filter(b => filter === 'ALL' || b.status === filter)
-    .filter(b => mode === 'ALL' || (b.serviceMode || 'TRIP') === mode)
+    .filter(b => !needsDriverOnly || needsDriver(b))
     .filter(b => !search || b.userName?.toLowerCase().includes(search.toLowerCase()) || b.fromPlace?.toLowerCase().includes(search.toLowerCase()) || b.toPlace?.toLowerCase().includes(search.toLowerCase()))
 
   const { currentPage, totalPages, paginatedItems, setCurrentPage } = usePagination(filtered, 10)
 
   useEffect(() => { setCurrentPage(1) }, [search])
 
-  const handleAssign = async (bookingId, driverId) => {
-    try {
-      await assignDriver(bookingId, driverId)
-      load()
-      celebrate({ title: 'Driver assigned', message: `Driver #${driverId} is on this trip. The traveller will see it in their bookings.` })
-    } catch { /* ignore */ }
+  const handleAssigned = (_res, driver) => {
+    setAssignBooking(null)
+    load()
+    celebrate({ title: 'Driver assigned', message: `${driver?.name || 'Your driver'} is on this trip. The traveller will see it in their bookings.` })
   }
 
-  const waiting = bookings.filter(b => b.status === 'PENDING' && !b.driverId).length
+  const waiting = bookings.filter(needsDriver).length
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
-      {assignBooking && <AssignModal booking={assignBooking} onClose={() => setAssignBooking(null)} onAssign={handleAssign} />}
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
+      {assignBooking && <AssignDriverModal booking={assignBooking} onClose={() => setAssignBooking(null)} onAssigned={handleAssigned} />}
       {photoBookingId && <DriverPhotoModal bookingId={photoBookingId} onClose={() => setPhotoBookingId(null)} />}
 
       <PageHead
         title="All Bookings"
         sub={`${bookings.length} total bookings${waiting ? ` · ${waiting} waiting for a driver` : ''}`}
       />
+      {me?.platform && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button type="button" className={`pc-btn pc-btn-sm ${scope === 'trips' ? 'pc-btn-teal' : ''}`} onClick={() => setScope('trips')}>My Trips</button>
+          <button type="button" className={`pc-btn pc-btn-sm ${scope === 'city' ? 'pc-btn-teal' : ''}`} onClick={() => setScope('city')}>City rides</button>
+        </div>
+      )}
 
       <div className="pc-grid">
         <Panel span={12}>
@@ -167,18 +134,13 @@ export default function OwnerBookings() {
               <span aria-hidden="true" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--pc-muted)', display: 'flex' }}><Icon name="search" size={16} /></span>
               <input className="input-field" aria-label="Search bookings" style={{ width: '100%', paddingLeft: 38 }} placeholder="Search by customer, route..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <div className="pc-chips" role="group" aria-label="Filter by City or Trip">
-              {[['ALL', 'All'], ['CITY', 'City'], ['TRIP', 'Trips']].map(([m, text]) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={mode === m}
-                  onClick={() => { setMode(m); setCurrentPage(1) }}
-                  className="pc-chip"
-                  style={{ border: 'none', cursor: 'pointer', ...(mode === m ? { background: 'var(--pc-brand-deep)', color: '#fff' } : {}) }}
-                >{text}</button>
-              ))}
-            </div>
+            <button
+              type="button"
+              aria-pressed={needsDriverOnly}
+              onClick={() => { setNeedsDriverOnly((on) => !on); setCurrentPage(1) }}
+              className="pc-chip"
+              style={{ border: 'none', cursor: 'pointer', ...(needsDriverOnly ? { background: 'var(--pc-brand-deep)', color: '#fff' } : {}) }}
+            >Needs a driver{waiting ? ` (${waiting})` : ''}</button>
             <div className="pc-chips" role="group" aria-label="Filter by status">
               {FILTERS.map(f => (
                 <button
@@ -212,20 +174,23 @@ export default function OwnerBookings() {
                         <td><div className="pc-row-title">{b.userName}</div><div style={muted}>{b.userPhone}</div></td>
                         <td><div style={{ fontSize: 13, color: 'var(--pc-ink)' }}>{b.fromPlace}</div><div style={muted}>→ {b.toPlace}</div></td>
                         <td style={{ whiteSpace: 'nowrap' }}>{b.fromDate}</td>
-                        <td>{b.serviceMode === 'CITY'
-                          ? <span className="pc-chip" style={{ whiteSpace: 'nowrap' }}><Icon name={vehicleIcon(b.vehicleType)} size={13} />City · {vehicleLabel(b.vehicleType)}</span>
-                          : b.bookingType === 'HOUR_BASED'
-                          ? <span className="pc-chip" style={{ whiteSpace: 'nowrap' }}><Icon name="clock" size={13} />{b.bookingHours}h</span>
-                          : <span className="pc-chip" style={{ whiteSpace: 'nowrap' }}><Icon name="route" size={13} />KM</span>}</td>
+                        <td>
+                          {b.bookingType === 'HOUR_BASED'
+                            ? <span className="pc-chip" style={{ whiteSpace: 'nowrap' }}><Icon name="clock" size={13} />{b.bookingHours}h</span>
+                            : <span className="pc-chip" style={{ whiteSpace: 'nowrap' }}><Icon name="route" size={13} />KM</span>}
+                          {b.carCategory && <div style={{ ...muted, marginTop: 4, whiteSpace: 'nowrap' }}>{categoryLabel(b.carCategory)}</div>}
+                        </td>
                         <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--pc-ink)', whiteSpace: 'nowrap' }}>{inr(b.totalAmount)}</td>
-                        <td>{b.driverId ? `#${b.driverId}` : <span style={{ color: 'var(--pc-muted)' }}>Unassigned</span>}</td>
+                        <td>{b.driverId ? `#${b.driverId}`
+                          : needsDriver(b) ? <span className="pc-pill pc-pill-wait" style={{ whiteSpace: 'nowrap' }}>Needs a driver</span>
+                          : <span style={{ color: 'var(--pc-muted)' }}>Unassigned</span>}</td>
                         <td>{(b.status === 'STARTED' || b.status === 'COMPLETED') && b.driverId ? (
                           <button type="button" onClick={() => setPhotoBookingId(b.bookingId || b.id)} className="pc-btn pc-btn-ghost pc-btn-sm"><Icon name="camera" size={14} />View</button>
                         ) : <span style={{ color: 'var(--pc-muted)' }}>—</span>}</td>
                         <td><StatusPill status={b.status} /></td>
                         <td>{b.status === 'PENDING' && b.advanceDue ? (
                           <span style={{ fontSize: 12, color: 'var(--pc-muted)', whiteSpace: 'nowrap' }}>Awaiting advance</span>
-                        ) : b.status === 'PENDING' && !b.driverId && (
+                        ) : scope === 'trips' && needsDriver(b) && (
                           <button type="button" onClick={() => setAssignBooking(b)} className="pc-btn pc-btn-sm">Assign</button>
                         )}</td>
                       </tr>

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getNotifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } from '../utils/api'
+import useOwnerMe from '../hooks/useOwnerMe'
+import { visibleNav } from './owner/ownerNav'
 import Icon, { navIcon, navTint } from './dash/Icon'
 import { TipLayer } from './dash/ui'
 import ApplicationGate from './driver/ApplicationGate'
@@ -34,7 +36,7 @@ const ROLE_LABEL = { ROLE_USER: 'Traveller', ROLE_DRIVER: 'Driver', ROLE_OWNER: 
  * line icons (mapped from each page's routes, so pages keep passing their nav items as is),
  * a top bar with notifications, and a drawer on narrow screens.
  */
-export default function DashboardLayout({ children, navItems, role }) {
+export default function DashboardLayout({ children, navItems: allNavItems, role }) {
   const { logout, user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
@@ -43,6 +45,10 @@ export default function DashboardLayout({ children, navItems, role }) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
+
+  // Platform screens (City rides, independent drivers) are for NJO-0001 only; other owners never see them.
+  const owner = useOwnerMe(role === 'ROLE_OWNER')
+  const navItems = role === 'ROLE_OWNER' ? visibleNav(allNavItems, !!owner?.platform) : allNavItems
 
   const roleLabel = ROLE_LABEL[role] || 'Traveller'
   const displayName = user?.name || user?.email || roleLabel
@@ -54,7 +60,7 @@ export default function DashboardLayout({ children, navItems, role }) {
     // Admins have no notification feed; their alerts arrive by email.
     if (!user?.userId || !user?.role || user.role === 'ROLE_ADMIN') return
     try {
-      const recipientId = user.role === 'ROLE_OWNER' ? 'owner' : String(user.userId)
+      const recipientId = String(user.userId)
       const [notifRes, countRes] = await Promise.all([
         getNotifications(recipientId, user.role),
         getUnreadCount(recipientId, user.role),
@@ -107,7 +113,7 @@ export default function DashboardLayout({ children, navItems, role }) {
   const handleMarkAllRead = async () => {
     if (!user?.userId || !user?.role) return
     try {
-      const recipientId = user.role === 'ROLE_OWNER' ? 'owner' : String(user.userId)
+      const recipientId = String(user.userId)
       await markAllNotificationsAsRead(recipientId, user.role)
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
       setUnreadCount(0)
