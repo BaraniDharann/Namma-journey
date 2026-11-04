@@ -118,6 +118,10 @@ export function invalidateCache(urlPattern) {
   }
 }
 
+// Everything cached belongs to whoever was signed in: cleared on login and logout, so the next
+// account in this tab never sees the last one's bookings, drivers or /owner/me.
+export const clearApiCache = () => invalidateCache('')
+
 // --- Debounce utility ---
 const debounceTimers = new Map()
 function debouncedGet(url, delay = 300) {

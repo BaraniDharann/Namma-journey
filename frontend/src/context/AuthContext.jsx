@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { logoutEverywhere } from '../utils/api'
+import { logoutEverywhere, clearApiCache } from '../utils/api'
 import { clearVerificationCache } from '../components/driver/gateView'
 
 const AuthContext = createContext(null)
@@ -79,6 +79,7 @@ export function AuthProvider({ children }) {
     if (!authData?.token || !authData?.role) {
       throw new Error('Login response missing token or role')
     }
+    clearApiCache()
     const userData = {
       userId: authData.userId,
       role: authData.role,
@@ -104,6 +105,7 @@ export function AuthProvider({ children }) {
     // Fire-and-forget: a network error must never keep someone signed in on this device.
     logoutEverywhere(token).catch(() => {})
     clearVerificationCache()
+    clearApiCache()
     setToken(null)
     setUser(null)
     safeStorage(() => localStorage.removeItem('nj_token'))
