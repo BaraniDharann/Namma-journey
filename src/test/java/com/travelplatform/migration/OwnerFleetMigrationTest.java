@@ -235,4 +235,31 @@ class OwnerFleetMigrationTest {
             assertEquals(owner, id(s, "SELECT owner_id FROM payments"));
         }
     }
+
+    @Test
+    @DisplayName("a fleet bike or auto gets no car record: only cars become vehicles that Trips can use")
+    void onlyCarsBecomeVehicles() throws SQLException {
+        flyway("26").migrate();
+        long bike;
+        try (Connection c = connect(); Statement s = c.createStatement()) {
+            id(s, "INSERT INTO owners (email, password, role, created_at, owner_code, status) "
+                    + "VALUES ('boss@x.com', 'h', 'ROLE_OWNER', now(), 'NJO-0001', 'APPROVED') RETURNING id");
+            bike = id(s, "INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status, "
+                    + "first_login, email_verified, token_version, created_at, vehicle_type, serves_trip, serves_city, "
+                    + "fleet, vehicle_number, vehicle_seats) VALUES ('Bike', '9000000021', 'x', 'L-21', '111100000021', "
+                    + "'ROLE_DRIVER', 'ACTIVE', true, true, 0, now(), 'BIKE', false, true, 'OWNER_FLEET', 'KA01B1', 1) RETURNING id");
+        }
+
+        flyway(null).migrate();
+
+        try (Connection c = connect(); Statement s = c.createStatement()) {
+            assertEquals(0, id(s, "SELECT count(*) FROM vehicles"));
+            try (ResultSet rs = s.executeQuery("SELECT default_vehicle_id, serves_city FROM drivers WHERE id = " + bike)) {
+                assertTrue(rs.next());
+                rs.getLong(1);
+                assertTrue(rs.wasNull());
+                assertFalse(rs.getBoolean(2));
+            }
+        }
+    }
 }
