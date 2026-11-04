@@ -43,12 +43,14 @@ public class OwnerController {
     private final com.travelplatform.service.DriverDuesService duesService;
     private final com.travelplatform.service.TripRateService tripRateService;
     private final com.travelplatform.config.OwnerScope ownerScope;
+    private final com.travelplatform.service.OwnerDriverReviewService ownerDriverReviewService;
 
     /** Self-signed-up drivers waiting for (or past) review; oldest first. */
     @GetMapping("/driver-applications")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<DriverDetailsResponse>> driverApplications(
             @RequestParam(required = false) com.travelplatform.entity.Driver.Verification status) {
+        ownerScope.requirePlatform();
         return ResponseEntity.ok(driverVerificationService.applications(status));
     }
 
@@ -56,7 +58,44 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<DriverDetailsResponse> approveDriver(
             @PathVariable Long id, org.springframework.security.core.Authentication authentication) {
+        // My own driver: my checklist decides. An independent driver: the platform's review.
+        if (ownerDriverReviewService.isMine(id)) {
+            return ResponseEntity.ok(ownerService.mapToDriverDetails(ownerDriverReviewService.approve(id)));
+        }
+        ownerScope.requirePlatform();
         return ResponseEntity.ok(driverVerificationService.approve(id, reviewerId(authentication)));
+    }
+
+    /** The owner's licence (Sarathi) and RC (Vahan) checks for one of their drivers. */
+    @GetMapping("/drivers/{id}/checks")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<com.travelplatform.entity.DriverVerificationCheck>> driverChecks(@PathVariable Long id) {
+        return ResponseEntity.ok(ownerDriverReviewService.checksFor(id));
+    }
+
+    /** Records one check: {result: VERIFIED|FAILED, note}. A failed check needs a note. */
+    @PutMapping("/drivers/{id}/checks/{type}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.entity.DriverVerificationCheck> recordDriverCheck(
+            @PathVariable Long id, @PathVariable String type, @RequestBody Map<String, String> body) {
+        com.travelplatform.entity.DriverVerificationCheck.Type t;
+        com.travelplatform.entity.DriverVerificationCheck.Result r;
+        try {
+            t = com.travelplatform.entity.DriverVerificationCheck.Type.valueOf(type.trim().toUpperCase(java.util.Locale.ROOT));
+            r = com.travelplatform.entity.DriverVerificationCheck.Result.valueOf(
+                    String.valueOf(body == null ? null : body.get("result")).trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Check LICENCE or RC, with result VERIFIED or FAILED");
+        }
+        return ResponseEntity.ok(ownerDriverReviewService.recordCheck(id, t, r, body.get("note")));
+    }
+
+    /** Sets a driver's usual car: {vehicleId}. */
+    @PutMapping("/drivers/{id}/default-vehicle")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<DriverDetailsResponse> setDefaultVehicle(@PathVariable Long id, @RequestBody Map<String, Long> body) {
+        adminDriverService.setDefaultVehicle(id, body == null ? null : body.get("vehicleId"));
+        return ResponseEntity.ok(ownerService.getDriverById(ownerScope.ownerId(), ownerScope.isPlatform(), id));
     }
 
     @PostMapping("/drivers/{id}/reject")
@@ -67,6 +106,10 @@ public class OwnerController {
         if (body == null) {
             throw new IllegalArgumentException("Give a reason of 5 to 500 characters");
         }
+        if (ownerDriverReviewService.isMine(id)) {
+            return ResponseEntity.ok(ownerService.mapToDriverDetails(ownerDriverReviewService.reject(id, body.get("reason"))));
+        }
+        ownerScope.requirePlatform();
         return ResponseEntity.ok(driverVerificationService.reject(id, body.get("reason"), reviewerId(authentication)));
     }
 
@@ -131,7 +174,7 @@ public class OwnerController {
             @PathVariable Long driverId,
             @RequestBody com.travelplatform.dto.VehicleRequest vehicle) {
         adminDriverService.updateVehicle(driverId, vehicle);
-        return ResponseEntity.ok(ownerService.getDriverById(driverId));
+        return ResponseEntity.ok(ownerService.getDriverById(ownerScope.ownerId(), ownerScope.isPlatform(), driverId));
     }
     
     @GetMapping("/bookings")
@@ -224,12 +267,13 @@ public class OwnerController {
             @RequestParam(required = false) Boolean vehicleAc,
             @RequestParam(required = false) Integer vehicleSeats,
             @RequestParam(required = false) Boolean servesCity,
-            @RequestParam(required = false) Boolean servesTrip) {
+            @RequestParam(required = false) Boolean servesTrip,
+            @RequestParam(required = false) Long defaultVehicleId) {
         DriverCreationResponse response = adminDriverService.createDriver(
             name, mobile, email, licenseNumber, aadhaarNumber,
             photo, licensePhoto, aadhaarPhoto,
             new com.travelplatform.dto.VehicleRequest(vehicleType, vehicleNumber, vehicleModel,
-                    vehicleAc, vehicleSeats, servesCity, servesTrip));
+                    vehicleAc, vehicleSeats, servesCity, servesTrip), defaultVehicleId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
     
@@ -320,13 +364,21 @@ public class OwnerController {
     @GetMapping("/drivers")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<DriverDetailsResponse>> getAllDrivers() {
-        return ResponseEntity.ok(ownerService.getAllDrivers());
+        return ResponseEntity.ok(ownerService.getAllDrivers(ownerScope.ownerId()));
+    }
+
+    /** Independent (self-signup) City-ride drivers: a platform screen. */
+    @GetMapping("/platform/drivers")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<DriverDetailsResponse>> getIndependentDrivers() {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(ownerService.getIndependentDrivers());
     }
 
     @GetMapping("/drivers/{driverId}")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<DriverDetailsResponse> getDriverById(@PathVariable Long driverId) {
-        return ResponseEntity.ok(ownerService.getDriverById(driverId));
+        return ResponseEntity.ok(ownerService.getDriverById(ownerScope.ownerId(), ownerScope.isPlatform(), driverId));
     }
 
     @DeleteMapping("/drivers/{driverId}")
@@ -346,6 +398,8 @@ public class OwnerController {
     @PostMapping("/drivers/{driverId}/telegram-link")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, String>> createTelegramLink(@PathVariable Long driverId) {
+        // Only for a driver this owner may see (their own, or an independent one for the platform).
+        ownerService.getDriverById(ownerScope.ownerId(), ownerScope.isPlatform(), driverId);
         return ResponseEntity.ok(Map.of(
                 "linkUrl", telegramLinkService.createLinkUrl(driverId),
                 "expiresInHours", "24"));

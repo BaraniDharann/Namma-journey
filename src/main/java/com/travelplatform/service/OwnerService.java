@@ -189,17 +189,31 @@ public class OwnerService {
         return response;
     }
     
-    @Cacheable(value = "allDrivers")
-    public List<DriverDetailsResponse> getAllDrivers() {
-        return driverRepository.findAll().stream()
+    /** One owner's fleet drivers (their Drivers screen). Cached per owner: one list never serves another. */
+    @Cacheable(value = "allDrivers", key = "#ownerId")
+    public List<DriverDetailsResponse> getAllDrivers(Long ownerId) {
+        return driverRepository.findByOwnerIdAndFleetOrderByCreatedAtDesc(ownerId, Driver.Fleet.OWNER_FLEET).stream()
                 .map(this::mapToDriverDetails)
                 .collect(Collectors.toList());
     }
 
-    @Cacheable(value = "driverById", key = "#driverId")
-    public DriverDetailsResponse getDriverById(Long driverId) {
+    /** Independent (self-signup) drivers: the platform's City-ride drivers. */
+    @Cacheable(value = "allDrivers", key = "'independent'")
+    public List<DriverDetailsResponse> getIndependentDrivers() {
+        return driverRepository.findByFleetOrderByCreatedAtDesc(Driver.Fleet.INDEPENDENT).stream()
+                .map(this::mapToDriverDetails)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * One driver, for the owner whose fleet it is - or for the platform owner, an independent
+     * driver. Anyone else gets "not found". Cached per owner and driver.
+     */
+    @Cacheable(value = "driverById", key = "#ownerId + ':' + #platform + ':' + #driverId")
+    public DriverDetailsResponse getDriverById(Long ownerId, boolean platform, Long driverId) {
         Driver driver = driverRepository.findById(driverId)
-                .orElseThrow(() -> new RuntimeException("Driver not found"));
+                .filter(d -> ownerId.equals(d.getOwnerId()) || (platform && d.getFleet() == Driver.Fleet.INDEPENDENT))
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Driver not found"));
         return mapToDriverDetails(driver);
     }
 

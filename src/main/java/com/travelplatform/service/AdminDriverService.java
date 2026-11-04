@@ -38,6 +38,11 @@ public class AdminDriverService {
     @Autowired(required = false)
     private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
 
+    @Autowired(required = false)
+    private com.travelplatform.repository.VehicleRepository vehicleRepository;
+
+    private final com.travelplatform.config.OwnerScope ownerScope = new com.travelplatform.config.OwnerScope();
+
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$";
 
     @Caching(evict = {
@@ -48,6 +53,25 @@ public class AdminDriverService {
             String name, String mobile, String email, String licenseNumber, String aadhaarNumber,
             MultipartFile photo, MultipartFile licensePhoto, MultipartFile aadhaarPhoto,
             com.travelplatform.dto.VehicleRequest vehicle) {
+        return createDriver(name, mobile, email, licenseNumber, aadhaarNumber, photo, licensePhoto, aadhaarPhoto,
+                vehicle, null);
+    }
+
+    /**
+     * A travels owner adds a driver to their own fleet (V27): Trips only, pending until the owner
+     * checks the licence and RC and approves (OwnerDriverReviewService), which is when the login
+     * is emailed. {@code defaultVehicleId} is the driver's usual car, one of the owner's own cars.
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "allDrivers", allEntries = true),
+            @CacheEvict(value = "driverById", allEntries = true)
+    })
+    public DriverCreationResponse createDriver(
+            String name, String mobile, String email, String licenseNumber, String aadhaarNumber,
+            MultipartFile photo, MultipartFile licensePhoto, MultipartFile aadhaarPhoto,
+            com.travelplatform.dto.VehicleRequest vehicle, Long defaultVehicleId) {
+        Long ownerId = ownerScope.ownerId();
+        requireUsableCar(ownerId, defaultVehicleId);
 
         // Checked before any file is written: a bad number plate should not leave orphaned uploads.
         Driver plateCheck = new Driver();
@@ -79,7 +103,7 @@ public class AdminDriverService {
             String aadhaarPhotoUrl = store(aadhaarPhoto, "aadhaar", stored);
             driver = persistDriver(
                     name, mobile, email, licenseNumber, aadhaarNumber,
-                    photoUrl, licensePhotoUrl, aadhaarPhotoUrl, generatedPassword, vehicle);
+                    photoUrl, licensePhotoUrl, aadhaarPhotoUrl, generatedPassword, vehicle, ownerId, defaultVehicleId);
         } catch (RuntimeException e) {
             // Identity scans must not outlive a driver that was never saved.
             for (String path : stored) {
@@ -97,21 +121,14 @@ public class AdminDriverService {
 
         // Email is @Async on EmailService, but dispatching it AFTER the DB commit means
         // a slow SMTP handshake never lengthens the API response.
-        emailService.sendDriverCredentials(
-                driver.getEmail(),
-                driver.getName(),
-                driver.getMobile(),
-                generatedPassword
-        );
-
-        log.info("Driver created with ID: {}, credentials email dispatched to: {}", driver.getId(), email);
+        log.info("Driver {} added to owner {}'s fleet, pending the owner's checks", driver.getId(), ownerId);
 
         return new DriverCreationResponse(
                 driver.getId(),
                 driver.getName(),
                 driver.getEmail(),
                 driver.getMobile(),
-                "Driver created successfully. Login credentials sent to driver's email."
+                "Driver added. Check their licence and RC, then approve them to email their login."
         );
     }
 
@@ -120,8 +137,7 @@ public class AdminDriverService {
             @CacheEvict(value = "driverById", key = "#driverId")
     })
     public void deleteDriver(Long driverId) {
-        Driver driver = driverRepository.findById(driverId)
-                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
+        Driver driver = actingOn(driverId);
 
         // Block deletion while the driver is tied to a live trip — removing them would orphan
         // an active booking (a passenger expecting this driver) with no way to reassign.
@@ -140,7 +156,7 @@ public class AdminDriverService {
     private Driver persistDriver(String name, String mobile, String email, String licenseNumber,
                                    String aadhaarNumber, String photoUrl, String licensePhotoUrl,
                                    String aadhaarPhotoUrl, String generatedPassword,
-                                   com.travelplatform.dto.VehicleRequest vehicle) {
+                                   com.travelplatform.dto.VehicleRequest vehicle, Long ownerId, Long defaultVehicleId) {
         Driver driver = new Driver();
         driver.setName(name);
         driver.setMobile(mobile);
@@ -155,8 +171,57 @@ public class AdminDriverService {
         driver.setStatus(Driver.Status.ACTIVE);
         driver.setFirstLogin(true);
         driver.setEmailVerified(false);
+        driver.setFleet(Driver.Fleet.OWNER_FLEET);
+        driver.setOwnerId(ownerId);
+        driver.setDefaultVehicleId(defaultVehicleId);
+        driver.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
+        driver.setSubmittedAt(java.time.LocalDateTime.now());
         DriverVehicles.apply(driver, vehicle);
+        // Owner-fleet drivers take Trips only, whatever the vehicle form said (drivers_fleet_no_city).
+        driver.setServesCity(false);
+        driver.setServesTrip(true);
         return driverRepository.save(driver);
+    }
+
+    /** A usual car must be one of the owner's own cars in use; none is fine. */
+    private void requireUsableCar(Long ownerId, Long vehicleId) {
+        if (vehicleId == null) {
+            return;
+        }
+        com.travelplatform.entity.Vehicle car = vehicleRepository.findById(vehicleId)
+                .filter(v -> ownerId.equals(v.getOwnerId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Car not found"));
+        if (!car.isActive()) {
+            throw new IllegalArgumentException(car.getRegistrationNumber() + " is not in use. Choose another car.");
+        }
+    }
+
+    /** Sets a driver's usual car (one of the owner's own cars in use). */
+    @Caching(evict = {
+            @CacheEvict(value = "allDrivers", allEntries = true),
+            @CacheEvict(value = "driverById", allEntries = true)
+    })
+    public Driver setDefaultVehicle(Long driverId, Long vehicleId) {
+        Long ownerId = ownerScope.ownerId();
+        Driver driver = ownFleetDriver(driverId, ownerId);
+        requireUsableCar(ownerId, vehicleId);
+        driver.setDefaultVehicleId(vehicleId);
+        return driverRepository.save(driver);
+    }
+
+    /** A driver the caller may manage: one of their own, or - for the platform owner - an independent one. */
+    private Driver actingOn(Long driverId) {
+        Long me = ownerScope.ownerId();
+        return driverRepository.findById(driverId)
+                .filter(d -> me.equals(d.getOwnerId())
+                        || (d.getFleet() == Driver.Fleet.INDEPENDENT && ownerScope.isPlatform()))
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
+    }
+
+    /** One of this owner's fleet drivers, or "not found". */
+    private Driver ownFleetDriver(Long driverId, Long ownerId) {
+        return driverRepository.findById(driverId).filter(d -> ownerId.equals(d.getOwnerId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
     }
 
     private String store(MultipartFile file, String kind, java.util.List<String> stored) {
@@ -184,8 +249,7 @@ public class AdminDriverService {
             @CacheEvict(value = "driverById", key = "#driverId")
     })
     public Driver updateVehicle(Long driverId, com.travelplatform.dto.VehicleRequest vehicle) {
-        Driver driver = driverRepository.findById(driverId)
-                .orElseThrow(() -> new ResourceNotFoundException("Driver not found with id: " + driverId));
+        Driver driver = actingOn(driverId);
         DriverVehicles.apply(driver, vehicle);
         requirePlateFree(driver.getVehicleNumber(), driverId);
         Driver saved = driverRepository.save(driver);

@@ -33,7 +33,64 @@ class AdminDriverServiceTest {
         ReflectionTestUtils.setField(service, "driverRepository", drivers);
         ReflectionTestUtils.setField(service, "fileStorageService", files);
         ReflectionTestUtils.setField(service, "passwordEncoder", new BCryptPasswordEncoder(4));
-        ReflectionTestUtils.setField(service, "emailService", mock(EmailService.class));
+        email = mock(EmailService.class);
+        ReflectionTestUtils.setField(service, "emailService", email);
+        vehicles = mock(com.travelplatform.repository.VehicleRepository.class);
+        ReflectionTestUtils.setField(service, "vehicleRepository", vehicles);
+        // Drivers are added by a travels owner, into their own fleet (V27).
+        com.travelplatform.config.OwnerScope.bind(OWNER, false);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void unbind() {
+        com.travelplatform.config.OwnerScope.clear();
+    }
+
+    private static final long OWNER = 7L;
+    private EmailService email;
+    private com.travelplatform.repository.VehicleRepository vehicles;
+
+    private void car(long id, long owner, boolean active) {
+        com.travelplatform.entity.Vehicle v = new com.travelplatform.entity.Vehicle();
+        v.setId(id);
+        v.setOwnerId(owner);
+        v.setActive(active);
+        when(vehicles.findById(id)).thenReturn(Optional.of(v));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("an owner's new driver is in their fleet, pending, Trips only, with no login emailed yet")
+    void ownerDriverStartsPending() {
+        car(500, OWNER, true);
+        when(drivers.save(any(Driver.class))).thenAnswer(i -> {
+            Driver d = i.getArgument(0);
+            d.setId(11L);
+            return d;
+        });
+
+        service.createDriver("Ravi", "9000000001", "r@x.com", "DL1", "123412341234", img, img, img, null, 500L);
+
+        org.mockito.ArgumentCaptor<Driver> saved = org.mockito.ArgumentCaptor.forClass(Driver.class);
+        verify(drivers).save(saved.capture());
+        assertEquals(OWNER, saved.getValue().getOwnerId());
+        assertEquals(Driver.Fleet.OWNER_FLEET, saved.getValue().getFleet());
+        assertEquals(Driver.Verification.UNDER_REVIEW, saved.getValue().getVerificationStatus());
+        assertFalse(saved.getValue().isServesCity());
+        assertTrue(saved.getValue().isServesTrip());
+        assertEquals(500L, saved.getValue().getDefaultVehicleId());
+        verify(email, never()).sendDriverCredentials(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("the usual car must be one of my own cars in use")
+    void defaultVehicleMustBeOwnActive() {
+        car(600, 8L, true);
+        car(501, OWNER, false);
+        assertThrows(com.travelplatform.exception.ResourceNotFoundException.class, () -> service.createDriver(
+                "Ravi", "9000000001", "r@x.com", "DL1", "123412341234", img, img, img, null, 600L));
+        assertThrows(IllegalArgumentException.class, () -> service.createDriver(
+                "Ravi", "9000000001", "r@x.com", "DL1", "123412341234", img, img, img, null, 501L));
+        verify(drivers, never()).save(any());
     }
 
     private static VehicleRequest car(String plate) {
@@ -43,6 +100,7 @@ class AdminDriverServiceTest {
     private Driver holder(long id) {
         Driver d = new Driver();
         d.setId(id);
+        d.setOwnerId(OWNER);
         return d;
     }
 
