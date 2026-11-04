@@ -141,7 +141,7 @@ public class RideSafetyService {
         if (driver.getMobile() != null) {
             text.append("📞 <b>Phone:</b> ").append(escapeHtml(driver.getMobile())).append('\n');
         }
-        String vehicle = vehicleLine(driver);
+        String vehicle = vehicleLine(driver, booking);
         if (!vehicle.isEmpty()) {
             text.append("🚗 <b>Vehicle:</b> ").append(escapeHtml(vehicle)).append('\n');
         }
@@ -636,7 +636,7 @@ public class RideSafetyService {
             if (driver.getMobile() != null) {
                 ops.append(" — ").append(escapeHtml(driver.getMobile()));
             }
-            String vehicle = vehicleLine(driver);
+            String vehicle = vehicleLine(driver, booking);
             if (!vehicle.isEmpty()) {
                 ops.append(" — ").append(escapeHtml(vehicle));
             }
@@ -692,7 +692,7 @@ public class RideSafetyService {
                     + name + " pressed SOS on a Namma Journey ride and listed you as an emergency contact.\n\n"
                     + "<b>Trip:</b> " + escapeHtml(booking.getFromPlace()) + " → " + escapeHtml(booking.getToPlace()) + "\n"
                     + (driver != null ? "<b>Driver:</b> " + escapeHtml(driver.getName())
-                            + (vehicleLine(driver).isEmpty() ? "" : " — " + escapeHtml(vehicleLine(driver))) + "\n" : "")
+                            + (vehicleLine(driver, booking).isEmpty() ? "" : " — " + escapeHtml(vehicleLine(driver, booking))) + "\n" : "")
                     + "<b>Watch live:</b> " + share + "\n"
                     + (mapLink != null ? "<b>Last position:</b> " + mapLink + "\n" : "")
                     + "\nPlease call " + name + " now. If you cannot reach them and believe they are in danger, call 112.";
@@ -798,7 +798,7 @@ public class RideSafetyService {
                             b.getFromPlace(), b.getToPlace(),
                             b.getFromLat(), b.getFromLon(), b.getToLat(), b.getToLon(),
                             d == null ? null : d.getName(),
-                            d == null ? null : vehicleLine(d),
+                            d == null ? null : vehicleLine(d, b),
                             here == null ? null : here.getLatitude(),
                             here == null ? null : here.getLongitude(),
                             here == null ? null : here.getTimestamp(),
@@ -848,11 +848,18 @@ public class RideSafetyService {
         return String.format(Locale.ROOT, "https://maps.google.com/?q=%.6f,%.6f", lat, lon);
     }
 
-    private static String vehicleLine(Driver d) {
+    /** The car the passenger should look for: the Trip's own car when the owner put one on it. */
+    private String vehicleLine(Driver d, TravelBooking booking) {
+        if (tripCars != null) {
+            return tripCars.line(d, booking);
+        }
         String model = d.getVehicleModel() == null ? "" : d.getVehicleModel().trim();
         String number = d.getVehicleNumber() == null ? "" : d.getVehicleNumber().trim();
         return (model + " " + number).trim();
     }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripCars tripCars;
 
     private static String firstName(String name) {
         if (name == null || name.isBlank()) {

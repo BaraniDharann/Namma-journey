@@ -67,6 +67,9 @@ public class UserService {
 
     // City rides: dispatch and fares. Null only in unit tests that build UserService by hand.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripCars tripCars;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DispatchService dispatchService;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -666,7 +669,9 @@ public class UserService {
             driverDetails.setMobile(driver.getMobile());
             driverDetails.setPhoto(driver.getPhoto());
             driverDetails.setLicenseNumber(driver.getLicenseNumber());
-            response.setDriver(driverDetails.withVehicle(driver));
+            // A Trip shows the car its owner put on it, which may not be the driver's own (TripCars).
+            response.setDriver(tripCars == null ? driverDetails.withVehicle(driver)
+                    : tripCars.apply(driverDetails.withVehicle(driver), booking));
         }
 
         return response.withDispatch(booking);

@@ -60,6 +60,16 @@ public class DriverDetailsResponse {
         return this;
     }
 
+    /** Replaces the vehicle with the car the owner put on this Trip (TripCars). */
+    public DriverDetailsResponse withTripCar(com.travelplatform.entity.Vehicle car) {
+        this.vehicleType = "CAR";
+        this.vehicleNumber = car.getRegistrationNumber();
+        this.vehicleModel = car.getModel();
+        this.vehicleAc = car.isAc();
+        this.vehicleSeats = car.getSeats();
+        return this;
+    }
+
     /**
      * Copies fleet and verification. The RC scan is an identity document, so the caller passes the
      * signing it uses for the licence and Aadhaar links rather than this DTO knowing about storage.

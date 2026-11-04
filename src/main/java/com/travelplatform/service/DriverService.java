@@ -33,6 +33,9 @@ public class DriverService {
     private final FileStorageService fileStorageService;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripCars tripCars;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.repository.OwnerRepository ownerRepository;
 
     /** Trip dates are Indian calendar days. Not final so tests can fix "today". */
@@ -478,7 +481,9 @@ public class DriverService {
             driverDetails.setMobile(driver.getMobile());
             driverDetails.setPhoto(driver.getPhoto());
             driverDetails.setLicenseNumber(driver.getLicenseNumber());
-            response.setDriver(driverDetails.withVehicle(driver));
+            // A Trip shows the car its owner put on it, which may not be the driver's own (TripCars).
+            response.setDriver(tripCars == null ? driverDetails.withVehicle(driver)
+                    : tripCars.apply(driverDetails.withVehicle(driver), booking));
         }
 
         return response.withDispatch(booking);
