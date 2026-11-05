@@ -31,10 +31,10 @@ const ROLES = {
 
 const ease = [0.16, 1, 0.3, 1]
 
-export default function AuthShell({ role = 'user', title, sub, children, footer }) {
+export default function AuthShell({ role = 'user', title, sub, children, footer, wide = false }) {
   const r = ROLES[role]
   return (
-    <div className={`au au-${role}`}>
+    <div className={`au au-${role}${wide ? ' au-wide' : ''}`}>
       <aside className="au-side" aria-hidden="true">
         <img src={r.photo} alt="" />
         <div className="au-side-shade" />
@@ -114,6 +114,36 @@ export function PasswordInput(props) {
         <Icon name={show ? 'eye-off' : 'eye-open'} size={18} />
       </button>
     </>
+  )
+}
+
+/**
+ * A next step that has to be seen, such as "Apply to list your travels": a full-width tinted card
+ * link with an icon, a title, a short line and an arrow, not a link hidden in grey text.
+ */
+export function CtaLink({ to, icon, title, line }) {
+  return (
+    <Link to={to} className="au-cta">
+      <span className="au-cta-ic"><Icon name={icon} size={20} /></span>
+      <span className="au-cta-txt"><b>{title}</b>{line && <small>{line}</small>}</span>
+      <Icon name="arrow" size={18} className="au-cta-go" />
+    </Link>
+  )
+}
+
+/** A numbered part of a long form, so people can see where they are and how much is left. */
+export function FormSection({ n, title, hint, children }) {
+  return (
+    <section className="au-sec" aria-labelledby={`au-sec-${n}`}>
+      <header className="au-sec-head">
+        <span className="au-sec-n" aria-hidden="true">{n}</span>
+        <span>
+          <h2 id={`au-sec-${n}`} className="au-sec-t">{title}</h2>
+          {hint && <p className="au-sec-hint">{hint}</p>}
+        </span>
+      </header>
+      {children}
+    </section>
   )
 }
 

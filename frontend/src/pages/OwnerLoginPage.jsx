@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ownerLogin, ownerForgotPassword, sendOtp } from '../utils/api'
 import { offerToSaveLogin } from '../utils/rememberLogin'
-import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
+import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton, CtaLink } from '../components/auth/AuthShell'
 
 export default function OwnerLoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
@@ -110,7 +110,8 @@ export default function OwnerLoginPage() {
 
   return (
     <AuthShell role="owner" title="Owner portal" sub="Sign in to run your fleet and bookings."
-      footer={<p className="au-sub" style={{ marginTop: 16 }}>New travels owner? <Link to="/owner/signup">Apply to list your travels</Link>. Your Owner ID and password are emailed once we approve you.</p>}>
+      footer={<CtaLink to="/owner/signup" icon="bus" title="New travels owner? Apply to list your travels"
+        line="Takes about 5 minutes. Your Owner ID and password are emailed once we approve you." />}>
       <Alert>{error}</Alert>
       <form onSubmit={handleSubmit} className="au-form">
         <Field label="Owner ID or email" icon="mail">
