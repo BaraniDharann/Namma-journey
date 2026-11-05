@@ -1,6 +1,7 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import { idempotencyHeaders } from './idempotency'
+import { shrinkFormDataImages } from './shrinkImage'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -27,9 +28,38 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Every upload (driver sign-up, document resubmission, owner sign-up, owner adding a driver,
+// end-of-trip photo) goes through here, so photos are shrunk once for all of them.
+api.interceptors.request.use(async (config) => {
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.data = await shrinkFormDataImages(config.data)
+  }
+  return config
+})
+
+// 503 = the server is overloaded (DB pool, timeouts), not "your session ended": it must never
+// clear the token. Reads are retried after Retry-After plus jitter, so a surge's clients don't
+// all come back in the same instant. Writes are not: only the caller knows if one is safe to resend.
+const BUSY_RETRIES = 2
+export function busyRetryDelayMs(retryAfter, random = Math.random) {
+  const seconds = Number.parseInt(retryAfter, 10)
+  const base = Number.isFinite(seconds) ? Math.min(Math.max(seconds, 1), 10) : 2
+  return base * 1000 + Math.floor(random() * 1000)
+}
+
 api.interceptors.response.use(
   (res) => res,
   (err) => {
+    const cfg = err.config
+    if (err.response?.status === 503 && cfg && (cfg.method || 'get').toLowerCase() === 'get'
+        && (cfg._busyRetries || 0) < BUSY_RETRIES) {
+      cfg._busyRetries = (cfg._busyRetries || 0) + 1
+      // One shared toast id: a dashboard's 30 parallel reads show one message, not 30.
+      if (!cfg._silent) toast('Server is busy, retrying...', { id: 'api-busy', duration: 4000 })
+      const h = err.response.headers
+      const delay = busyRetryDelayMs(typeof h?.get === 'function' ? h.get('retry-after') : h?.['retry-after'])
+      return new Promise((resolve) => setTimeout(resolve, delay)).then(() => api(cfg))
+    }
     if (err.response?.status === 401) {
       const isAuthRequest = err.config?.url?.includes('/auth/')
       if (!isAuthRequest) {
@@ -376,5 +406,15 @@ export const markNotificationAsRead = (notificationId) =>
 
 export const markAllNotificationsAsRead = (recipientId, role) =>
   api.put(`/notifications/read-all?recipientId=${recipientId}&role=${role}`)
+
+// The bell now polls only the count (see components/notificationPoll.js). cachedGet's short TTL
+// and in-flight dedup fold the focus + visibilitychange pair, and React StrictMode's double
+// effect, into one request. Call invalidateCache('/notifications') after marking anything read.
+export const getUnreadCountCached = (recipientId, role) =>
+  cachedGet(`/notifications/unread-count?recipientId=${recipientId}&role=${role}`, 2000, true)
+
+// Fetched when the panel opens, not on a timer. The server caps it anyway (default 50).
+export const getLatestNotifications = (recipientId, role, limit = 50) =>
+  api.get(`/notifications?recipientId=${recipientId}&role=${role}&limit=${limit}`, { _silent: true })
 
 export default api

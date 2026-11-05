@@ -49,10 +49,15 @@ services:
       METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:?Set METRICS_SCRAPE_TOKEN in .env}
       # Every request reaches the backend from the nginx container, so without this the rate
       # limiter saw one IP for all users: the 10/min login budget was shared by everybody, and
-      # one person's typos locked the whole site out of signing in. Trusting the Docker bridge
-      # ranges lets it read the real client from nginx's X-Forwarded-For (rightmost untrusted
-      # hop, see ClientIpResolver). Safe ONLY because 8080 is not reachable from outside, below.
-      RATELIMIT_TRUSTED_PROXIES: ${RATELIMIT_TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16}
+      # one person's typos locked the whole site out of signing in. Trusting the containers'
+      # range lets it read the real client from nginx's X-Forwarded-For (rightmost untrusted
+      # hop, see ClientIpResolver).
+      # Only the pinned container range (travel-network, at the bottom), not all of
+      # 172.16.0.0/12: that also covers the network's gateway, 172.30.0.1, which is where
+      # anything Docker's userland proxy forwards appears from (a request to 127.0.0.1:8080 on
+      # the host, or an IPv6 client of nginx). Trusted, such a request could send its own
+      # X-Forwarded-For and pick a fresh rate-limit bucket every time.
+      RATELIMIT_TRUSTED_PROXIES: ${RATELIMIT_TRUSTED_PROXIES:-172.30.1.0/24}
       # A fixed heap instead of the JVM's default of 1/4 of the host's RAM per JVM. During a
       # rolling deploy (scripts/deploy.sh) two backends run side by side for a minute or two;
       # uncapped, they plus Postgres could run a 2 GB server out of memory, and the kernel's OOM
@@ -61,9 +66,9 @@ services:
       # back a clean one instead of limping on, half its threads dead.
       JAVA_TOOL_OPTIONS: ${BACKEND_JAVA_OPTS:--Xms256m -Xmx512m -XX:MaxMetaspaceSize=192m -XX:+ExitOnOutOfMemoryError}
     # Loopback only: the public way in is nginx on :80, which serves /api from the same origin.
-    # Published on all interfaces, anyone could skip nginx, hit 8080 directly with a forged
-    # X-Forwarded-For, and - arriving from the Docker gateway, a trusted range - pick a fresh
-    # identity per request to walk through every rate limit.
+    # Published on all interfaces, anyone could skip nginx and hit 8080 directly. (A forged
+    # X-Forwarded-For sent that way is ignored - it arrives from the untrusted gateway - but the
+    # nginx limits would be skipped.)
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -91,6 +96,13 @@ services:
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
     ports:
       - "80:80"
+    # nginx.conf asks for 40000 descriptors per worker (worker_rlimit_nofile), and it can only
+    # raise its soft limit up to this hard limit. Recent Docker/containerd releases start
+    # containers at a 1024 soft limit, which would quietly undo the worker_connections raise.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     depends_on:
       # Wait for a backend that can serve (Dockerfile HEALTHCHECK = readiness), so the first
       # requests after "up" are not 502s while Flyway is still running.
@@ -182,3 +194,15 @@ volumes:
 networks:
   travel-network:
     driver: bridge
+    # Pinned so RATELIMIT_TRUSTED_PROXIES (backend, above) can name exactly where nginx lives.
+    # Left to Docker, the subnet is whatever pool was free when the network was first created.
+    # Containers get addresses from ip_range only; the gateway sits outside it on purpose, so
+    # traffic Docker's userland proxy relays (which appears to come from the gateway) is never
+    # trusted. Change all three - and the trusted range - together if 172.30.0.0/16 clashes
+    # with a VPC or VPN on the host (avoid 172.31.0.0/16, the AWS default VPC).
+    # Changing a network's settings needs it recreated once: docker compose down, then up.
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+          ip_range: 172.30.1.0/24
+          gateway: 172.30.0.1

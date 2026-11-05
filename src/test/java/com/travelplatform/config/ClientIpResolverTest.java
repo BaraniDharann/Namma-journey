@@ -74,6 +74,31 @@ class ClientIpResolverTest {
     }
 
     @Test
+    @DisplayName("behind the compose nginx, a client's own X-Forwarded-For cannot choose its bucket")
+    void composeDefaultResistsForgedHeaderThroughNginx() {
+        // docker-compose.yml's default: only travel-network's container range, not its gateway.
+        ClientIpResolver resolver = new ClientIpResolver("172.30.1.0/24");
+
+        // nginx (172.30.1.5) appends the real peer to whatever the client sent.
+        assertEquals("198.51.100.7", resolver.resolve(request("172.30.1.5", "198.51.100.7")));
+        assertEquals("198.51.100.7", resolver.resolve(request("172.30.1.5", "1.2.3.4, 198.51.100.7")));
+        // A forged hop inside the trusted range is still client-written: the walk stops at the
+        // real peer nginx appended and never reaches it.
+        assertEquals("198.51.100.7", resolver.resolve(request("172.30.1.5", "172.30.1.9, 198.51.100.7")));
+    }
+
+    @Test
+    @DisplayName("a request Docker relays through the network gateway is not treated as from nginx")
+    void composeGatewayIsNotTrusted() {
+        ClientIpResolver resolver = new ClientIpResolver("172.30.1.0/24");
+
+        // curl 127.0.0.1:8080 on the host arrives via docker-proxy from the gateway. Trusting the
+        // whole 172.16.0.0/12 made this a way to pick a fresh identity per request.
+        assertFalse(resolver.isTrustedProxy("172.30.0.1"));
+        assertEquals("172.30.0.1", resolver.resolve(request("172.30.0.1", "5.6.7.8")));
+    }
+
+    @Test
     @DisplayName("wildcard trusts any peer")
     void wildcardTrustsEveryPeer() {
         ClientIpResolver resolver = new ClientIpResolver("*");

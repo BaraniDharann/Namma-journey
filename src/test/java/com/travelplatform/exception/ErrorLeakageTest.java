@@ -47,7 +47,10 @@ class ErrorLeakageTest {
         };
         for (RuntimeException e : internals) {
             ResponseEntity<Map<String, String>> r = handler.handleRuntimeException(e);
-            assertEquals(500, r.getStatusCode().value(), e.getClass().getSimpleName());
+            // Redis/statement timeouts are overload, answered 503 (ServiceUnavailableMappingTest);
+            // either way the detail must stay out of the body.
+            boolean transientFailure = e instanceof RedisConnectionFailureException || e instanceof QueryTimeoutException;
+            assertEquals(transientFailure ? 503 : 500, r.getStatusCode().value(), e.getClass().getSimpleName());
             assertFalse(body(r).contains("10.0.4.17") || body(r).contains("SQL") || body(r).contains("uploads/")
                     || body(r).contains("com.travelplatform") || body(r).contains("jwt"), "leaked: " + body(r));
         }
