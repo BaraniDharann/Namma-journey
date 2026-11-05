@@ -1,7 +1,12 @@
 package com.travelplatform.service;
 
+import com.travelplatform.exception.TooManyRequestsException;
 import com.travelplatform.storage.FileStore;
+import com.travelplatform.storage.ImageCompressor;
+import com.travelplatform.storage.ImageProfile;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -11,6 +16,8 @@ import java.io.UncheckedIOException;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The single way an uploaded image enters storage: driver photos, licences and Aadhaar scans,
@@ -32,10 +39,43 @@ public class FileStorageService {
             "image/webp", ".webp",
             "image/gif", ".gif");
 
+    /** How long an upload waits for a compression slot before being told to retry. */
+    private static final long SLOT_WAIT_SECONDS = 20;
+
     private final FileStore fileStore;
+    /**
+     * Decoding a photo needs tens of MB of heap for a moment. Without a cap, a handful of sign-ups
+     * arriving together could exhaust a 512 MB heap; with it, the extra ones wait their turn.
+     */
+    private final Semaphore compressionSlots;
+
+    @Autowired
+    public FileStorageService(FileStore fileStore,
+                              @Value("${app.uploads.max-parallel-compressions:3}") int maxParallelCompressions) {
+        this.fileStore = fileStore;
+        this.compressionSlots = new Semaphore(Math.max(1, maxParallelCompressions), true);
+    }
 
     public FileStorageService(FileStore fileStore) {
-        this.fileStore = fileStore;
+        this(fileStore, 3);
+    }
+
+    /**
+     * What an upload shows, from where it is stored: the driver's own photo is a face, trip
+     * folders hold end-of-trip / odometer photos, a bus's gallery photos are shown to customers
+     * browsing buses, everything else is an identity or vehicle document.
+     */
+    static ImageProfile profileFor(String folder, String namePrefix) {
+        if (folder != null && folder.startsWith("buses/") && "photo".equals(namePrefix)) {
+            return ImageProfile.PHOTO;
+        }
+        if ("photo".equals(namePrefix)) {
+            return ImageProfile.PROFILE;
+        }
+        if (folder != null && folder.startsWith("trips/")) {
+            return ImageProfile.PHOTO;
+        }
+        return ImageProfile.DOCUMENT;
     }
 
     /** A driver document. Returns "/uploads/drivers/{fileType}_{uuid}.{ext}", or null if none was sent. */
@@ -64,16 +104,19 @@ public class FileStorageService {
             throw new IllegalArgumentException("The file is not a valid " + extension.substring(1).toUpperCase(Locale.ROOT) + " image");
         }
 
-        // Every upload is re-drawn as a compact JPEG (ImageCompressor): a 6 MB phone photo becomes a
-        // few hundred KB, upright, without its EXIF/GPS metadata - and what is stored is never the
-        // uploaded bytes themselves.
+        // Every upload is re-drawn as a compact JPEG (ImageCompressor), sized by what it shows: a
+        // 6 MB phone photo becomes ~50 KB as a profile photo or ~300 KB as a licence, upright,
+        // without its EXIF/GPS metadata - and what is stored is never the uploaded bytes themselves.
         byte[] compressed;
+        acquireCompressionSlot();
         try (InputStream in = file.getInputStream()) {
-            compressed = com.travelplatform.storage.ImageCompressor.toCompressedJpeg(in.readAllBytes());
-        } catch (com.travelplatform.storage.ImageCompressor.UnreadableImageException e) {
+            compressed = ImageCompressor.toCompressedJpeg(in.readAllBytes(), profileFor(folder, namePrefix));
+        } catch (ImageCompressor.UnreadableImageException e) {
             throw new IllegalArgumentException(e.getMessage());
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read the uploaded file", e);
+        } finally {
+            compressionSlots.release();
         }
 
         String key = "uploads/" + folder + "/" + namePrefix + "_" + UUID.randomUUID() + ".jpg";
@@ -95,6 +138,19 @@ public class FileStorageService {
             fileStore.delete(publicPath.substring(1));
         } catch (RuntimeException e) {
             log.warn("Could not delete replaced upload: {}", e.toString());
+        }
+    }
+
+    private void acquireCompressionSlot() {
+        boolean acquired;
+        try {
+            acquired = compressionSlots.tryAcquire(SLOT_WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            acquired = false;
+        }
+        if (!acquired) {
+            throw new TooManyRequestsException("Many photos are being uploaded right now. Please try again in a minute.");
         }
     }
 

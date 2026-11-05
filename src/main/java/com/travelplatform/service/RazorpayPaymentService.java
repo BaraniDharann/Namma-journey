@@ -14,8 +14,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -52,19 +55,23 @@ public class RazorpayPaymentService {
     private final RazorpayGateway gateway;
     private final RazorpayProperties properties;
     private final ObjectMapper objectMapper;
+    /** createOrder's two short transactions either side of the Razorpay call. */
+    private final TransactionTemplate tx;
 
     public RazorpayPaymentService(PaymentRepository paymentRepository,
                                   TravelBookingRepository bookingRepository,
                                   PaymentService paymentService,
                                   RazorpayGateway gateway,
                                   RazorpayProperties properties,
-                                  ObjectMapper objectMapper) {
+                                  ObjectMapper objectMapper,
+                                  TransactionTemplate tx) {
         this.paymentRepository = paymentRepository;
         this.bookingRepository = bookingRepository;
         this.paymentService = paymentService;
         this.gateway = gateway;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.tx = tx;
     }
 
     // Field-injected so the tests that build this service by hand are unaffected.
@@ -91,20 +98,90 @@ public class RazorpayPaymentService {
      * Opens checkout for whatever the passenger owes next. While a Trip's advance is due that is
      * the advance (and the booking is still PENDING); after it, the fare balance once the trip is
      * confirmed. The browser never chooses: one "Pay" endpoint, the server decides.
+     *
+     * <p>Deliberately not {@code @Transactional}. Creating an order is an HTTP call to Razorpay
+     * (200-600 ms normally, up to the 5 s read timeout when it is slow), and a transaction would
+     * hold one of the 20 pooled connections for all of it: a slow Razorpay could then exhaust the
+     * pool and fail every login and booking. So it runs in three steps: a short transaction that
+     * checks the booking and reuses an open order when there is one; the Razorpay call with no
+     * transaction open; and a second short transaction that re-checks everything and records the
+     * new order. Nothing is written before Razorpay answers, so a failed call leaves no trace.
      */
-    @Transactional
     public RazorpayOrderResponse createOrder(UUID userId, UUID bookingId) {
         if (!properties.isOperational()) {
             throw new RuntimeException("Online payment is not set up yet. Please pay by UPI or cash.");
         }
+        Checkout open = tx.execute(s -> reuseOpenOrder(userId, bookingId));
+        if (open.response() != null) {
+            return open.response();
+        }
+
+        Map<String, String> notes = new LinkedHashMap<>();
+        notes.put("booking_id", bookingId.toString());
+        notes.put("user_id", userId.toString());
+        notes.put("purpose", open.purpose().name());
+        String orderId = gateway.createOrder(toPaise(open.amount()), receipt(bookingId, open.purpose()), notes);
+
+        try {
+            return tx.execute(s -> recordOrder(userId, bookingId, open, orderId));
+        } catch (OptimisticLockingFailureException | DataIntegrityViolationException raced) {
+            // Another tap (or the driver's UPI QR) wrote this payment while we were at Razorpay.
+            // Once more on fresh state: it either finds that tap's order and reuses it, or stores ours.
+            log.info("Payment for booking {} changed while creating Razorpay order {}; retrying", bookingId, orderId);
+            return tx.execute(s -> recordOrder(userId, bookingId, open, orderId));
+        }
+    }
+
+    /** What step 1 decided: an answer when an open order could be reused, else what to order. */
+    private record Checkout(RazorpayOrderResponse response, Payment.PaymentPurpose purpose, BigDecimal amount) {
+    }
+
+    private Checkout reuseOpenOrder(UUID userId, UUID bookingId) {
+        TravelBooking booking = payableBooking(userId, bookingId);
+        Payment.PaymentPurpose purpose = purposeDue(booking);
+        BigDecimal amount = amountDue(booking, purpose);
+        toPaise(amount); // refuse a non-positive amount before ever calling Razorpay
+
+        Payment payment = existingPayment(booking, purpose);
+        // Reuse the order while the amount is unchanged. Minting a new one on every "Pay online"
+        // tap would orphan the old one: a passenger still paying it in another tab would be
+        // charged, and the webhook would find no payment holding that order id.
+        if (holdsOrderFor(payment, amount)) {
+            return new Checkout(store(payment, booking, purpose, amount, payment.getRazorpayOrderId()), purpose, amount);
+        }
+        return new Checkout(null, purpose, amount);
+    }
+
+    /**
+     * Step 3: Razorpay has answered, but the booking may have moved on in the meantime - been
+     * cancelled, its hold lapsed, its fare changed, or the fare paid in cash. Every check from
+     * step 1 runs again on fresh state. When one fails, the new order is simply never handed to
+     * the browser; an order nobody pays costs nothing and Razorpay expires it.
+     */
+    private RazorpayOrderResponse recordOrder(UUID userId, UUID bookingId, Checkout open, String orderId) {
+        TravelBooking booking = payableBooking(userId, bookingId);
+        Payment.PaymentPurpose purpose = purposeDue(booking);
+        BigDecimal amount = amountDue(booking, purpose);
+        if (purpose != open.purpose() || amount.compareTo(open.amount()) != 0) {
+            log.info("Fare for booking {} changed while creating Razorpay order {}; not using it", bookingId, orderId);
+            throw new RuntimeException("The amount due changed while opening payment. Please try again.");
+        }
+        Payment payment = existingPayment(booking, purpose);
+        if (holdsOrderFor(payment, amount)) {
+            // A second tap stored its order first. Hand out that one, so the passenger only ever
+            // has one order to pay; ours goes unused.
+            log.info("Booking {} already has Razorpay order {}; dropping {}", bookingId, payment.getRazorpayOrderId(), orderId);
+            return store(payment, booking, purpose, amount, payment.getRazorpayOrderId());
+        }
+        return store(payment, booking, purpose, amount, orderId);
+    }
+
+    private TravelBooking payableBooking(UUID userId, UUID bookingId) {
         TravelBooking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
         if (!booking.getUserId().equals(userId)) {
             throw new RuntimeException("Unauthorized access");
         }
-
-        Payment.PaymentPurpose purpose;
-        BigDecimal amount;
         if (booking.isAdvanceDue()) {
             if (booking.getStatus() != TravelBooking.BookingStatus.PENDING) {
                 throw new RuntimeException("This booking can no longer be paid");
@@ -112,19 +189,25 @@ public class RazorpayPaymentService {
             if (booking.getHoldExpiresAt() != null && booking.getHoldExpiresAt().isBefore(LocalDateTime.now())) {
                 throw new RuntimeException("This booking's hold has expired. Please book again.");
             }
-            purpose = Payment.PaymentPurpose.ADVANCE;
-            amount = booking.getAdvanceAmount();
         } else {
             requirePayable(booking);
-            purpose = Payment.PaymentPurpose.FARE;
-            amount = PaymentService.amountDue(booking);
         }
-        long paise = toPaise(amount);
+        return booking;
+    }
 
-        Payment payment = paymentRepository.findByBookingIdAndPurpose(bookingId, purpose).orElseGet(() -> {
+    private static Payment.PaymentPurpose purposeDue(TravelBooking booking) {
+        return booking.isAdvanceDue() ? Payment.PaymentPurpose.ADVANCE : Payment.PaymentPurpose.FARE;
+    }
+
+    private static BigDecimal amountDue(TravelBooking booking, Payment.PaymentPurpose purpose) {
+        return purpose == Payment.PaymentPurpose.ADVANCE ? booking.getAdvanceAmount() : PaymentService.amountDue(booking);
+    }
+
+    private Payment existingPayment(TravelBooking booking, Payment.PaymentPurpose purpose) {
+        Payment payment = paymentRepository.findByBookingIdAndPurpose(booking.getId(), purpose).orElseGet(() -> {
             Payment p = new Payment();
-            p.setBookingId(bookingId);
-            p.setUserId(userId);
+            p.setBookingId(booking.getId());
+            p.setUserId(booking.getUserId());
             p.setDriverId(booking.getDriverId());
             p.setCreatedAt(LocalDateTime.now());
             p.setPurpose(purpose);
@@ -133,20 +216,20 @@ public class RazorpayPaymentService {
         if (payment.getStatus() == Payment.PaymentStatus.VERIFIED) {
             throw new RuntimeException("Payment already completed");
         }
+        return payment;
+    }
 
-        // Reuse the order while the amount is unchanged. Minting a new one on every "Pay online"
-        // tap would orphan the old one: a passenger still paying it in another tab would be
-        // charged, and the webhook would find no payment holding that order id.
-        boolean reusable = payment.getRazorpayOrderId() != null
+    private static boolean holdsOrderFor(Payment payment, BigDecimal amount) {
+        return payment.getRazorpayOrderId() != null
                 && payment.getAmount() != null
                 && payment.getAmount().compareTo(amount) == 0;
-        if (!reusable) {
-            Map<String, String> notes = new LinkedHashMap<>();
-            notes.put("booking_id", bookingId.toString());
-            notes.put("user_id", userId.toString());
-            notes.put("purpose", purpose.name());
-            payment.setRazorpayOrderId(gateway.createOrder(paise, receipt(bookingId, purpose), notes));
-        }
+    }
+
+    private RazorpayOrderResponse store(Payment payment, TravelBooking booking, Payment.PaymentPurpose purpose,
+                                        BigDecimal amount, String orderId) {
+        UUID bookingId = booking.getId();
+        long paise = toPaise(amount);
+        payment.setRazorpayOrderId(orderId);
         payment.setAmount(amount);
         payment.setPaymentMethod(Payment.PaymentMethod.RAZORPAY);
         payment.setStatus(Payment.PaymentStatus.PENDING);

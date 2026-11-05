@@ -45,7 +45,8 @@ class RazorpayBusWebhookTest {
         busBooking = mock(BusBookingService.class);
         busRefunds = mock(BusRefunds.class);
         service = new RazorpayPaymentService(carPayments, mock(TravelBookingRepository.class), mock(PaymentService.class),
-                mock(RazorpayGateway.class), new RazorpayProperties(), new ObjectMapper());
+                mock(RazorpayGateway.class), new RazorpayProperties(), new ObjectMapper(),
+                new org.springframework.transaction.support.TransactionTemplate(new NoOpTransactionManager()));
         service.setBusModule(busBooking, busRefunds);
     }
 

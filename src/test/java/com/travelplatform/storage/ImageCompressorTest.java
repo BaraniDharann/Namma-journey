@@ -38,20 +38,56 @@ class ImageCompressorTest {
         return img;
     }
 
-    @Test
-    @DisplayName("a big phone-sized photo comes back as a JPEG, 2000 px long side, about 1 MB at most")
-    void shrinksLargePhoto() throws Exception {
-        byte[] original = encode(noisy(4000, 3000), "png");
+    /** Looks like a scanned document or a photo: smooth areas, edges and some text-like detail. */
+    private static BufferedImage photoLike(int w, int h) {
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        g.setPaint(new java.awt.GradientPaint(0, 0, new Color(230, 225, 210), w, h, new Color(120, 140, 170)));
+        g.fillRect(0, 0, w, h);
+        g.setColor(Color.DARK_GRAY);
+        g.setFont(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, Math.max(12, h / 40)));
+        for (int y = h / 20; y < h; y += h / 20) {
+            g.drawString("DL No. TN-0920190012345  Valid till 12/03/2034  Class LMV MCWG", w / 20, y);
+        }
+        g.dispose();
+        return img;
+    }
 
-        byte[] out = ImageCompressor.toCompressedJpeg(original);
+    @Test
+    @DisplayName("a licence photo is stored at 1600 px long side and about 300 KB at most")
+    void documentProfile() throws Exception {
+        byte[] original = encode(photoLike(4032, 3024), "png");
+
+        byte[] out = ImageCompressor.toCompressedJpeg(original, ImageProfile.DOCUMENT);
         BufferedImage back = ImageIO.read(new ByteArrayInputStream(out));
 
-        assertEquals(2000, back.getWidth());
-        assertEquals(1500, back.getHeight());
-        assertTrue(out.length <= ImageCompressor.TARGET_BYTES * 1.5, "stored " + out.length + " bytes");
-        assertTrue(out.length < original.length / 5);
+        assertEquals(1600, back.getWidth());
+        assertEquals(1200, back.getHeight());
+        assertTrue(out.length <= ImageProfile.DOCUMENT.targetBytes(), "stored " + out.length + " bytes");
         assertEquals((byte) 0xFF, out[0]);
         assertEquals((byte) 0xD8, out[1]);
+    }
+
+    @Test
+    @DisplayName("a profile photo is stored at 512 px long side and 50 KB at most")
+    void profilePhoto() throws Exception {
+        byte[] out = ImageCompressor.toCompressedJpeg(encode(photoLike(3024, 4032), "png"), ImageProfile.PROFILE);
+        BufferedImage back = ImageIO.read(new ByteArrayInputStream(out));
+
+        assertEquals(512, back.getHeight());
+        assertEquals(384, back.getWidth());
+        assertTrue(out.length <= 50 * 1024, "stored " + out.length + " bytes");
+    }
+
+    @Test
+    @DisplayName("when quality alone cannot reach the target, resolution drops - but never below the readable floor")
+    void shrinksResolutionWithinFloor() throws Exception {
+        // Pure noise is the worst case: it cannot get near 50 KB at 512 px.
+        byte[] out = ImageCompressor.toCompressedJpeg(encode(noisy(2000, 2000), "png"), ImageProfile.PROFILE);
+        BufferedImage back = ImageIO.read(new ByteArrayInputStream(out));
+
+        assertTrue(back.getWidth() < 512, "shrunk: " + back.getWidth());
+        assertTrue(back.getWidth() >= ImageProfile.PROFILE.minSide, "floor kept: " + back.getWidth());
     }
 
     @Test
@@ -63,7 +99,7 @@ class ImageCompressorTest {
         g.fillRect(0, 0, 40, 20);
         g.dispose();
 
-        BufferedImage back = ImageIO.read(new ByteArrayInputStream(ImageCompressor.toCompressedJpeg(encode(img, "png"))));
+        BufferedImage back = ImageIO.read(new ByteArrayInputStream(ImageCompressor.toCompressedJpeg(encode(img, "png"), ImageProfile.DOCUMENT)));
 
         assertEquals(40, back.getWidth());
         Color c = new Color(back.getRGB(20, 10));
@@ -86,14 +122,14 @@ class ImageCompressorTest {
     @DisplayName("not an image at all: refused with a message a person can act on")
     void junkRefused() {
         byte[] html = "<html><script>alert(1)</script></html>".getBytes(StandardCharsets.UTF_8);
-        assertThrows(ImageCompressor.UnreadableImageException.class, () -> ImageCompressor.toCompressedJpeg(html));
+        assertThrows(ImageCompressor.UnreadableImageException.class, () -> ImageCompressor.toCompressedJpeg(html, ImageProfile.DOCUMENT));
     }
 
     @Test
     @DisplayName("a decompression bomb is refused from its header, before any pixel is decoded")
     void bombRefused() {
         assertThrows(ImageCompressor.UnreadableImageException.class,
-                () -> ImageCompressor.toCompressedJpeg(pngHeaderClaiming(50_000, 50_000)));
+                () -> ImageCompressor.toCompressedJpeg(pngHeaderClaiming(50_000, 50_000), ImageProfile.DOCUMENT));
     }
 
     /** A PNG signature and a valid IHDR chunk claiming the given size, with no image data. */

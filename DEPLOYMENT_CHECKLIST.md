@@ -38,7 +38,11 @@ refuses to start rather than run on a value baked into the source.
 - [ ] `RATELIMIT_TRUSTED_PROXIES` — **blocking behind a proxy.** Set to your load balancer or
       ingress range. Left empty behind a proxy, every request appears to come from the balancer
       and shares one rate-limit bucket. Set to `*`, any caller can spoof `X-Forwarded-For` and
-      bypass rate limiting entirely.
+      bypass rate limiting entirely. The Docker Compose deploy sets it for you to
+      `172.30.1.0/24`, the pinned container range of `travel-network` where nginx runs
+      (docker-compose.yml) — leave it empty in `.env` there. If you change that network's
+      subnet, change this to match. A network created before the subnet was pinned must be
+      recreated once (`docker compose down`, then `up`).
 - [ ] `JPA_DDL_AUTO=validate` — leave it. `update` lets Hibernate quietly alter live tables.
 
 ### Optional

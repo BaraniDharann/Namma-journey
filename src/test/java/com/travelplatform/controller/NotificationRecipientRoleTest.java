@@ -37,7 +37,7 @@ class NotificationRecipientRoleTest {
     @DisplayName("admin 7 cannot read driver 7's notifications")
     void adminCannotReadDriverWithSameId() {
         signIn("7", "ROLE_ADMIN");
-        assertThrows(AccessDeniedException.class, () -> controller.getNotifications("7", "ROLE_DRIVER"));
+        assertThrows(AccessDeniedException.class, () -> controller.getNotifications("7", "ROLE_DRIVER", null, null));
         assertThrows(AccessDeniedException.class, () -> controller.getUnreadCount("7", "ROLE_DRIVER"));
     }
 
@@ -45,13 +45,13 @@ class NotificationRecipientRoleTest {
     @DisplayName("an owner on a setup token cannot read driver 7's notifications")
     void setupOwnerCannotReadDriverWithSameId() {
         signIn("7", "ROLE_OWNER_SETUP");
-        assertThrows(AccessDeniedException.class, () -> controller.getNotifications("7", "ROLE_DRIVER"));
+        assertThrows(AccessDeniedException.class, () -> controller.getNotifications("7", "ROLE_DRIVER", null, null));
     }
 
     @Test
     @DisplayName("a driver still reads their own")
     void driverReadsOwn() {
         signIn("7", "ROLE_DRIVER");
-        assertDoesNotThrow(() -> controller.getNotifications("7", "ROLE_DRIVER"));
+        assertDoesNotThrow(() -> controller.getNotifications("7", "ROLE_DRIVER", null, null));
     }
 }

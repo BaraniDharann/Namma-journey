@@ -1,9 +1,12 @@
 package com.travelplatform.config;
 
+import com.travelplatform.exception.ServiceUnavailable;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -17,7 +20,9 @@ import java.util.Collections;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     @Autowired
     private JwtUtil jwtUtil;
 
@@ -57,6 +62,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             } catch (Exception e) {
+                // The token checks above read token_version and revoked_tokens from the database.
+                // If that read failed because the database is busy, we do not know whether the
+                // token is good - carrying on anonymously would end in a 401, and the SPA treats a
+                // 401 as "session over" and logs the user out. Answer 503 instead so the client
+                // retries with the same token. (Exceptions here never reach GlobalExceptionHandler.)
+                Throwable busy = ServiceUnavailable.transientCause(e);
+                if (busy != null) {
+                    ServiceUnavailable.log(log, "authentication", busy);
+                    ServiceUnavailable.write(response);
+                    return;
+                }
                 logger.error("JWT validation failed: " + e.getMessage());
             }
         }

@@ -1,5 +1,6 @@
 package com.travelplatform.service;
 
+import com.travelplatform.storage.ImageProfile;
 import com.travelplatform.storage.LocalFileStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -10,6 +11,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import java.nio.file.Path;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -117,5 +119,21 @@ class FileStorageServiceTest {
     void emptyUploadIsNull() {
         assertNull(service.storeFile(new MockMultipartFile("file", new byte[0]), "photo"));
         assertNull(service.storeFile(null, "photo"));
+    }
+
+    @Test
+    @DisplayName("faces are stored small, trip photos medium, identity documents large enough to read")
+    void profileByWhatTheImageShows() {
+        assertEquals(ImageProfile.PROFILE, FileStorageService.profileFor("drivers", "photo"));
+        assertEquals(ImageProfile.PHOTO, FileStorageService.profileFor("trips/trip_9", "driver_7"));
+        for (String doc : new String[] {"license", "aadhaar", "rc"}) {
+            assertEquals(ImageProfile.DOCUMENT, FileStorageService.profileFor("drivers", doc), doc);
+        }
+        for (String doc : new String[] {"registration", "pan", "aadhaar"}) {
+            assertEquals(ImageProfile.DOCUMENT, FileStorageService.profileFor("owners", doc), doc);
+        }
+        // A bus's gallery photo is a photo customers browse, not a face; its permit/RC are documents.
+        assertEquals(ImageProfile.PHOTO, FileStorageService.profileFor("buses/12", "photo"));
+        assertEquals(ImageProfile.DOCUMENT, FileStorageService.profileFor("buses/12", "doc_permit"));
     }
 }

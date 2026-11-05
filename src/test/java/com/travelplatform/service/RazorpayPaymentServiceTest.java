@@ -13,7 +13,11 @@ import com.travelplatform.repository.TravelBookingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -22,7 +26,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -61,7 +67,8 @@ class RazorpayPaymentServiceTest {
         props.setKeyId("rzp_test_key");
         props.setKeySecret(SECRET);
         props.setWebhookSecret("whsec");
-        service = new RazorpayPaymentService(payments, bookings, paymentService, gateway, props, new ObjectMapper());
+        service = new RazorpayPaymentService(payments, bookings, paymentService, gateway, props, new ObjectMapper(),
+                new TransactionTemplate(new NoOpTransactionManager()));
 
         booking = new TravelBooking();
         booking.setId(BOOKING);
@@ -267,7 +274,120 @@ class RazorpayPaymentServiceTest {
     @DisplayName("an unconfigured deployment refuses online payment")
     void refusesWithoutKeys() {
         RazorpayPaymentService unconfigured = new RazorpayPaymentService(payments, mock(TravelBookingRepository.class),
-                mock(PaymentService.class), gateway, new RazorpayProperties(), new ObjectMapper());
+                mock(PaymentService.class), gateway, new RazorpayProperties(), new ObjectMapper(),
+                new TransactionTemplate(new NoOpTransactionManager()));
         assertThrows(RuntimeException.class, () -> unconfigured.createOrder(USER, BOOKING));
+    }
+
+    // --- createOrder never holds a database connection while Razorpay is answering ---
+
+    @Test
+    @DisplayName("Razorpay is called with no transaction open; the booking is read and the order stored inside one")
+    void razorpayCalledOutsideTransaction() {
+        when(payments.findByBookingIdAndPurpose(BOOKING, Payment.PaymentPurpose.FARE)).thenAnswer(i -> {
+            assertTrue(TransactionSynchronizationManager.isActualTransactionActive(), "payment read outside a transaction");
+            return Optional.empty();
+        });
+        when(gateway.createOrder(anyLong(), anyString(), anyMap())).thenAnswer(i -> {
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive(),
+                    "Razorpay called inside a transaction: it would hold a pooled connection for the whole call");
+            return "order_1";
+        });
+        when(payments.save(any(Payment.class))).thenAnswer(i -> {
+            assertTrue(TransactionSynchronizationManager.isActualTransactionActive(), "payment saved outside a transaction");
+            return i.getArgument(0);
+        });
+
+        RazorpayOrderResponse order = service.createOrder(USER, BOOKING);
+
+        assertEquals("order_1", order.getOrderId());
+        verify(gateway).createOrder(eq(250050L), anyString(), anyMap());
+        verify(payments).save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("a failed Razorpay call writes nothing and tells the passenger to try again or pay another way")
+    void razorpayFailureWritesNothing() {
+        when(gateway.createOrder(anyLong(), anyString(), anyMap())).thenThrow(new RuntimeException(
+                "Online payment is unavailable right now. Please try again, or pay by UPI or cash."));
+
+        RuntimeException e = assertThrows(RuntimeException.class, () -> service.createOrder(USER, BOOKING));
+
+        assertTrue(e.getMessage().contains("try again"));
+        verify(payments, never()).save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("tapping Pay again after a failed Razorpay call opens one order")
+    void retryAfterFailureCreatesOneOrder() {
+        when(gateway.createOrder(anyLong(), anyString(), anyMap()))
+                .thenThrow(new RuntimeException("Online payment is unavailable right now."))
+                .thenReturn("order_1");
+        assertThrows(RuntimeException.class, () -> service.createOrder(USER, BOOKING));
+
+        RazorpayOrderResponse order = service.createOrder(USER, BOOKING);
+
+        assertEquals("order_1", order.getOrderId());
+        verify(gateway, times(2)).createOrder(anyLong(), anyString(), anyMap());
+        verify(payments, times(1)).save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("a booking cancelled while Razorpay was answering never gets the new order")
+    void cancelledDuringCallIsNotRecorded() {
+        when(gateway.createOrder(anyLong(), anyString(), anyMap())).thenAnswer(i -> {
+            booking.setStatus(TravelBooking.BookingStatus.CANCELLED);
+            return "order_1";
+        });
+
+        assertThrows(RuntimeException.class, () -> service.createOrder(USER, BOOKING));
+
+        verify(payments, never()).save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("a fare changed while Razorpay was answering is refused, not stored against the old amount")
+    void fareChangedDuringCallIsNotRecorded() {
+        when(gateway.createOrder(anyLong(), anyString(), anyMap())).thenAnswer(i -> {
+            booking.setTotalAmount(new BigDecimal("3000.00"));
+            return "order_1";
+        });
+
+        RuntimeException e = assertThrows(RuntimeException.class, () -> service.createOrder(USER, BOOKING));
+
+        assertTrue(e.getMessage().contains("try again"));
+        verify(payments, never()).save(any(Payment.class));
+    }
+
+    @Test
+    @DisplayName("when a second tap stored its order first, both taps get that one order to pay")
+    void concurrentTapReusesTheStoredOrder() {
+        when(gateway.createOrder(anyLong(), anyString(), anyMap())).thenAnswer(i -> {
+            // The other tap finishes while this one waits on Razorpay.
+            Payment theirs = pendingOnline();
+            theirs.setRazorpayOrderId("order_theirs");
+            return "order_ours";
+        });
+
+        RazorpayOrderResponse order = service.createOrder(USER, BOOKING);
+
+        assertEquals("order_theirs", order.getOrderId());
+        ArgumentCaptor<Payment> saved = ArgumentCaptor.forClass(Payment.class);
+        verify(payments).save(saved.capture());
+        assertEquals("order_theirs", saved.getValue().getRazorpayOrderId());
+    }
+
+    @Test
+    @DisplayName("a payment changed under us while storing the order is retried once on fresh state, without a second Razorpay order")
+    void optimisticLockConflictRetriesOnce() {
+        when(payments.save(any(Payment.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Payment.class, UUID.randomUUID()))
+                .thenAnswer(i -> i.getArgument(0));
+
+        RazorpayOrderResponse order = service.createOrder(USER, BOOKING);
+
+        assertEquals("order_1", order.getOrderId());
+        verify(gateway, times(1)).createOrder(anyLong(), anyString(), anyMap());
+        verify(payments, times(2)).save(any(Payment.class));
     }
 }

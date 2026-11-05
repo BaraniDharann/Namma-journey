@@ -44,7 +44,8 @@ import java.util.concurrent.TimeUnit;
  *       provider's, and never trip it (Telegram's 403 for a blocked bot, Razorpay's "already
  *       refunded").</li>
  *   <li>a <b>bulkhead</b>: at most 20 calls to one dependency in flight per instance, so even a
- *       slow-but-not-failing provider can hold only 20 request threads, never the whole pool.</li>
+ *       slow-but-not-failing provider can hold only 20 request threads, never the whole pool.
+ *       Razorpay gets 8 (see {@link #LIMITS}).</li>
  * </ul>
  *
  * <p>Both refuse by throwing {@link ResourceAccessException}, the same exception a timeout
@@ -61,6 +62,18 @@ public final class ExternalHttpClients {
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
     static final int MAX_CONCURRENT_CALLS = 20;
+
+    /**
+     * Dependencies that get a tighter bulkhead than {@link #MAX_CONCURRENT_CALLS}.
+     *
+     * <p>Razorpay is called on the payment path, which reads and writes the database just before
+     * and after the call. The call itself runs outside any transaction, but 20 equals the Hikari
+     * pool (spring.datasource.hikari.maximum-pool-size), so a regression that put it back inside
+     * one would let a slow Razorpay hold every connection and take logins, bookings and tracking
+     * down with it. 8 leaves most of the pool for everything else whatever happens; it is also
+     * far above the order rate a single instance sees.
+     */
+    static final java.util.Map<String, Integer> LIMITS = java.util.Map.of("razorpay", 8);
 
     private static final CircuitBreakerRegistry BREAKERS = CircuitBreakerRegistry.of(CircuitBreakerConfig.custom()
             .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
@@ -102,12 +115,22 @@ public final class ExternalHttpClients {
         factory.setReadTimeout((int) READ_TIMEOUT.toMillis());
         RestTemplate restTemplate = new RestTemplate(factory);
         restTemplate.getInterceptors().add(
-                new Guard(dependency, BREAKERS.circuitBreaker(dependency), BULKHEADS.bulkhead(dependency)));
+                new Guard(dependency, BREAKERS.circuitBreaker(dependency), bulkhead(dependency)));
         return restTemplate;
     }
 
     static CircuitBreaker breaker(String dependency) {
         return BREAKERS.circuitBreaker(dependency);
+    }
+
+    static Bulkhead bulkhead(String dependency) {
+        Integer limit = LIMITS.get(dependency);
+        if (limit == null) {
+            return BULKHEADS.bulkhead(dependency);
+        }
+        return BULKHEADS.bulkhead(dependency, BulkheadConfig.from(BULKHEADS.getDefaultConfig())
+                .maxConcurrentCalls(limit)
+                .build());
     }
 
     /**
@@ -124,8 +147,8 @@ public final class ExternalHttpClients {
             try {
                 bulkhead.acquirePermission();
             } catch (BulkheadFullException e) {
-                throw new ResourceAccessException(dependency + " has " + MAX_CONCURRENT_CALLS
-                        + " calls in flight; failing fast");
+                throw new ResourceAccessException(dependency + " has "
+                        + bulkhead.getBulkheadConfig().getMaxConcurrentCalls() + " calls in flight; failing fast");
             }
             try {
                 try {

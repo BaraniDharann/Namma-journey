@@ -11,6 +11,9 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import org.yaml.snakeyaml.Yaml;
+
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,6 +79,24 @@ class ExternalHttpClientsTest {
             assertThrows(HttpClientErrorException.class, () -> http.getForObject(URL, String.class));
         }
         assertEquals(CircuitBreaker.State.OPEN, ExternalHttpClients.breaker(name).getState());
+    }
+
+    @Test
+    @DisplayName("Razorpay's bulkhead stays well below the database pool, so a slow Razorpay can never hold every connection")
+    @SuppressWarnings("unchecked")
+    void razorpayBulkheadBelowPoolSize() throws Exception {
+        int poolSize;
+        try (java.io.InputStream in = getClass().getClassLoader().getResourceAsStream("application.yml")) {
+            Map<String, Object> root = new Yaml().load(in);
+            Map<String, Object> hikari = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>)
+                    root.get("spring")).get("datasource")).get("hikari");
+            poolSize = Integer.parseInt(hikari.get("maximum-pool-size").toString());
+        }
+        int razorpay = ExternalHttpClients.bulkhead("razorpay").getBulkheadConfig().getMaxConcurrentCalls();
+
+        assertTrue(razorpay <= poolSize / 2, "razorpay bulkhead " + razorpay + " vs pool " + poolSize);
+        assertEquals(ExternalHttpClients.MAX_CONCURRENT_CALLS,
+                ExternalHttpClients.bulkhead(freshName()).getBulkheadConfig().getMaxConcurrentCalls());
     }
 
     @Test

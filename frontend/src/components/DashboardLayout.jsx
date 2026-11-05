@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getNotifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead } from '../utils/api'
+import { getLatestNotifications, getUnreadCountCached, invalidateCache, markNotificationAsRead, markAllNotificationsAsRead } from '../utils/api'
 import useOwnerMe from '../hooks/useOwnerMe'
 import { visibleNav } from './owner/ownerNav'
+import { createCountPoller } from './notificationPoll'
 import Icon, { navIcon, navTint } from './dash/Icon'
 import { TipLayer } from './dash/ui'
 import ApplicationGate from './driver/ApplicationGate'
@@ -63,27 +64,40 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
 
   const handleLogout = () => { logout(); navigate('/') }
 
-  const fetchNotifications = useCallback(async () => {
-    // Admins have no notification feed; their alerts arrive by email.
-    if (!user?.userId || !user?.role || user.role === 'ROLE_ADMIN') return
+  const userRole = user?.role
+  // Admins have no notification feed; their alerts arrive by email.
+  const recipientId = !user?.userId || userRole === 'ROLE_ADMIN' ? null
+    : String(user.userId)
+  const openRef = useRef(false)
+  useEffect(() => { openRef.current = dropdownOpen }, [dropdownOpen])
+
+  // The list is only fetched when someone is looking at it: on opening the panel, or when the
+  // count moves while it is open. Polling it every 10 s was the biggest steady database load.
+  const loadList = useCallback(async () => {
+    if (!recipientId || !userRole) return
     try {
-      const recipientId = String(user.userId)
-      const [notifRes, countRes] = await Promise.all([
-        getNotifications(recipientId, user.role),
-        getUnreadCount(recipientId, user.role),
-      ])
-      setNotifications(notifRes.data || [])
-      setUnreadCount(countRes.data?.count ?? countRes.data ?? 0)
-    } catch {
-      /* already surfaced by the api error toast */
-    }
-  }, [user?.userId, user?.role])
+      const res = await getLatestNotifications(recipientId, userRole)
+      setNotifications(res.data || [])
+    } catch { /* silent: the bell just keeps its last list */ }
+  }, [recipientId, userRole])
 
   useEffect(() => {
-    fetchNotifications()
-    const interval = setInterval(fetchNotifications, 10000)
-    return () => clearInterval(interval)
-  }, [fetchNotifications])
+    if (!recipientId || !userRole) return undefined
+    const poller = createCountPoller({
+      fetchCount: () => getUnreadCountCached(recipientId, userRole).then((res) => res.data?.count ?? res.data ?? 0),
+      onCount: (count, previous) => {
+        setUnreadCount(count)
+        if (previous !== null && count !== previous && openRef.current) loadList()
+      },
+    })
+    poller.start()
+    return () => poller.stop()
+  }, [recipientId, userRole, loadList])
+
+  const toggleDropdown = () => {
+    if (!dropdownOpen) loadList()
+    setDropdownOpen(!dropdownOpen)
+  }
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -107,6 +121,7 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
     if (!notif.read) {
       try {
         await markNotificationAsRead(notif.id)
+        invalidateCache('/notifications')
         setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)))
         setUnreadCount((prev) => Math.max(0, prev - 1))
       } catch { /* already surfaced by the api error toast */ }
@@ -118,10 +133,10 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
   }
 
   const handleMarkAllRead = async () => {
-    if (!user?.userId || !user?.role) return
+    if (!recipientId || !userRole) return
     try {
-      const recipientId = String(user.userId)
-      await markAllNotificationsAsRead(recipientId, user.role)
+      await markAllNotificationsAsRead(recipientId, userRole)
+      invalidateCache('/notifications')
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
       setUnreadCount(0)
     } catch { /* already surfaced by the api error toast */ }
@@ -174,7 +189,7 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
             <button
               type="button"
               className="pc-iconbtn notification-bell"
-              onClick={() => setDropdownOpen((prev) => !prev)}
+              onClick={toggleDropdown}
               aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
               aria-expanded={dropdownOpen}
             >
