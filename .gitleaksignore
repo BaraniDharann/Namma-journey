@@ -1,0 +1,3 @@
+# False positives, one fingerprint per line (commit:file:rule:line).
+# PASSWORD_CHARS is the alphabet temporary driver passwords are drawn from, not a secret.
+d0199d2e63c98e6ad59fc7060a6c74a15a04f405:src/main/java/com/travelplatform/service/OwnerDriverReviewService.java:generic-api-key:30

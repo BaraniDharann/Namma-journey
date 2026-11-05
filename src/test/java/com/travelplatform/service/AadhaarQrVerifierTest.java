@@ -27,9 +27,16 @@ class AadhaarQrVerifierTest {
     @Test
     @DisplayName("finds the Secure QR in a photo of the card and verifies it")
     void readsQrFromImage() throws Exception {
-        AadhaarSecureQrTest.keys();
-        String qr = AadhaarSecureQrTest.qr(AadhaarSecureQrTest.V2_FIELDS, 64, AadhaarSecureQrTest.uidai.getPrivate());
-        AadhaarQrVerifier verifier = new AadhaarQrVerifier(List.of(AadhaarSecureQrTest.uidai.getPublic()));
+        // A fixed key, so the QR is the same every run. With a fresh random key about 1 QR in 35
+        // happened to carry a data pattern that hid ZXing's finder patterns, even in a lossless
+        // PNG, and this test failed at random (once on CI).
+        java.security.SecureRandom seeded = java.security.SecureRandom.getInstance("SHA1PRNG");
+        seeded.setSeed(20261105L);
+        java.security.KeyPairGenerator gen = java.security.KeyPairGenerator.getInstance("RSA");
+        gen.initialize(2048, seeded);
+        java.security.KeyPair key = gen.generateKeyPair();
+        String qr = AadhaarSecureQrTest.qr(AadhaarSecureQrTest.V2_FIELDS, 64, key.getPrivate());
+        AadhaarQrVerifier verifier = new AadhaarQrVerifier(List.of(key.getPublic()));
 
         AadhaarSecureQr.Result r = verifier.verifyImage(cardWithQr(qr, "jpg"));
 
