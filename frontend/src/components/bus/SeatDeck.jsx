@@ -1,10 +1,12 @@
 import React from 'react'
 import Icon from '../dash/Icon'
 import { seatAt, seatClassOf, seatClassName, seatLook, seatRows, deckSize, SEAT_LOOKS } from '../../utils/busLayouts'
+import '../../styles/bus.css'
 
 // The bus seen from above, front at the top. Pure drawing: the owner's layout editor, the trip
 // seat chart, the admin preview and (later) the customer seat map all pass their own states.
 
+// Seat cell size in px on wide screens; phones get bigger, easier to tap cells via --bus-cell-w and --bus-cell-h in bus.css.
 export const CELL = 36
 const GAP = 6
 
@@ -23,11 +25,11 @@ function SeatShape({ seat, look, price, dim }) {
       {sleeper
         ? <span aria-hidden="true" style={{ position: 'absolute', top: 4, left: 5, right: 5, height: 5, borderRadius: 3, background: look.border, opacity: 0.45 }} />
         : <span aria-hidden="true" style={{ position: 'absolute', bottom: 3, left: 4, right: 4, height: 4, borderRadius: 2, background: look.border, opacity: 0.55 }} />}
-      <b style={{ fontSize: 10.5, fontWeight: 800 }}>{seat.label}</b>
-      {look.tag && <small style={{ fontSize: 8, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.02em' }}>{look.tag}</small>}
+      <b className="bus-seat-label">{seat.label}</b>
+      {look.tag && <small className={`bus-seat-tag${look.tag.length > 5 ? ' is-long' : ''}`}>{look.tag}</small>}
       {/* A seater is too small for a tag and a price; the price is in its label then. */}
-      {price != null && (!look.tag || sleeper) && <small style={{ fontSize: 8.5, fontWeight: 700 }}>₹{price}</small>}
-      {seat.ladiesOnly && !look.tag && <small style={{ fontSize: 8, fontWeight: 800, color: '#9d174d' }}>W</small>}
+      {price != null && (!look.tag || sleeper) && <small className="bus-seat-price">₹{price}</small>}
+      {seat.ladiesOnly && !look.tag && <small className="bus-seat-tag" style={{ color: '#9d174d' }}>W</small>}
     </span>
   )
 }
@@ -59,7 +61,8 @@ export function SeatDeck({ seats, deck, rows, cols, stateOf, onSeatClick, select
       <div
         role="group"
         aria-label={title || (deck === 0 ? 'Lower deck' : 'Upper deck')}
-        style={{ display: 'grid', gridTemplateColumns: `repeat(${C}, ${CELL}px)`, gridAutoRows: `${CELL}px`, gridTemplateRows: `repeat(${R}, ${CELL}px)`, gap: GAP }}
+        className="bus-deck-grid"
+        style={{ display: 'grid', gridTemplateColumns: `repeat(${C}, var(--bus-cell-w, ${CELL}px))`, gridAutoRows: `var(--bus-cell-h, ${CELL}px)`, gridTemplateRows: `repeat(${R}, var(--bus-cell-h, ${CELL}px))`, gap: GAP }}
       >
         {empties.map(([r, c]) => (
           <button key={`e${r}-${c}`} type="button" onClick={() => onCellClick(deck, r, c)}

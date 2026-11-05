@@ -254,9 +254,9 @@ export default function OwnerBusRouteWizard() {
             </div>
             <fieldset style={{ border: 'none', padding: 0, margin: '18px 0 0' }}>
               <legend style={labelStyle}>Runs on *</legend>
-              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', columnGap: 14, flexWrap: 'wrap' }}>
                 {WEEKDAYS.map(([n, l]) => (
-                  <label key={n} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 13, fontWeight: 700 }}>
+                  <label key={n} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', minHeight: 40, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
                     <input type="checkbox" checked={route.runDays.includes(n)}
                       onChange={(e) => set('runDays', e.target.checked ? [...route.runDays, n] : route.runDays.filter((d) => d !== n))} />
                     {l}

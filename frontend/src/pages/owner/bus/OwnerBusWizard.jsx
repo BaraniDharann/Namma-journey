@@ -228,9 +228,9 @@ export default function OwnerBusWizard() {
                 </div>
                 <div style={{ marginTop: 16 }}>
                   <span style={labelStyle}>Amenities</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0 16px' }}>
                     {AMENITIES.map((a) => (
-                      <label key={a} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+                      <label key={a} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', minHeight: 40, fontSize: 13, cursor: 'pointer' }}>
                         <input type="checkbox" checked={form.amenities.includes(a)}
                           onChange={(e) => set('amenities', e.target.checked ? [...form.amenities, a] : form.amenities.filter((x) => x !== a))} />
                         {a}

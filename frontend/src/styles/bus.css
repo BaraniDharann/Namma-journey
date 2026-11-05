@@ -14,6 +14,13 @@
 .bus-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--pc-ink); text-decoration: none; font: 700 15px var(--pc-fd); }
 .bus-top-sp { flex: 1; }
 .bus-main { max-width: 1240px; margin: 0 auto; padding: 22px 20px 120px; }
+/* Phones: logo, "My bus tickets" and "Dashboard" must share one row; the brand name is kept for
+   screen readers only. */
+@media (max-width: 480px) {
+  .bus-top { gap: 8px; padding: 0 16px; }
+  .bus-top .pc-btn-sm { padding: 0 10px; }
+  .bus-brand > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 
 /* ── search form ──────────────────────────────────────────────── */
 .bus-form {
@@ -92,9 +99,9 @@
 .bus-card-type { font-size: 12.5px; color: var(--pc-muted); font-weight: 700; margin-top: 3px; }
 .bus-times { display: flex; align-items: center; gap: 10px; }
 .bus-times b { font: 700 19px var(--pc-fd); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-.bus-times sup { font-size: 10px; color: var(--pc-brand-deep); font-weight: 800; margin-left: 2px; }
+.bus-times sup { font-size: 12px; color: var(--pc-brand-deep); font-weight: 800; margin-left: 2px; }
 .bus-times .bus-dur { flex: 1; min-width: 60px; text-align: center; font-size: 12px; color: var(--pc-muted); font-weight: 700; border-bottom: 1px dashed var(--pc-axis); padding-bottom: 3px; }
-.bus-times small { display: block; font-size: 11.5px; color: var(--pc-muted); font-weight: 600; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bus-times small { display: block; font-size: 12px; color: var(--pc-muted); font-weight: 600; max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bus-rate { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 8px; font-size: 12px; font-weight: 800; background: #15803d; color: #fff; }
 .bus-rate.is-new { background: var(--pc-wash); color: var(--pc-ink-2); }
 .bus-buy { text-align: right; display: grid; gap: 6px; justify-items: end; }
@@ -103,7 +110,7 @@
 .bus-left { font-size: 12px; font-weight: 700; color: var(--pc-ink-2); }
 .bus-left.is-low { color: var(--pc-bad); }
 .bus-amen { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
-.bus-amen span { padding: 3px 9px; border-radius: 99px; background: var(--pc-wash); font-size: 11.5px; font-weight: 700; color: var(--pc-ink-2); }
+.bus-amen span { padding: 3px 9px; border-radius: 99px; background: var(--pc-wash); font-size: 12px; font-weight: 700; color: var(--pc-ink-2); }
 @media (max-width: 900px) {
   .bus-results { grid-template-columns: 1fr; }
   .bus-filter-open, .bus-filter-close { display: inline-flex !important; }
@@ -129,7 +136,7 @@
 .bus-steps button { display: inline-flex; align-items: center; gap: 8px; border: 0; background: var(--pc-wash); color: var(--pc-ink-2); padding: 9px 14px; border-radius: 99px; font: 800 13px var(--pc-fb); cursor: pointer; }
 .bus-steps button[aria-current='step'] { background: var(--pc-rail); color: #fff; }
 .bus-steps button:disabled { opacity: .5; cursor: not-allowed; }
-.bus-steps i { font-style: normal; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .25); font-size: 11px; }
+.bus-steps i { font-style: normal; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .25); font-size: 12px; }
 .bus-pricechips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .bus-points { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 .bus-point { display: grid; grid-template-columns: auto 52px minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px; border-radius: 14px; border: 1.5px solid var(--pc-line); cursor: pointer; margin-bottom: 8px; background: #fff; }
@@ -141,9 +148,9 @@
 .bus-pax { display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px auto; gap: 10px; align-items: end; padding: 12px 0; border-top: 1px solid var(--pc-line); }
 .bus-pax:first-child { border-top: 0; }
 .bus-pax-seat { font: 700 15px var(--pc-fd); align-self: center; }
-.bus-pax-seat small { display: block; font: 700 11px var(--pc-fb); color: var(--pc-muted); }
+.bus-pax-seat small { display: block; font: 700 12px var(--pc-fb); color: var(--pc-muted); }
 .bus-gender { display: inline-flex; border-radius: 10px; overflow: hidden; border: 1.5px solid #e2e8f0; height: 44px; }
-.bus-gender button { border: 0; background: #fff; padding: 0 14px; font: 800 13px var(--pc-fb); color: var(--pc-ink-2); cursor: pointer; }
+.bus-gender button { flex: 1; border: 0; background: #fff; padding: 0 14px; font: 800 13px var(--pc-fb); color: var(--pc-ink-2); cursor: pointer; }
 .bus-gender button[aria-pressed='true'] { background: var(--pc-rail); color: #fff; }
 .bus-gender button:disabled:not([aria-pressed='true']) { opacity: .35; cursor: not-allowed; }
 .bus-foot {
@@ -173,11 +180,33 @@
 .bus-stops li:not(:last-child)::after { content: ''; position: absolute; left: 7px; top: 15px; bottom: 0; width: 2px; background: var(--pc-line); }
 .bus-stops li.is-leg::before { background: var(--pc-brand); }
 .bus-deck-scroll { overflow-x: auto; padding-bottom: 6px; }
+
+/* seat drawing (components/bus/SeatDeck): text inside a seat */
+.bus-seat-label { font-size: 11px; font-weight: 800; }
+.bus-seat-tag { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.bus-seat-price { font-size: 9.5px; font-weight: 700; }
+/* "Blocked" is too wide for a seat in capitals: keep its own case so it is not cut off. */
+.bus-seat-tag.is-long { text-transform: none; letter-spacing: 0; font-size: 8px; }
+/* Phones: wider, taller cells so each seat is a comfortable tap target (the decks stack). */
+@media (max-width: 760px) {
+  .bus-deck-grid { --bus-cell-w: 44px; --bus-cell-h: 40px; }
+  .bus-seat-label { font-size: 12px; }
+  .bus-seat-tag, .bus-seat-price { font-size: 10px; }
+  .bus-seat-tag.is-long { font-size: 9.5px; }
+}
 @media (max-width: 1000px) {
   .bus-trip { grid-template-columns: 1fr; }
   .bus-side { position: static; }
 }
 @media (max-width: 600px) {
+  /* Fare bar: summary and breakup on one row, the main button full width below. */
+  .bus-foot-in { position: relative; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); gap: 8px 12px; }
+  .bus-foot-in > .pc-btn { flex: 1 1 100%; justify-content: center; }
+  .bus-breakup { position: static; }
+  .bus-breakup-pop { left: 16px; right: 16px; width: auto; }
+  .bus-check { min-height: 40px; }
+  .bus-steps button, .bus-tabs button { min-height: 40px; }
+  .bus-copy button { min-width: 36px; min-height: 36px; justify-content: center; align-items: center; }
   .bus-pax { grid-template-columns: 56px minmax(0, 1fr) 76px; }
   .bus-pax > .bus-gender { grid-column: 2 / -1; }
   .bus-main { padding: 16px 16px 140px; }
@@ -185,7 +214,8 @@
 
 /* ── ticket ───────────────────────────────────────────────────── */
 .bus-ticket-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
-.bus-kv small { display: block; font-size: 11.5px; font-weight: 800; color: var(--pc-muted); text-transform: uppercase; letter-spacing: .04em; }
+.bus-table td small, .bus-slabs td small { font-size: 12px; }
+.bus-kv small { display: block; font-size: 12px; font-weight: 800; color: var(--pc-muted); text-transform: uppercase; letter-spacing: .04em; }
 .bus-kv b { display: block; font-size: 15px; margin-top: 3px; }
 .bus-kv span { display: block; font-size: 12.5px; color: var(--pc-ink-2); font-weight: 600; margin-top: 2px; }
 .bus-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
