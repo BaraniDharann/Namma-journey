@@ -98,7 +98,8 @@ public class OwnerReviewService {
                 o.getRejectionReason(), o.isMustChangePassword(),
                 new AdminOwnerDetail.Documents(sign(o.getRegistrationDocPath()), sign(o.getPanDocPath()),
                         sign(o.getAadhaarDocPath())),
-                qr, checks, allVerified(checks) && o.getStatus() == OwnerStatus.PENDING_REVIEW);
+                qr, checks, allVerified(checks) && o.getStatus() == OwnerStatus.PENDING_REVIEW,
+                o.getBusCommissionPercent());
     }
 
     @Transactional

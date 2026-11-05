@@ -87,6 +87,11 @@ public class SecurityConfig {
                                         && OwnerScope.current().map(OwnerScope.Bound::platform).orElse(false)))
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/places/**").permitAll()
+                // Bus town autocomplete: customers search before they log in.
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/bus/places").permitAll()
+                // Bus search and seat maps are public too; holding seats and tickets need a customer login.
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/bus/search", "/api/bus/trips/*").permitAll()
+                .requestMatchers("/api/bus/holds", "/api/bus/tickets", "/api/bus/tickets/**").hasRole("USER")
                 .requestMatchers("/api/user/forgot-password").permitAll()
                 .requestMatchers("/api/user/route-preview").permitAll()
                 .requestMatchers("/api/public/**").permitAll()

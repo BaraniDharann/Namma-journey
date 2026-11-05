@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { userLogin, googleLogin, sendOtp, userForgotPassword, saveUserPassword } from '../utils/api'
 import { offerToSaveLogin, wasSaveOfferSkipped, skipSaveOffer } from '../utils/rememberLogin'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
+import { takeReturn } from '../utils/returnTo'
 
 export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
@@ -22,7 +23,7 @@ export default function LoginPage() {
 
   const finishGoogle = (auth) => {
     login(auth)
-    navigate('/user/dashboard')
+    navigate(takeReturn() || '/user/dashboard')
   }
 
   const handleSavePassword = async (e) => {
@@ -54,7 +55,7 @@ export default function LoginPage() {
       const res = await userLogin({ loginType: 'EMAIL', email: form.email, password: form.password })
       void offerToSaveLogin(form.email, form.password, res.data?.name)
       login(res.data)
-      navigate('/user/dashboard')
+      navigate(takeReturn() || '/user/dashboard')
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid credentials. Please try again.')
     } finally {
@@ -74,7 +75,7 @@ export default function LoginPage() {
         return
       }
       login(res.data)
-      navigate('/user/dashboard')
+      navigate(takeReturn() || '/user/dashboard')
     } catch (err) {
       setError(err.response?.data?.error || 'Google login failed. Please try again.')
     } finally {

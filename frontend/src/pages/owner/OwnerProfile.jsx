@@ -4,6 +4,7 @@ import { OWNER_NAV } from '../../components/owner/ownerNav'
 import useOwnerMe from '../../hooks/useOwnerMe'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, Skeleton } from '../../components/dash/ui'
+import FleetTypePanel from '../../components/bus/FleetTypePanel'
 
 function Rows({ rows }) {
   return (
@@ -65,6 +66,7 @@ export default function OwnerProfile() {
             ]} />
           )}
         </Panel>
+        <FleetTypePanel span={6} />
       </div>
     </DashboardLayout>
   )

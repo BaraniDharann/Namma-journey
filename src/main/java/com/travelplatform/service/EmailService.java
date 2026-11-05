@@ -371,6 +371,14 @@ public class EmailService {
                 HTML_FOOTER);
     }
 
+    /**
+     * A bus ticket message (confirmation, reminder, cancellation, refund) composed by BusNotifier.
+     * {@code bodyHtml} must already be escaped; it is framed like every other notification.
+     */
+    public void sendBusTicketEmail(String toEmail, String subject, String bodyHtml) {
+        queue(toEmail, subject, HTML_HEADER + bodyHtml + HTML_FOOTER);
+    }
+
     private void queue(String to, String subject, String html) {
         if (to == null || to.isBlank()) {
             return;

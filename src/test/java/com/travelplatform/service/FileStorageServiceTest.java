@@ -132,5 +132,8 @@ class FileStorageServiceTest {
         for (String doc : new String[] {"registration", "pan", "aadhaar"}) {
             assertEquals(ImageProfile.DOCUMENT, FileStorageService.profileFor("owners", doc), doc);
         }
+        // A bus's gallery photo is a photo customers browse, not a face; its permit/RC are documents.
+        assertEquals(ImageProfile.PHOTO, FileStorageService.profileFor("buses/12", "photo"));
+        assertEquals(ImageProfile.DOCUMENT, FileStorageService.profileFor("buses/12", "doc_permit"));
     }
 }

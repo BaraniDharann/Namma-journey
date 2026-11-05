@@ -6,7 +6,7 @@ import {
   Eye, DownloadSimple, Funnel, MapTrifold, Power, EnvelopeSimple, Camera, Link as LinkIcon,
   PaperPlaneTilt, ArrowsClockwise, Sparkle, HandsPraying, CreditCard, QrCode, ChartPie,
   ChartLine, ChartLineUp, SteeringWheel, Lock, Eye as EyeOpen, EyeSlash, GoogleLogo, IdentificationCard,
-  Crown, Suitcase, Gauge, Sun, Moon, TelegramLogo, Moped,
+  Crown, Suitcase, Gauge, Sun, Moon, TelegramLogo, Moped, Bus, Copy,
 } from '@phosphor-icons/react'
 import ErtigaIcon from '../brand/ErtigaIcon'
 import AutoRickshawIcon from '../brand/AutoRickshawIcon'
@@ -28,7 +28,7 @@ const SET = {
   pie: ChartPie, bar: ChartBar, line: ChartLine, area: ChartLineUp,
   wheel: SteeringWheel, lock: Lock, 'eye-open': EyeOpen, 'eye-off': EyeSlash, google: GoogleLogo,
   id: IdentificationCard, crown: Crown, suitcase: Suitcase, gauge: Gauge, sun: Sun, moon: Moon,
-  telegram: TelegramLogo, bike: Moped, auto: AutoRickshawIcon,
+  telegram: TelegramLogo, bike: Moped, auto: AutoRickshawIcon, bus: Bus, copy: Copy,
 }
 
 export default function Icon({ name, size = 18, className = '', style, title, weight }) {
@@ -66,10 +66,17 @@ const NAV = [
   [/\/payments$/, 'wallet'],
   [/\/reviews$/, 'star'],
   [/\/revenue$/, 'chart'],
+  [/\/buses$/, 'bus'],
+  [/\/bus-routes$/, 'route'],
+  [/\/bus-trips$/, 'ticket'],
+  [/\/bus-approvals$/, 'bus'],
+  [/\/bus-tickets$/, 'ticket'],
+  [/\/bus-earnings$/, 'rupee'],
+  [/\/bus-payouts$/, 'wallet'],
   [/\/profile$/, 'user'],
 ]
 export const navIcon = (path) => NAV.find(([re]) => re.test(path))?.[1] || 'sparkle'
 
 /** Each nav destination keeps one tint, used for its icon chip across the app. */
-const TINT = { home: 'brand', plus: 'brand', calendar: 'blue', ticket: 'pink', package: 'violet', car: 'teal', gauge: 'violet', rupee: 'green', wallet: 'green', star: 'amber', chart: 'blue', user: 'slate' }
+const TINT = { home: 'brand', plus: 'brand', calendar: 'blue', ticket: 'pink', package: 'violet', car: 'teal', bus: 'teal', route: 'violet', gauge: 'violet', rupee: 'green', wallet: 'green', star: 'amber', chart: 'blue', user: 'slate' }
 export const navTint = (path) => TINT[navIcon(path)] || 'brand'

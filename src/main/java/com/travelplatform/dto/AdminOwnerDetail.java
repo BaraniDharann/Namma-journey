@@ -18,7 +18,8 @@ public record AdminOwnerDetail(Long id, String ownerCode, OwnerStatus status, St
                                String bankName, String upiId, LocalDateTime submittedAt,
                                LocalDateTime reviewBy, boolean overdue, String rejectionReason,
                                boolean mustChangePassword, Documents documents, AadhaarQr aadhaarQr,
-                               Map<OwnerVerificationCheck.Type, Check> checks, boolean canApprove) {
+                               Map<OwnerVerificationCheck.Type, Check> checks, boolean canApprove,
+                               java.math.BigDecimal busCommissionPercent) {
 
     public record Documents(String registration, String pan, String aadhaar) {
     }

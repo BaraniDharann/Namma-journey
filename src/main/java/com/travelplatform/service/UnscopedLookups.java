@@ -1,6 +1,7 @@
 package com.travelplatform.service;
 
 import com.travelplatform.config.OwnerScope;
+import com.travelplatform.repository.BusRepository;
 import com.travelplatform.repository.DriverRepository;
 import com.travelplatform.repository.VehicleRepository;
 import org.springframework.stereotype.Service;
@@ -25,11 +26,14 @@ public class UnscopedLookups {
 
     private final VehicleRepository vehicles;
     private final DriverRepository drivers;
+    private final BusRepository buses;
     private final TransactionTemplate fresh;
 
-    public UnscopedLookups(VehicleRepository vehicles, DriverRepository drivers, PlatformTransactionManager transactions) {
+    public UnscopedLookups(VehicleRepository vehicles, DriverRepository drivers, BusRepository buses,
+                           PlatformTransactionManager transactions) {
         this.vehicles = vehicles;
         this.drivers = drivers;
+        this.buses = buses;
         this.fresh = new TransactionTemplate(transactions);
         this.fresh.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.fresh.setReadOnly(true);
@@ -42,6 +46,11 @@ public class UnscopedLookups {
     /** The id of the car holding this plate (spaceless, upper case), whoever owns it. */
     public Optional<Long> vehiclePlateHolder(String key) {
         return unscoped(() -> vehicles.findByRegistrationKey(key).map(v -> v.getId()));
+    }
+
+    /** The id of the bus holding this plate (spaceless, upper case), whoever owns it. */
+    public Optional<Long> busPlateHolder(String key) {
+        return unscoped(() -> buses.findByRegistrationKey(key).map(b -> b.getId()));
     }
 
     /** The id of the driver whose own profile holds this plate, whoever they belong to. */

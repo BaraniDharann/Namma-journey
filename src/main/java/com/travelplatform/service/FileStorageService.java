@@ -62,9 +62,13 @@ public class FileStorageService {
 
     /**
      * What an upload shows, from where it is stored: the driver's own photo is a face, trip
-     * folders hold end-of-trip / odometer photos, everything else is an identity or vehicle document.
+     * folders hold end-of-trip / odometer photos, a bus's gallery photos are shown to customers
+     * browsing buses, everything else is an identity or vehicle document.
      */
     static ImageProfile profileFor(String folder, String namePrefix) {
+        if (folder != null && folder.startsWith("buses/") && "photo".equals(namePrefix)) {
+            return ImageProfile.PHOTO;
+        }
         if ("photo".equals(namePrefix)) {
             return ImageProfile.PROFILE;
         }

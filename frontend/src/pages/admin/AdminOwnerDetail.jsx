@@ -6,6 +6,7 @@ import { Panel, PageHead, Skeleton } from '../../components/dash/ui'
 import { adminOwner, adminOwnerCheck, adminApproveOwner, adminRejectOwner, adminResendCredentials } from '../../utils/api'
 import { rejectReasonError, REJECT_MAX } from '../../utils/rejectReason'
 import { adminNavItems, errorText, when } from './adminNav'
+import BusCommissionPanel from '../../components/bus/BusCommissionPanel'
 
 // Each check is made by hand on a free official source; the button opens it in a new tab.
 const CHECKS = [
@@ -207,6 +208,8 @@ export default function AdminOwnerDetail() {
                 )}
               </Panel>
             )}
+
+            {o.status === 'APPROVED' && <BusCommissionPanel key={o.id} ownerId={o.id} percent={o.busCommissionPercent} />}
 
             {o.status === 'APPROVED' && o.mustChangePassword && (
               <Panel span={12} title="Owner has not signed in yet">

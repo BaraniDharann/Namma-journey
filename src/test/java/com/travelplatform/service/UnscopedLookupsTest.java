@@ -51,6 +51,8 @@ class UnscopedLookupsTest {
     @Autowired
     private VehicleRepository vehicles;
     @Autowired
+    private com.travelplatform.repository.BusRepository buses;
+    @Autowired
     private UnscopedLookups lookups;
     @Autowired
     private PlatformTransactionManager transactions;
@@ -81,6 +83,24 @@ class UnscopedLookupsTest {
         });
 
         assertEquals(Boolean.TRUE, taken);
+        assertTrue(OwnerScope.current().isPresent(), "the owner's scope is back afterwards");
+    }
+
+    @Test
+    @DisplayName("an owner adding a bus whose plate another owner's bus has is told so")
+    void busPlateOfAnotherOwnerIsSeen() {
+        Long a = jdbc.queryForObject("INSERT INTO owners (email, role, created_at) VALUES ('ba@x.com', 'ROLE_OWNER', now()) RETURNING id", Long.class);
+        Long b = jdbc.queryForObject("INSERT INTO owners (email, role, created_at) VALUES ('bb@x.com', 'ROLE_OWNER', now()) RETURNING id", Long.class);
+        Long theirs = jdbc.queryForObject("INSERT INTO buses (owner_id, registration_number, name, permit_type) "
+                + "VALUES (?, 'TN01BU0001', 'Their bus', 'STAGE_CARRIAGE') RETURNING id", Long.class, a);
+        OwnerScope.bind(b, false);
+
+        java.util.Optional<Long> holder = new TransactionTemplate(transactions).execute(tx -> {
+            assertTrue(buses.findByRegistrationKey("TN01BU0001").isEmpty(), "the row filter hides it from owner B");
+            return lookups.busPlateHolder("TN01BU0001");
+        });
+
+        assertEquals(java.util.Optional.of(theirs), holder);
         assertTrue(OwnerScope.current().isPresent(), "the owner's scope is back afterwards");
     }
 }

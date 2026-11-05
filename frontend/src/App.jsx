@@ -46,6 +46,23 @@ const PackageDetail  = lazy(() => import('./pages/PackageDetail'))
 const SharedTripPage = lazy(() => import('./pages/SharedTripPage'))
 const UserPackageBookings = lazy(() => import('./pages/user/UserPackageBookings'))
 
+// Bus module: owner screens and the admin's bus approvals
+const OwnerBuses          = lazy(() => import('./pages/owner/bus/OwnerBuses'))
+const OwnerBusWizard      = lazy(() => import('./pages/owner/bus/OwnerBusWizard'))
+const OwnerBusRoutes      = lazy(() => import('./pages/owner/bus/OwnerBusRoutes'))
+const OwnerBusRouteWizard = lazy(() => import('./pages/owner/bus/OwnerBusRouteWizard'))
+const OwnerBusTrips       = lazy(() => import('./pages/owner/bus/OwnerBusTrips'))
+const OwnerBusTripDetail  = lazy(() => import('./pages/owner/bus/OwnerBusTripDetail'))
+const AdminBusApprovals   = lazy(() => import('./pages/admin/AdminBusApprovals'))
+const AdminBusDetail      = lazy(() => import('./pages/admin/AdminBusDetail'))
+const AdminBusPayouts     = lazy(() => import('./pages/admin/AdminBusPayouts'))
+const OwnerBusEarnings    = lazy(() => import('./pages/owner/bus/OwnerBusEarnings'))
+// Bus module: customer search, seat map and tickets
+const BusSearchPage       = lazy(() => import('./pages/bus/BusSearchPage'))
+const BusTripPage         = lazy(() => import('./pages/bus/BusTripPage'))
+const UserBusTickets      = lazy(() => import('./pages/user/UserBusTickets'))
+const UserBusTicketDetail = lazy(() => import('./pages/user/UserBusTicketDetail'))
+
 function PageLoader() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#fff' }}>
@@ -135,6 +152,21 @@ function AppRoutes() {
         <Route path="/owner/profile"   element={<ProtectedRoute role="ROLE_OWNER"><OwnerProfile /></ProtectedRoute>} />
         <Route path="/owner/packages" element={<ProtectedRoute role="ROLE_OWNER"><OwnerPackages /></ProtectedRoute>} />
         <Route path="/owner/package-bookings" element={<ProtectedRoute role="ROLE_OWNER"><OwnerPackageBookings /></ProtectedRoute>} />
+        <Route path="/owner/buses"          element={<ProtectedRoute role="ROLE_OWNER"><OwnerBuses /></ProtectedRoute>} />
+        <Route path="/owner/buses/:id"      element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusWizard /></ProtectedRoute>} />
+        <Route path="/owner/bus-routes"     element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusRoutes /></ProtectedRoute>} />
+        <Route path="/owner/bus-routes/:id" element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusRouteWizard /></ProtectedRoute>} />
+        <Route path="/owner/bus-trips"      element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusTrips /></ProtectedRoute>} />
+        <Route path="/owner/bus-trips/:id"  element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusTripDetail /></ProtectedRoute>} />
+        <Route path="/admin/bus-approvals"     element={<ProtectedRoute role="ROLE_ADMIN"><AdminBusApprovals /></ProtectedRoute>} />
+        <Route path="/admin/bus-approvals/:id" element={<ProtectedRoute role="ROLE_ADMIN"><AdminBusDetail /></ProtectedRoute>} />
+        <Route path="/admin/bus-payouts"      element={<ProtectedRoute role="ROLE_ADMIN"><AdminBusPayouts /></ProtectedRoute>} />
+        <Route path="/owner/bus-earnings"     element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusEarnings /></ProtectedRoute>} />
+        <Route path="/user/bus-tickets"       element={<ProtectedRoute role="ROLE_USER"><UserBusTickets /></ProtectedRoute>} />
+        <Route path="/user/bus-tickets/:id"   element={<ProtectedRoute role="ROLE_USER"><UserBusTicketDetail /></ProtectedRoute>} />
+        {/* Public: anyone can search buses and see a seat map; booking asks for a login. */}
+        <Route path="/bus/search"         element={<BusSearchPage />} />
+        <Route path="/bus/trip/:tripId"   element={<BusTripPage />} />
 
         <Route path="/packages/:id" element={<PackageDetail />} />
         {/* Public: family opens this from a shared trip link or an SOS alert, without logging in. */}
