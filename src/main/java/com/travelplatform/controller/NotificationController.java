@@ -3,12 +3,14 @@ package com.travelplatform.controller;
 import com.travelplatform.entity.Notification;
 import com.travelplatform.service.NotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -20,12 +22,19 @@ public class NotificationController {
 
     private final NotificationService notificationService;
 
+    /**
+     * Same JSON array as before, but only the latest {@code limit} (default 50, at most 100).
+     * Older ones: pass the last row's createdAt as {@code before} (ISO date-time).
+     */
     @GetMapping
     public ResponseEntity<List<Notification>> getNotifications(
             @RequestParam String recipientId,
-            @RequestParam String role) {
+            @RequestParam String role,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime before) {
         assertOwnRecipient(recipientId, role);
-        return ResponseEntity.ok(notificationService.getNotifications(recipientId, role));
+        return ResponseEntity.ok(notificationService.getNotifications(recipientId, role, limit, before));
     }
 
     @GetMapping("/unread-count")

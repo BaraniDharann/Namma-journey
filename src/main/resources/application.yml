@@ -75,7 +75,8 @@ spring:
   servlet:
     multipart:
       enabled: true
-      # Per photo as uploaded; ImageCompressor stores it at about 1 MB or less.
+      # Per photo as uploaded (the browser shrinks it first); ImageCompressor stores a profile
+      # photo at ~50 KB, a trip photo at ~150 KB and a document at ~300 KB.
       max-file-size: 30MB
       # Driver sign-up sends up to four documents at once.
       max-request-size: 125MB
@@ -183,6 +184,17 @@ app:
     # Open (pending/confirmed/started) bookings one passenger may hold at once, so a single account
     # cannot tie up the whole fleet with reservations (TripRules).
     max-open-per-user: ${BOOKING_MAX_OPEN_PER_USER:5}
+
+  notifications:
+    # In-app notifications (the bell) are purged by age (NotificationPurgeJob), the shared owner
+    # bucket included: read ones after read-days, any after max-days. 0 switches a rule off.
+    # Deleted batch-size rows per statement, at most max-batches-per-run batches per run.
+    retention:
+      read-days: ${NOTIFICATION_READ_RETENTION_DAYS:30}
+      max-days: ${NOTIFICATION_MAX_RETENTION_DAYS:90}
+      batch-size: ${NOTIFICATION_PURGE_BATCH_SIZE:5000}
+      max-batches-per-run: ${NOTIFICATION_PURGE_MAX_BATCHES:200}
+      interval-ms: ${NOTIFICATION_PURGE_INTERVAL_MS:3600000}
 
   storage:
     # Where uploads (driver documents, trip photos) live:

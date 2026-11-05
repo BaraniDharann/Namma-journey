@@ -468,6 +468,26 @@ public class NotificationService {
         return notificationRepository.findByRecipientIdAndRecipientRoleOrderByCreatedAtDesc(recipientId, role);
     }
 
+    /** What the bell shows when the caller does not ask for a size. */
+    public static final int DEFAULT_PAGE_SIZE = 50;
+    /** Upper bound on one page, whatever the caller asks for. */
+    public static final int MAX_PAGE_SIZE = 100;
+
+    /**
+     * The latest {@code limit} notifications, newest first, optionally only those older than
+     * {@code before} (the createdAt of the last row the caller already has). Always capped: the
+     * bell polled the uncapped list every 10 s, and the shared owner bucket had grown to thousands
+     * of rows that were all sent on every poll.
+     */
+    public List<Notification> getNotifications(String recipientId, String role, Integer limit, LocalDateTime before) {
+        int size = limit == null ? DEFAULT_PAGE_SIZE : Math.max(1, Math.min(MAX_PAGE_SIZE, limit));
+        org.springframework.data.domain.Pageable page = org.springframework.data.domain.PageRequest.of(0, size);
+        return before == null
+                ? notificationRepository.findByRecipientIdAndRecipientRoleOrderByCreatedAtDesc(recipientId, role, page)
+                : notificationRepository.findByRecipientIdAndRecipientRoleAndCreatedAtBeforeOrderByCreatedAtDesc(
+                        recipientId, role, before, page);
+    }
+
     public long getUnreadCount(String recipientId, String role) {
         return notificationRepository.countByRecipientIdAndRecipientRoleAndReadFalse(recipientId, role);
     }
