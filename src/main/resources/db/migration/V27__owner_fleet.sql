@@ -79,19 +79,20 @@ UPDATE public.drivers d SET owner_id = o.id
 FROM public.owners o
 WHERE o.owner_code = 'NJO-0001' AND d.fleet = 'OWNER_FLEET';
 
--- Each fleet driver's car becomes a vehicle; plates are already unique among drivers (V16).
+-- Each fleet driver's car becomes a vehicle; plates are already unique among drivers (V16). A bike
+-- or auto is not a Trip car, so it gets no vehicle (and no usual car) rather than a fake Sedan.
 INSERT INTO public.vehicles (owner_id, category, registration_number, model, seats, ac)
 SELECT d.owner_id,
        CASE WHEN d.vehicle_seats <= 5 THEN 'SEDAN' WHEN d.vehicle_seats <= 8 THEN 'SUV' ELSE 'TEMPO_TRAVELLER' END,
        COALESCE(NULLIF(upper(replace(d.vehicle_number, ' ', '')), ''), 'TEMP-' || d.id),
        d.vehicle_model, LEAST(GREATEST(d.vehicle_seats, 1), 30), d.vehicle_ac
 FROM public.drivers d
-WHERE d.fleet = 'OWNER_FLEET' AND d.owner_id IS NOT NULL
+WHERE d.fleet = 'OWNER_FLEET' AND d.owner_id IS NOT NULL AND d.vehicle_type = 'CAR'
 ORDER BY d.id;
 
 UPDATE public.drivers d SET default_vehicle_id = v.id
 FROM public.vehicles v
-WHERE d.fleet = 'OWNER_FLEET'
+WHERE d.fleet = 'OWNER_FLEET' AND d.vehicle_type = 'CAR'
   AND v.registration_number = COALESCE(NULLIF(upper(replace(d.vehicle_number, ' ', '')), ''), 'TEMP-' || d.id);
 
 -- Owner-fleet drivers take Trips only.

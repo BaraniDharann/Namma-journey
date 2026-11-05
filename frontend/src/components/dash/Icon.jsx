@@ -60,6 +60,8 @@ const NAV = [
   [/\/bookings$/, 'calendar'],
   [/\/driver-applications$/, 'id'],
   [/\/drivers$/, 'car'],
+  [/\/vehicles$/, 'gauge'],
+  [/\/pricing$/, 'rupee'],
   [/\/cities$/, 'map'],
   [/\/payments$/, 'wallet'],
   [/\/reviews$/, 'star'],
@@ -76,5 +78,5 @@ const NAV = [
 export const navIcon = (path) => NAV.find(([re]) => re.test(path))?.[1] || 'sparkle'
 
 /** Each nav destination keeps one tint, used for its icon chip across the app. */
-const TINT = { home: 'brand', plus: 'brand', calendar: 'blue', ticket: 'pink', package: 'violet', car: 'teal', bus: 'teal', route: 'violet', wallet: 'green', star: 'amber', chart: 'blue', user: 'slate' }
+const TINT = { home: 'brand', plus: 'brand', calendar: 'blue', ticket: 'pink', package: 'violet', car: 'teal', bus: 'teal', route: 'violet', gauge: 'violet', rupee: 'green', wallet: 'green', star: 'amber', chart: 'blue', user: 'slate' }
 export const navTint = (path) => TINT[navIcon(path)] || 'brand'

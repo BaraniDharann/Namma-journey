@@ -62,6 +62,10 @@ public class BusService {
     private final FileStorageService files;
     private final BusViewMapper mapper;
     private final OwnerScope ownerScope = new OwnerScope();
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.UnscopedLookups lookups;
+
     private Clock clock = Clock.system(ZoneId.of("Asia/Kolkata"));
 
     public BusService(BusRepository buses, BusSeatRepository seats, BusDocumentRepository documents,
@@ -295,9 +299,10 @@ public class BusService {
             if (!PLATE.matcher(plate).matches()) {
                 throw new IllegalArgumentException("Registration number looks wrong. Use the number plate, e.g. TN 01 AB 1234");
             }
-            buses.findByRegistrationKey(plate)
-                    .filter(other -> b.getId() == null || !b.getId().equals(other.getId()))
-                    .ifPresent(other -> {
+            // Through UnscopedLookups: the row filter hides other owners' buses from this owner.
+            (lookups != null ? lookups.busPlateHolder(plate) : buses.findByRegistrationKey(plate).map(Bus::getId))
+                    .filter(otherId -> b.getId() == null || !b.getId().equals(otherId))
+                    .ifPresent(otherId -> {
                         throw new IllegalArgumentException("Registration number already added");
                     });
             b.setRegistrationNumber(plate);

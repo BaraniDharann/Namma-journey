@@ -4,7 +4,8 @@ import DashboardLayout from '../../components/DashboardLayout'
 import PlaceAutocomplete from '../../components/PlaceAutocomplete'
 import RouteMap from '../../components/RouteMap'
 import { useAuth } from '../../context/AuthContext'
-import { createBooking, getCurrentPricing, getCityFareEstimate } from '../../utils/api'
+import { createBooking, getPublicTripRates, getCityFareEstimate, getRoutePreview } from '../../utils/api'
+import { CAR_CATEGORIES, categoryLabel, estimateTripPrice } from '../../utils/carCategories'
 import { actionKey } from '../../utils/idempotency'
 import { MobileRequiredPanel, needsMobileNumber } from '../../components/MobileNumberGate'
 import Icon from '../../components/dash/Icon'
@@ -40,7 +41,7 @@ const MODES = [
 const emptyForm = (mode = 'TRIP') => ({
   mode, vehicleType: 'AUTO',
   fromPlace: '', toPlace: '', fromLat: null, fromLon: null, toLat: null, toLon: null,
-  fromDate: '', toDate: '', travelMembers: 1, acType: 'AC', bookingType: 'DISTANCE_BASED', bookingHours: 2,
+  fromDate: '', toDate: '', travelMembers: 1, acType: 'AC', bookingType: 'DISTANCE_BASED', bookingHours: 2, carCategory: '',
 })
 
 export default function NewBooking() {
@@ -67,16 +68,32 @@ export default function NewBooking() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(null)
-  const [pricing, setPricing] = useState({ pricePerKm: 10, pricePerHour: 150 })
+  const [rates, setRates] = useState(null)
   const [estimate, setEstimate] = useState({ loading: false, data: null, failed: false })
 
   const city = form.mode === 'CITY'
 
+  // Only the car types that are priced can be booked; the first one starts selected.
   useEffect(() => {
-    getCurrentPricing().then(res => {
-      if (res.data) setPricing(res.data)
-    }).catch(() => {})
+    getPublicTripRates().then(res => setRates(res.data || [])).catch(() => setRates([]))
   }, [])
+  const offered = CAR_CATEGORIES.filter((c) => rates?.some((r) => r.category === c.value))
+  const carCategory = form.carCategory || offered[0]?.value || ''
+  const rate = rates?.find((r) => r.category === carCategory)
+
+  // The road distance for a Trip, so the estimate uses the chosen car's per-km price.
+  const routeKey = !city && form.fromLat && form.toLat ? `${form.fromLat},${form.fromLon},${form.toLat},${form.toLon}` : null
+  const [route, setRoute] = useState(null)
+  useEffect(() => {
+    if (!routeKey) return undefined
+    let stale = false
+    getRoutePreview(form.fromLat, form.fromLon, form.toLat, form.toLon)
+      .then((r) => { if (!stale) setRoute({ key: routeKey, km: r.data?.distanceKm ?? null }) })
+      .catch(() => {})
+    return () => { stale = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- routeKey already carries the coordinates
+  }, [routeKey])
+  const tripKm = route?.key === routeKey ? route.km : null
 
   // City fares for bike, auto and car, from the real road route, once both places are picked.
   useEffect(() => {
@@ -127,6 +144,10 @@ export default function NewBooking() {
         setError('End date cannot be before the start date.')
         return
       }
+      if (!carCategory) {
+        setError('Please choose a car type.')
+        return
+      }
       if (form.bookingType === 'HOUR_BASED' && (!form.bookingHours || Number(form.bookingHours) < 1)) {
         setError('Please enter a valid number of hours for an hour-based booking.')
         return
@@ -153,6 +174,7 @@ export default function NewBooking() {
         acType: city ? 'NON_AC' : form.acType,
         bookingType: city ? 'DISTANCE_BASED' : form.bookingType,
         bookingHours: !city && form.bookingType === 'HOUR_BASED' ? Number(form.bookingHours) : null,
+        carCategory: city ? null : carCategory,
       }, bookingKey.current.get())
       // Done: the next booking is a new action and needs its own key.
       bookingKey.current.reset()
@@ -240,7 +262,9 @@ export default function NewBooking() {
   const subHead = { fontSize: 12, fontWeight: 800, color: 'var(--pc-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 }
   const lbl = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
   const picked = <div style={{ fontSize: 12, color: 'var(--pc-good)', marginTop: 4, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="check" size={13} />Location selected</div>
-  const hourTotal = form.bookingHours * pricing.pricePerHour
+  const hourly = form.bookingType === 'HOUR_BASED'
+  const tripTotal = hourly ? estimateTripPrice(rate, { hours: form.bookingHours })
+    : tripKm ? estimateTripPrice(rate, { km: tripKm }) : null
   const row = { gridTemplateColumns: 'minmax(0,1fr) auto' }
   const chosenFare = fareFor(form.vehicleType)
 
@@ -376,6 +400,28 @@ export default function NewBooking() {
                 </div>
               )}
 
+              {/* Car type */}
+              <h3 style={{ ...subHead, marginTop: 24 }}><Icon name="car" size={15} />Car type</h3>
+              {rates && offered.length === 0 ? (
+                <p role="alert" style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--pc-warn)' }}>Trips can&apos;t be booked right now. Please try again later.</p>
+              ) : (
+                <div role="radiogroup" aria-label="Car type" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+                  {offered.map((c) => {
+                    const r = rates.find((x) => x.category === c.value)
+                    const on = carCategory === c.value
+                    return (
+                      <button key={c.value} type="button" role="radio" aria-checked={on} onClick={() => set('carCategory', c.value)}
+                        style={{ ...choice(on), flexDirection: 'column', alignItems: 'flex-start', gap: 4, padding: 14 }}>
+                        <span style={{ fontSize: 14 }}>{c.label}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--pc-muted)' }}>
+                          {hourly ? `${inr(r.perHour)}/hour` : `${inr(r.perKm)}/km`} · ~{c.seats} seats
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
               {/* Travel Details */}
               <h3 style={{ ...subHead, marginTop: 24 }}><Icon name="calendar" size={15} />Travel details</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 14 }}>
@@ -449,23 +495,18 @@ export default function NewBooking() {
                     <span style={{ color: 'var(--pc-ink-2)' }}>Booking type</span>
                     <b>{form.bookingType === 'HOUR_BASED' ? 'Hour Based' : 'Distance Based'}</b>
                   </div>
-                  {form.bookingType === 'HOUR_BASED' ? (
-                    <>
-                      <div className="pc-row" style={row}>
-                        <span style={{ color: 'var(--pc-ink-2)' }}>Rate: {inr(pricing.pricePerHour)}/hour</span>
-                        <b>Duration: {form.bookingHours} hour{form.bookingHours > 1 ? 's' : ''}</b>
-                      </div>
-                      <div className="pc-row" style={row}>
-                        <span style={{ color: 'var(--pc-ink-2)' }}>Estimated total</span>
-                        <span className="pc-figure" style={{ fontSize: 26, color: 'var(--pc-brand-deep)' }}>{inr(hourTotal)}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="pc-row" style={row}>
-                      <span style={{ color: 'var(--pc-ink-2)' }}>Rate</span>
-                      <b>{inr(pricing.pricePerKm)}/km</b>
-                    </div>
-                  )}
+                  <div className="pc-row" style={row}>
+                    <span style={{ color: 'var(--pc-ink-2)' }}>Car · rate</span>
+                    <b>{categoryLabel(carCategory)}{rate ? ` · ${hourly ? `${inr(rate.perHour)}/hour` : `${inr(rate.perKm)}/km`}` : ''}</b>
+                  </div>
+                  <div className="pc-row" style={row}>
+                    <span style={{ color: 'var(--pc-ink-2)' }}>{hourly ? 'Duration' : 'Road distance'}</span>
+                    <b>{hourly ? `${form.bookingHours} hour${form.bookingHours > 1 ? 's' : ''}` : tripKm ? `${Number(tripKm).toFixed(1)} km` : '—'}</b>
+                  </div>
+                  <div className="pc-row" style={row}>
+                    <span style={{ color: 'var(--pc-ink-2)' }}>Estimated total</span>
+                    <span className="pc-figure" style={{ fontSize: 26, color: 'var(--pc-brand-deep)' }}>{rate && tripTotal != null ? inr(tripTotal) : '—'}</span>
+                  </div>
                   <div className="pc-row" style={row}>
                     <span style={{ color: 'var(--pc-ink-2)' }}>Travellers · car</span>
                     <b>{form.travelMembers} · {form.acType === 'AC' ? 'AC' : 'Non-AC'}</b>
@@ -476,7 +517,7 @@ export default function NewBooking() {
             {(city || form.bookingType !== 'HOUR_BASED') && (
               <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--pc-muted)' }}>The final fare is worked out from the road distance when you confirm.</p>
             )}
-            <button type="submit" disabled={loading || (city && tooManyFor(form.vehicleType))} className="pc-btn" style={{ width: '100%', marginTop: 16, minHeight: 48, fontSize: 15 }}>
+            <button type="submit" disabled={loading || (city ? tooManyFor(form.vehicleType) : !carCategory)} className="pc-btn" style={{ width: '100%', marginTop: 16, minHeight: 48, fontSize: 15 }}>
               {loading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Calculating route & price...</>
                 : <><Icon name={city ? VEHICLES[form.vehicleType]?.icon : 'check'} />{city ? `Book ${vehicleLabel(form.vehicleType).toLowerCase()} now` : 'Confirm Booking'}</>}
             </button>

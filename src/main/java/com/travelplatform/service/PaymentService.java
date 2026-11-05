@@ -290,6 +290,14 @@ public class PaymentService {
         return response;
     }
     
+    /** A payment an owner may act on: their own Trip's, or for the platform owner a City ride's. Else not found. */
+    @Transactional(readOnly = true)
+    public void requireVisibleTo(UUID paymentId, Long ownerId, boolean platform) {
+        paymentRepository.findById(paymentId)
+                .filter(p -> p.getOwnerId() != null ? p.getOwnerId().equals(ownerId) : platform)
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Payment not found"));
+    }
+
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "dailyRevenue",   allEntries = true),
@@ -297,13 +305,6 @@ public class PaymentService {
             @CacheEvict(value = "yearlyRevenue",  allEntries = true),
             @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
     })
-    /** A payment an owner may act on: their own Trip's, or for the platform owner a City ride's. Else not found. */
-    public void requireVisibleTo(UUID paymentId, Long ownerId, boolean platform) {
-        paymentRepository.findById(paymentId)
-                .filter(p -> p.getOwnerId() != null ? p.getOwnerId().equals(ownerId) : platform)
-                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Payment not found"));
-    }
-
     public PaymentResponse verifyPayment(UUID paymentId, String verifiedBy) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new RuntimeException("Payment not found"));

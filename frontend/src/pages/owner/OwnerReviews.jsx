@@ -1,25 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
 import Pagination, { usePagination } from '../../components/Pagination'
 import { getAllReviews } from '../../utils/api'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, Empty, Skeleton } from '../../components/dash/ui'
 import { HBarList } from '../../components/dash/charts'
-
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
 
 const starOn = { fill: 'currentColor', color: 'var(--pc-s4)' }
 const starOff = { color: 'var(--pc-line)' }
@@ -51,7 +37,7 @@ export default function OwnerReviews() {
   const chipStyle = (on) => ({ border: 'none', cursor: 'pointer', ...(on ? { background: 'var(--pc-ink)', color: 'var(--pc-panel)' } : {}) })
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       <PageHead title="Customer Reviews" sub={`${reviews.length} total reviews`} />
 
       <div className="pc-grid">

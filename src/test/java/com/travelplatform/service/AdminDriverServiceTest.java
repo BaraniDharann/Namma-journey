@@ -152,4 +152,17 @@ class AdminDriverServiceTest {
 
         assertEquals("KA 01 AB 1234", saved.getVehicleNumber());
     }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("a mobile another owner's or an independent driver already has is refused clearly")
+    void driverConflictSeenAcrossOwners() {
+        UnscopedLookups lookups = mock(UnscopedLookups.class);
+        when(lookups.driverConflict("9000000001", "r@x.com", "DL1", "123412341234")).thenReturn("Mobile number already registered");
+        ReflectionTestUtils.setField(service, "lookups", lookups);
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> service.createDriver(
+                "Ravi", "9000000001", "r@x.com", "DL1", "123412341234", img, img, img, null, null));
+        assertEquals("Mobile number already registered", e.getMessage());
+        verify(files, never()).storeFile(any(), anyString());
+    }
 }

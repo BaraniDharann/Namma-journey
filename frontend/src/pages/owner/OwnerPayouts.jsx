@@ -1,25 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
 import { getPayouts, recordPayout, getPendingDues, confirmDues, rejectDues } from '../../utils/api'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, Empty, Skeleton } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
 import { useCelebrate } from '../../components/celebrate/Celebration'
-
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
 
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
 
@@ -125,7 +111,7 @@ export default function OwnerPayouts() {
   }
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       {active && <TransferModal row={active} onClose={() => setActive(null)} onSaved={saved} />}
       <PageHead title="Payouts" sub="What you owe independent drivers for rides paid to you, and the commission they owe on cash rides." />
 

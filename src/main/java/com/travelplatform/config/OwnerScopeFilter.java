@@ -37,7 +37,10 @@ public class OwnerScopeFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         Long ownerId = ownerId(SecurityContextHolder.getContext().getAuthentication());
-        if (ownerId == null) {
+        // Only the owner's own screens run scoped. Public pages (packages, trip rates) are cached for
+        // everyone, so filling those caches under one owner's row filter would show every customer
+        // that owner's view.
+        if (ownerId == null || !ownerPath(request.getRequestURI())) {
             chain.doFilter(request, response);
             return;
         }
@@ -49,6 +52,10 @@ public class OwnerScopeFilter extends OncePerRequestFilter {
         } finally {
             OwnerScope.clear();
         }
+    }
+
+    private static boolean ownerPath(String uri) {
+        return uri != null && (uri.startsWith("/api/owner/") || uri.startsWith("/actuator/"));
     }
 
     private static Long ownerId(Authentication auth) {

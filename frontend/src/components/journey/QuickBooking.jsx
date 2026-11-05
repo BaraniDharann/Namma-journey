@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../../context/AuthContext'
-import { createBooking, getPublicPricing } from '../../utils/api'
+import { createBooking, getPublicTripRates } from '../../utils/api'
+import { CAR_CATEGORIES, estimateTripPrice } from '../../utils/carCategories'
 import { actionKey } from '../../utils/idempotency'
 import PlaceAutocomplete from '../PlaceAutocomplete'
 import { EASE } from '../motion/primitives'
@@ -20,7 +21,7 @@ const TEMPLES = [
 
 const EMPTY = {
   fromPlace: '', toPlace: '', fromLat: null, fromLon: null, toLat: null, toLon: null,
-  travelMembers: 1, acType: 'AC', bookingHours: 2,
+  travelMembers: 1, acType: 'AC', bookingHours: 2, carCategory: '',
 }
 
 /** Local calendar date n days from today, as yyyy-mm-dd (not UTC, which is yesterday before 5:30 IST). */
@@ -54,7 +55,7 @@ export default function QuickBooking() {
   // One key per booking attempt, reused if the request is retried, so it can only book once.
   const bookingKey = useRef(actionKey())
   const [qb, setQb] = useState(EMPTY)
-  const [pricing, setPricing] = useState({ pricePerHour: 150 })
+  const [rates, setRates] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(null)
@@ -72,11 +73,14 @@ export default function QuickBooking() {
   }
 
   useEffect(() => {
-    getPublicPricing().then((res) => { if (res.data) setPricing(res.data) }).catch(() => {})
+    getPublicTripRates().then((res) => setRates(res.data || [])).catch(() => {})
   }, [])
 
-  const rate = pricing.pricePerHour || 150
-  const estimate = rate * qb.bookingHours
+  // Only priced car types can be booked; until one is picked, the first is assumed.
+  const offered = CAR_CATEGORIES.filter((c) => rates.some((r) => r.category === c.value))
+  const category = qb.carCategory || offered[0]?.value || ''
+  const rate = rates.find((r) => r.category === category)
+  const estimate = estimateTripPrice(rate, { hours: qb.bookingHours })
 
   const submit = async () => {
     if (!user) {
@@ -91,6 +95,10 @@ export default function QuickBooking() {
       setError('Pick the day you want to travel.')
       return
     }
+    if (!category) {
+      setError('Trips can\'t be booked right now. Please try again later.')
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -103,6 +111,7 @@ export default function QuickBooking() {
         fromDate: travelDate, toDate: travelDate,
         travelMembers: qb.travelMembers, acType: qb.acType,
         bookingType: 'HOUR_BASED', bookingHours: qb.bookingHours,
+        carCategory: category,
       }, bookingKey.current.get())
       // Done: the next booking is a new action and needs its own key.
       bookingKey.current.reset()
@@ -197,8 +206,8 @@ export default function QuickBooking() {
                 <p className="qb-sub">An hourly ride with a verified driver</p>
               </div>
               <div className="qb-price" aria-live="polite">
-                <b>₹{estimate.toLocaleString('en-IN')}</b>
-                <span>{qb.bookingHours} h × ₹{rate}</span>
+                <b>{rate ? `₹${estimate.toLocaleString('en-IN')}` : '—'}</b>
+                <span>{rate ? `${qb.bookingHours} h × ₹${Number(rate.perHour).toLocaleString('en-IN')}` : `${qb.bookingHours} h`}</span>
               </div>
             </div>
 
@@ -270,6 +279,17 @@ export default function QuickBooking() {
                   </button>
                 </div>
               </div>
+
+              {offered.length > 0 && (
+                <div className="qb-field">
+                  <span className="qb-label" id="qb-category">Car type</span>
+                  <div className="qb-seg" role="group" aria-labelledby="qb-category">
+                    {offered.map((c) => (
+                      <button key={c.value} type="button" aria-pressed={category === c.value} onClick={() => setQb((p) => ({ ...p, carCategory: c.value }))}>{c.label}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="qb-trio">
                 <Stepper label="Hours" value={qb.bookingHours} min={1} max={24} unit="h"

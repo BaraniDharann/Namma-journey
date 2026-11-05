@@ -79,7 +79,9 @@ class VehicleServiceTest {
     @Test
     @DisplayName("a plate already added, by anyone, is refused before the RC photo is stored")
     void duplicatePlateRefused() {
-        when(vehicles.findByRegistrationKey("KA01AB1234")).thenReturn(Optional.of(new Vehicle()));
+        Vehicle held = new Vehicle();
+        held.setId(5L);
+        when(vehicles.findByRegistrationKey("KA01AB1234")).thenReturn(Optional.of(held));
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> service.create(form("SEDAN", "KA 01 AB 1234", 4), null));
@@ -125,5 +127,17 @@ class VehicleServiceTest {
         Vehicle mine = stored(1, ME);
         when(vehicles.findByOwnerIdOrderByIdAsc(ME)).thenReturn(List.of(mine));
         assertEquals(1, service.list().size());
+    }
+
+    @Test
+    @DisplayName("a plate another owner has (hidden from me by the row filter) is still refused clearly")
+    void otherOwnersPlateRefused() {
+        UnscopedLookups lookups = org.mockito.Mockito.mock(UnscopedLookups.class);
+        when(lookups.vehiclePlateHolder("KA01AB1234")).thenReturn(Optional.of(99L));
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "lookups", lookups);
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> service.create(form("SEDAN", "KA 01 AB 1234", 4), null));
+        assertEquals("Registration number already added", e.getMessage());
     }
 }

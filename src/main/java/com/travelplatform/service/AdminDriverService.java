@@ -41,6 +41,9 @@ public class AdminDriverService {
     @Autowired(required = false)
     private com.travelplatform.repository.VehicleRepository vehicleRepository;
 
+    @Autowired(required = false)
+    private UnscopedLookups lookups;
+
     private final com.travelplatform.config.OwnerScope ownerScope = new com.travelplatform.config.OwnerScope();
 
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$";
@@ -77,7 +80,14 @@ public class AdminDriverService {
         Driver plateCheck = new Driver();
         DriverVehicles.apply(plateCheck, vehicle);
 
-        // Cheap uniqueness checks first so we don't waste disk on a request that will fail.
+        // Cheap uniqueness checks first so we don't waste disk on a request that will fail. They must
+        // see every owner's and independent driver's rows, which the owner's row filter hides.
+        if (lookups != null) {
+            String taken = lookups.driverConflict(mobile, email, licenseNumber, aadhaarNumber);
+            if (taken != null) {
+                throw new IllegalArgumentException(taken);
+            }
+        }
         if (driverRepository.existsByMobile(mobile)) {
             throw new IllegalArgumentException("Mobile number already registered");
         }
@@ -134,7 +144,7 @@ public class AdminDriverService {
 
     @Caching(evict = {
             @CacheEvict(value = "allDrivers", allEntries = true),
-            @CacheEvict(value = "driverById", key = "#driverId")
+            @CacheEvict(value = "driverById", allEntries = true)
     })
     public void deleteDriver(Long driverId) {
         Driver driver = actingOn(driverId);
@@ -236,9 +246,9 @@ public class AdminDriverService {
             return;
         }
         String key = plate.replaceAll("\s+", "").toUpperCase(java.util.Locale.ROOT);
-        driverRepository.findByVehicleKey(key)
-                .filter(other -> !other.getId().equals(ownDriverId))
-                .ifPresent(other -> {
+        (lookups != null ? lookups.driverPlateHolder(key) : driverRepository.findByVehicleKey(key).map(Driver::getId))
+                .filter(otherId -> !otherId.equals(ownDriverId))
+                .ifPresent(otherId -> {
                     throw new IllegalArgumentException("Vehicle number already registered");
                 });
     }
@@ -246,7 +256,7 @@ public class AdminDriverService {
     /** The owner sets a driver's vehicle and City/Trip switches - e.g. for drivers added before V14. */
     @Caching(evict = {
             @CacheEvict(value = "allDrivers", allEntries = true),
-            @CacheEvict(value = "driverById", key = "#driverId")
+            @CacheEvict(value = "driverById", allEntries = true)
     })
     public Driver updateVehicle(Long driverId, com.travelplatform.dto.VehicleRequest vehicle) {
         Driver driver = actingOn(driverId);

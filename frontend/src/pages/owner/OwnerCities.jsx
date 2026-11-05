@@ -1,24 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
 import PlaceAutocomplete from '../../components/PlaceAutocomplete'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, Empty, Skeleton } from '../../components/dash/ui'
 import { getCities, createCity, updateCity } from '../../utils/api'
-
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
 
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
 const EMPTY = { id: null, name: '', centerName: '', centerLat: null, centerLon: null, radiusKm: '30', commissionPercent: '10', active: true }
@@ -74,7 +60,7 @@ export default function OwnerCities() {
   }
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       <PageHead title="Cities" sub="City rides are only offered where a pickup falls inside one of these. Anywhere else is a Trip.">
         {!draft && <button type="button" className="pc-btn" onClick={() => { setError(''); setDraft({ ...EMPTY }) }}><Icon name="plus" size={16} />Add city</button>}
       </PageHead>

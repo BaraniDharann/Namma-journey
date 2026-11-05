@@ -33,6 +33,9 @@ public class DriverService {
     private final FileStorageService fileStorageService;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripCars tripCars;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.repository.OwnerRepository ownerRepository;
 
     /** Trip dates are Indian calendar days. Not final so tests can fix "today". */
@@ -129,7 +132,7 @@ public class DriverService {
     @Transactional
     @org.springframework.cache.annotation.Caching(evict = {
             @org.springframework.cache.annotation.CacheEvict(value = "allDrivers", allEntries = true),
-            @org.springframework.cache.annotation.CacheEvict(value = "driverById", key = "#driverId")
+            @org.springframework.cache.annotation.CacheEvict(value = "driverById", allEntries = true)
     })
     public DriverDetailsResponse updateModes(Long driverId, Boolean servesCity, Boolean servesTrip) {
         Driver driver = driverRepository.findById(driverId)
@@ -478,7 +481,9 @@ public class DriverService {
             driverDetails.setMobile(driver.getMobile());
             driverDetails.setPhoto(driver.getPhoto());
             driverDetails.setLicenseNumber(driver.getLicenseNumber());
-            response.setDriver(driverDetails.withVehicle(driver));
+            // A Trip shows the car its owner put on it, which may not be the driver's own (TripCars).
+            response.setDriver(tripCars == null ? driverDetails.withVehicle(driver)
+                    : tripCars.apply(driverDetails.withVehicle(driver), booking));
         }
 
         return response.withDispatch(booking);

@@ -316,7 +316,11 @@ public class DriverDuesService {
     private TripRateService tripRates;
 
     private String platformFeed() {
-        return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
+        try {
+            return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
+        } catch (IllegalStateException noPlatformOwnerYet) {
+            return "owner"; // a fresh database: the notice must not fail the work it reports
+        }
     }
 
     private void ownerNotice(String type, String title, String message) {

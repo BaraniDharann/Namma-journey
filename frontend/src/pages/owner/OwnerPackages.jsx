@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
 import Pagination, { usePagination } from '../../components/Pagination'
-import { useAuth } from '../../context/AuthContext'
 import Icon from '../../components/dash/Icon'
 import { PageHead, Empty, Skeleton, StatusPill } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
@@ -38,23 +38,7 @@ const emptyForm = {
   highlights: [''], itinerary: [{ day: 1, title: '', description: '', activities: [''] }],
 }
 
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
-
 export default function OwnerPackages() {
-  const { user } = useAuth()
   const celebrate = useCelebrate()
   const [packages, setPackages] = useState([])
   const [loading, setLoading] = useState(true)
@@ -108,7 +92,7 @@ export default function OwnerPackages() {
       if (editId) {
         await updatePackage(editId, data)
       } else {
-        await createPackage(data, user.userId)
+        await createPackage(data)
       }
       setShowForm(false)
       fetchPackages()
@@ -160,7 +144,7 @@ export default function OwnerPackages() {
   const categoryIcon = (cat) => (cat === 'TEMPLE' || cat === 'PILGRIMAGE' ? 'temple' : cat === 'HILL_STATION' || cat === 'ADVENTURE' || cat === 'WILDLIFE' ? 'map' : 'package')
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       <PageHead title="Travel Packages" sub="Create and manage travel packages for your customers">
         <button type="button" className="pc-btn" onClick={openCreate}><Icon name="plus" />Create Package</button>
       </PageHead>

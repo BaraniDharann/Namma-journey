@@ -1,25 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, Empty, Skeleton } from '../../components/dash/ui'
 import { getDriverApplications, approveDriver, rejectDriver } from '../../utils/api'
 import { vehicleIcon, vehicleLabel } from '../../dash/vehicles'
 import { rejectReasonError, REJECT_MAX } from '../../utils/rejectReason'
-
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
 
 const TABS = [
   ['UNDER_REVIEW', 'Waiting'],
@@ -254,7 +240,7 @@ export default function OwnerDriverApplications() {
   const emptyText = { UNDER_REVIEW: 'No applications are waiting.', REJECTED: 'No rejected applications.', APPROVED: 'No approved applications yet.' }[tab]
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       <PageHead title="Driver Applications" sub={waiting == null ? 'Review drivers who signed up on their own' : `${waiting} waiting for review`} />
 
       <div className="pc-chips" role="tablist" aria-label="Application status" style={{ marginBottom: 18 }}>
