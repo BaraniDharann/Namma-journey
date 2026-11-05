@@ -32,6 +32,12 @@ public class DriverService {
     private final BookingDriverRejectionRepository rejectionRepository;
     private final FileStorageService fileStorageService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripCars tripCars;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.OwnerRepository ownerRepository;
+
     /** Trip dates are Indian calendar days. Not final so tests can fix "today". */
     private java.time.Clock clock = java.time.Clock.system(java.time.ZoneId.of("Asia/Kolkata"));
 
@@ -126,7 +132,7 @@ public class DriverService {
     @Transactional
     @org.springframework.cache.annotation.Caching(evict = {
             @org.springframework.cache.annotation.CacheEvict(value = "allDrivers", allEntries = true),
-            @org.springframework.cache.annotation.CacheEvict(value = "driverById", key = "#driverId")
+            @org.springframework.cache.annotation.CacheEvict(value = "driverById", allEntries = true)
     })
     public DriverDetailsResponse updateModes(Long driverId, Boolean servesCity, Boolean servesTrip) {
         Driver driver = driverRepository.findById(driverId)
@@ -315,12 +321,23 @@ public class DriverService {
             declined.add(driverId);
         }
 
-        Driver replacement = driverRepository
-                .findFirstFreeTripDriver(booking.getFromDate(), booking.getToDate(),
-                        "AC".equalsIgnoreCase(booking.getAcType()), UserService.excludedOrNobody(declined))
-                .orElse(null);
+        // An AUTO owner's trip goes to their next free driver and car; a MANUAL owner gets it back.
+        Driver replacement = null;
+        Long replacementVehicle = null;
+        if (autoAssigns(booking.getOwnerId())) {
+            DriverRepository.TripPair pair = driverRepository.findFirstFreeTripPair(booking.getOwnerId(),
+                    (booking.getCarCategory() != null ? booking.getCarCategory() : com.travelplatform.entity.CarCategory.SEDAN).name(),
+                    booking.getTravelMembers() == null ? 1 : Math.max(1, booking.getTravelMembers()),
+                    "AC".equalsIgnoreCase(booking.getAcType()), booking.getFromDate(), booking.getToDate(),
+                    UserService.excludedOrNobody(declined)).orElse(null);
+            if (pair != null) {
+                replacement = driverRepository.findById(pair.getDriverId()).orElse(null);
+                replacementVehicle = replacement == null ? null : pair.getVehicleId();
+            }
+        }
 
         booking.setDriverId(replacement != null ? replacement.getId() : null);
+        booking.setVehicleId(replacementVehicle);
         booking.setStatus(TravelBooking.BookingStatus.PENDING);
         TravelBooking updated = bookingRepository.save(booking);
         if (driverStates != null) {
@@ -334,6 +351,19 @@ public class DriverService {
         }
 
         return mapToResponse(updated);
+    }
+
+    /** Whether a booking's owner hands Trips out automatically. Without an owner table (unit tests), today's AUTO. */
+    private boolean autoAssigns(Long ownerId) {
+        if (ownerRepository == null) {
+            return true;
+        }
+        if (ownerId == null) {
+            return false;
+        }
+        return ownerRepository.findById(ownerId)
+                .map(o -> o.getAssignmentMode() == com.travelplatform.entity.Owner.AssignmentMode.AUTO)
+                .orElse(false);
     }
 
     @Transactional
@@ -451,7 +481,9 @@ public class DriverService {
             driverDetails.setMobile(driver.getMobile());
             driverDetails.setPhoto(driver.getPhoto());
             driverDetails.setLicenseNumber(driver.getLicenseNumber());
-            response.setDriver(driverDetails.withVehicle(driver));
+            // A Trip shows the car its owner put on it, which may not be the driver's own (TripCars).
+            response.setDriver(tripCars == null ? driverDetails.withVehicle(driver)
+                    : tripCars.apply(driverDetails.withVehicle(driver), booking));
         }
 
         return response.withDispatch(booking);

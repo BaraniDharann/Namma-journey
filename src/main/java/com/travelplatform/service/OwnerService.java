@@ -5,10 +5,8 @@ import com.travelplatform.dto.MonthlyRevenue;
 import com.travelplatform.dto.RevenueTotals;
 import com.travelplatform.dto.TravelBookingResponse;
 import com.travelplatform.entity.Driver;
-import com.travelplatform.entity.PricingConfig;
 import com.travelplatform.entity.TravelBooking;
 import com.travelplatform.repository.DriverRepository;
-import com.travelplatform.repository.PricingConfigRepository;
 import com.travelplatform.repository.TravelBookingRepository;
 import com.travelplatform.entity.TripDriverPhoto;
 import com.travelplatform.repository.TripDriverPhotoRepository;
@@ -28,17 +26,16 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OwnerService {
 
-    /** Used until the owner sets prices for the first time. */
-    private static final BigDecimal DEFAULT_PRICE_PER_KM = new BigDecimal("10.00");
-    private static final BigDecimal DEFAULT_PRICE_PER_HOUR = new BigDecimal("150.00");
-    
     private final TravelBookingRepository travelBookingRepository;
-    private final PricingConfigRepository pricingConfigRepository;
+    private final com.travelplatform.repository.OwnerRepository ownerRepository;
     private final DriverRepository driverRepository;
     private final TripDriverPhotoRepository tripDriverPhotoRepository;
     private final NotificationService notificationService;
 
     // Field-injected so existing constructor-built tests are unaffected; null-guarded where used.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripCars tripCars;
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.repository.PaymentRepository paymentRepository;
 
@@ -53,75 +50,54 @@ public class OwnerService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DispatchService dispatchService;
 
-    public List<TravelBooking> getAllBookings() {
-        return travelBookingRepository.findAll();
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.VehicleRepository vehicleRepository;
+
+    // Stateless: reads the request's owner (OwnerScopeFilter), so tests bind OwnerScope directly.
+    private final com.travelplatform.config.OwnerScope ownerScope = new com.travelplatform.config.OwnerScope();
+
+    /** One owner's Trips, newest first (their Bookings screen). */
+    public List<TravelBooking> getTripBookings(Long ownerId) {
+        return travelBookingRepository.findByOwnerIdAndServiceModeOrderByBookingDateDesc(ownerId, TravelBooking.ServiceMode.TRIP);
+    }
+
+    /** The platform's City rides, newest first (a platform screen). */
+    public List<TravelBooking> getCityRides() {
+        return travelBookingRepository.findByOwnerIdIsNullAndServiceModeOrderByBookingDateDesc(TravelBooking.ServiceMode.CITY);
     }
     
-    // Every price change is a NEW row (history), carrying the other price forward. A per-km change
-    // used to save a row with no hourly price, so the hourly price silently fell back to the default
-    // once its cache expired; both caches are evicted so every instance sees both prices at once.
-    @Caching(evict = {
-            @CacheEvict(value = "pricing", allEntries = true),
-            @CacheEvict(value = "hourlyPricing", allEntries = true)
-    })
-    public Map<String, Object> setPricePerKm(BigDecimal requestedPricePerKm, Long ownerId) {
-        BigDecimal pricePerKm = Money.positivePrice(requestedPricePerKm, "Price per km");
-        BigDecimal currentHourly = pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
-                .map(PricingConfig::getPricePerHour)
-                .orElse(null);
-        PricingConfig config = new PricingConfig();
-        config.setPricePerKm(pricePerKm);
-        config.setPricePerHour(currentHourly);
-        config.setUpdatedAt(LocalDateTime.now());
-        config.setUpdatedBy(ownerId);
-        pricingConfigRepository.save(config);
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Price per km updated successfully");
-        response.put("pricePerKm", pricePerKm);
-        response.put("updatedAt", config.getUpdatedAt());
-        return response;
-    }
-    
-    @Cacheable(value = "pricing")
-    public BigDecimal getCurrentPricePerKm() {
-        return pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
-            .map(PricingConfig::getPricePerKm)
-            .orElse(DEFAULT_PRICE_PER_KM);
+    /** The calling owner's own profile, with whether they are the platform owner (NJO-0001). */
+    @Transactional(readOnly = true)
+    public com.travelplatform.dto.OwnerProfileView profile(Long ownerId, boolean platform) {
+        com.travelplatform.entity.Owner o = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Owner not found"));
+        List<String> cities = o.getCities() == null ? List.of()
+                : o.getCities().stream().map(com.travelplatform.entity.City::getName).sorted().toList();
+        return new com.travelplatform.dto.OwnerProfileView(o.getId(), o.getOwnerCode(), o.getTravelsName(),
+                o.getContactName(), o.getPhone(), o.getEmail(), cities, o.getBankAccountHolder(),
+                o.getBankAccountNumber() == null ? null : OwnerApplicationChecks.maskAccount(o.getBankAccountNumber()),
+                o.getBankIfsc(), o.getBankName(), o.getUpiId(),
+                o.getAssignmentMode() == null ? null : o.getAssignmentMode().name(), platform);
     }
 
-    @Caching(evict = {
-            @CacheEvict(value = "pricing", allEntries = true),
-            @CacheEvict(value = "hourlyPricing", allEntries = true)
-    })
-    public Map<String, Object> setPricePerHour(BigDecimal requestedPricePerHour, Long ownerId) {
-        BigDecimal pricePerHour = Money.positivePrice(requestedPricePerHour, "Price per hour");
-        // A new row, never an edit of the latest one: editing in place destroyed pricing history.
-        BigDecimal currentKm = pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
-                .map(PricingConfig::getPricePerKm)
-                .orElse(DEFAULT_PRICE_PER_KM);
-        PricingConfig config = new PricingConfig();
-        config.setPricePerHour(pricePerHour);
-        config.setPricePerKm(currentKm);
-        config.setUpdatedAt(LocalDateTime.now());
-        config.setUpdatedBy(ownerId);
-        pricingConfigRepository.save(config);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Price per hour updated successfully");
-        response.put("pricePerHour", pricePerHour);
-        response.put("updatedAt", config.getUpdatedAt());
-        return response;
-    }
-
-    @Cacheable(value = "hourlyPricing")
-    public BigDecimal getCurrentPricePerHour() {
-        return pricingConfigRepository.findTopByOrderByUpdatedAtDesc()
-            .map(PricingConfig::getPricePerHour)
-            .orElse(DEFAULT_PRICE_PER_HOUR);
+    /** How this owner's Trips get a driver: AUTO (first free driver and car) or MANUAL (the owner assigns). */
+    @Transactional
+    public com.travelplatform.entity.Owner.AssignmentMode setAssignmentMode(Long ownerId, String mode) {
+        com.travelplatform.entity.Owner.AssignmentMode m;
+        try {
+            m = com.travelplatform.entity.Owner.AssignmentMode.valueOf(String.valueOf(mode).trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Assignment mode must be AUTO or MANUAL");
+        }
+        com.travelplatform.entity.Owner owner = ownerRepository.findById(ownerId)
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Owner not found"));
+        owner.setAssignmentMode(m);
+        ownerRepository.save(owner);
+        return m;
     }
 
     public Map<String, Object> getDriverPhotoForBooking(UUID bookingId) {
+        ownBooking(bookingId, ownerScope.ownerId());
         TripDriverPhoto photo = tripDriverPhotoRepository.findByBookingId(bookingId)
             .orElseThrow(() -> new RuntimeException("No driver photo found for this booking"));
         Map<String, Object> response = new HashMap<>();
@@ -140,15 +116,18 @@ public class OwnerService {
      * is counted once, in the new period. The JSON shape is unchanged.
      */
 
-    @Cacheable(value = "dailyRevenue", key = "#date.toString()")
-    public Map<String, Object> getDailyRevenue(LocalDate date) {
-        return revenueReport(date.atStartOfDay(), date.plusDays(1).atStartOfDay(), "Daily", date.toString());
+    // Revenue is per owner (their Trips), or with ownerId null the platform's City rides. Every
+    // cache key starts with whose revenue it is, so one owner's figures never answer another.
+
+    @Cacheable(value = "dailyRevenue", key = "(#ownerId == null ? 'platform' : #ownerId) + ':' + #date.toString()")
+    public Map<String, Object> getDailyRevenue(Long ownerId, LocalDate date) {
+        return revenueReport(ownerId, date.atStartOfDay(), date.plusDays(1).atStartOfDay(), "Daily", date.toString());
     }
 
-    @Cacheable(value = "monthlyRevenue", key = "#year + '-' + #month")
-    public Map<String, Object> getMonthlyRevenue(int year, int month) {
+    @Cacheable(value = "monthlyRevenue", key = "(#ownerId == null ? 'platform' : #ownerId) + ':' + #year + '-' + #month")
+    public Map<String, Object> getMonthlyRevenue(Long ownerId, int year, int month) {
         LocalDate startDate = LocalDate.of(year, month, 1);
-        return revenueReport(startDate.atStartOfDay(), startDate.plusMonths(1).atStartOfDay(),
+        return revenueReport(ownerId, startDate.atStartOfDay(), startDate.plusMonths(1).atStartOfDay(),
                 "Monthly", year + "-" + String.format("%02d", month));
     }
 
@@ -157,12 +136,12 @@ public class OwnerService {
      * trips. The revenue screen's twelve-bar chart used to cost 12 HTTP requests, then a full
      * year of entities in memory; now it is a dozen rows at most.
      */
-    @Cacheable(value = "monthlyRevenueSeries", key = "#year")
-    public Map<String, Object> getMonthlyRevenueSeries(int year) {
+    @Cacheable(value = "monthlyRevenueSeries", key = "(#ownerId == null ? 'platform' : #ownerId) + ':' + #year")
+    public Map<String, Object> getMonthlyRevenueSeries(Long ownerId, int year) {
         LocalDateTime start = LocalDate.of(year, 1, 1).atStartOfDay();
         LocalDateTime end = LocalDate.of(year + 1, 1, 1).atStartOfDay();
         Map<Integer, MonthlyRevenue> byMonth = new HashMap<>();
-        for (MonthlyRevenue row : travelBookingRepository.monthlyRevenue(start, end)) {
+        for (MonthlyRevenue row : travelBookingRepository.monthlyRevenue(start, end, ownerId)) {
             byMonth.put(row.month(), row);
         }
 
@@ -192,15 +171,14 @@ public class OwnerService {
         return response;
     }
 
-    @Cacheable(value = "yearlyRevenue", key = "#year")
-    public Map<String, Object> getYearlyRevenue(int year) {
-        return revenueReport(LocalDate.of(year, 1, 1).atStartOfDay(), LocalDate.of(year + 1, 1, 1).atStartOfDay(),
+    @Cacheable(value = "yearlyRevenue", key = "(#ownerId == null ? 'platform' : #ownerId) + ':' + #year")
+    public Map<String, Object> getYearlyRevenue(Long ownerId, int year) {
+        return revenueReport(ownerId, LocalDate.of(year, 1, 1).atStartOfDay(), LocalDate.of(year + 1, 1, 1).atStartOfDay(),
                 "Yearly", String.valueOf(year));
     }
     
     public Map<String, Object> getTripRevenue(UUID tripId) {
-        TravelBooking booking = travelBookingRepository.findById(tripId)
-            .orElseThrow(() -> new RuntimeException("Trip not found"));
+        TravelBooking booking = ownBooking(tripId, ownerScope.ownerId());
         Map<String, Object> response = new HashMap<>();
         response.put("tripId", booking.getId());
         response.put("fromPlace", booking.getFromPlace());
@@ -213,8 +191,8 @@ public class OwnerService {
         return response;
     }
     
-    private Map<String, Object> revenueReport(LocalDateTime start, LocalDateTime end, String period, String periodValue) {
-        RevenueTotals totals = travelBookingRepository.revenueTotals(start, end);
+    private Map<String, Object> revenueReport(Long ownerId, LocalDateTime start, LocalDateTime end, String period, String periodValue) {
+        RevenueTotals totals = travelBookingRepository.revenueTotals(start, end, ownerId);
 
         Map<String, Object> response = new HashMap<>();
         response.put("period", period);
@@ -223,7 +201,7 @@ public class OwnerService {
         response.put("totalDistance", totals.distanceKm());
         response.put("totalRevenue", totals.revenue());
         response.put("totalTravelDays", totals.travelDays());
-        response.put("trips", travelBookingRepository.revenueTrips(start, end).stream().map(t -> {
+        response.put("trips", travelBookingRepository.revenueTrips(start, end, ownerId).stream().map(t -> {
             Map<String, Object> trip = new HashMap<>();
             trip.put("id", t.id());
             trip.put("fromPlace", t.fromPlace());
@@ -237,17 +215,31 @@ public class OwnerService {
         return response;
     }
     
-    @Cacheable(value = "allDrivers")
-    public List<DriverDetailsResponse> getAllDrivers() {
-        return driverRepository.findAll().stream()
+    /** One owner's fleet drivers (their Drivers screen). Cached per owner: one list never serves another. */
+    @Cacheable(value = "allDrivers", key = "#ownerId")
+    public List<DriverDetailsResponse> getAllDrivers(Long ownerId) {
+        return driverRepository.findByOwnerIdAndFleetOrderByCreatedAtDesc(ownerId, Driver.Fleet.OWNER_FLEET).stream()
                 .map(this::mapToDriverDetails)
                 .collect(Collectors.toList());
     }
 
-    @Cacheable(value = "driverById", key = "#driverId")
-    public DriverDetailsResponse getDriverById(Long driverId) {
+    /** Independent (self-signup) drivers: the platform's City-ride drivers. */
+    @Cacheable(value = "allDrivers", key = "'independent'")
+    public List<DriverDetailsResponse> getIndependentDrivers() {
+        return driverRepository.findByFleetOrderByCreatedAtDesc(Driver.Fleet.INDEPENDENT).stream()
+                .map(this::mapToDriverDetails)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * One driver, for the owner whose fleet it is - or for the platform owner, an independent
+     * driver. Anyone else gets "not found". Cached per owner and driver.
+     */
+    @Cacheable(value = "driverById", key = "#ownerId + ':' + #platform + ':' + #driverId")
+    public DriverDetailsResponse getDriverById(Long ownerId, boolean platform, Long driverId) {
         Driver driver = driverRepository.findById(driverId)
-                .orElseThrow(() -> new RuntimeException("Driver not found"));
+                .filter(d -> ownerId.equals(d.getOwnerId()) || (platform && d.getFleet() == Driver.Fleet.INDEPENDENT))
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Driver not found"));
         return mapToDriverDetails(driver);
     }
 
@@ -281,8 +273,25 @@ public class OwnerService {
             @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
     })
     public TravelBookingResponse assignDriver(UUID bookingId, Long driverId) {
-        TravelBooking booking = travelBookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
+        return assignDriver(bookingId, driverId, null);
+    }
+
+    /**
+     * Puts one of my drivers and one of my cars on one of my Trips ({@code vehicleId} null: the
+     * driver's usual car). City rides are the platform's: only NJO-0001 assigns them, and only to
+     * an independent driver. Another owner's booking, driver or car is "not found".
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "dailyRevenue",   allEntries = true),
+            @CacheEvict(value = "monthlyRevenue", allEntries = true),
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true),
+            @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
+    })
+    public TravelBookingResponse assignDriver(UUID bookingId, Long driverId, Long vehicleId) {
+        Long me = ownerScope.ownerId();
+        TravelBooking booking = ownBooking(bookingId, me);
+        boolean trip = booking.getServiceMode() == TravelBooking.ServiceMode.TRIP;
 
         // Only before the trip starts. Reassigning a STARTED trip threw it back to CONFIRMED with a
         // new driver while the old one was still driving the passenger.
@@ -296,7 +305,8 @@ public class OwnerService {
         }
 
         Driver driver = driverRepository.findById(driverId)
-                .orElseThrow(() -> new RuntimeException("Driver not found"));
+                .filter(d -> trip ? me.equals(d.getOwnerId()) : d.getOwnerId() == null || me.equals(d.getOwnerId()))
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Driver not found"));
 
         if (driver.getStatus() != Driver.Status.ACTIVE) {
             throw new RuntimeException("Driver is not active and cannot be assigned");
@@ -304,27 +314,31 @@ public class OwnerService {
         if (!driver.isApproved()) {
             throw new IllegalArgumentException(driver.getName() + " has not been approved yet.");
         }
-        if (booking.getServiceMode() == TravelBooking.ServiceMode.TRIP && driver.getFleet() != Driver.Fleet.OWNER_FLEET) {
+        if (trip && driver.getFleet() != Driver.Fleet.OWNER_FLEET) {
             throw new IllegalArgumentException("Trips go to your own fleet; " + driver.getName() + " is an independent driver.");
         }
-        // The owner may override a driver's City/Trip switches, but not their vehicle: a bike ride
-        // is not driven by car, and a Trip is never given to a bike or auto.
-        if (booking.getVehicleType() != null && driver.getVehicleType() != booking.getVehicleType()) {
-            throw new IllegalArgumentException("This " + (booking.getServiceMode() == TravelBooking.ServiceMode.TRIP
-                    ? "trip needs a car" : "ride needs a " + vehicleName(booking.getVehicleType()))
+        if (!trip && driver.getFleet() != Driver.Fleet.INDEPENDENT) {
+            throw new IllegalArgumentException("City rides go to independent drivers; " + driver.getName()
+                    + " is a travels owner's driver.");
+        }
+        // A City ride needs the driver's own vehicle type: a bike ride is not driven by car.
+        if (!trip && booking.getVehicleType() != null && driver.getVehicleType() != booking.getVehicleType()) {
+            throw new IllegalArgumentException("This ride needs a " + vehicleName(booking.getVehicleType())
                     + ", and " + driver.getName() + " drives a " + vehicleName(driver.getVehicleType()) + ".");
         }
+        Long carId = trip ? suitableCar(booking, driver, vehicleId).getId() : null;
 
         long overlapping = driverRepository.countOverlappingActiveBookings(
                 driverId, booking.getFromDate(), booking.getToDate(), bookingId);
         if (overlapping > 0) {
-            throw new RuntimeException(
-                    "Driver already has an active trip overlapping these dates ("
+            throw new com.travelplatform.exception.ConflictException(
+                    driver.getName() + " already has an active trip overlapping these dates ("
                             + booking.getFromDate() + " to " + booking.getToDate() + ")");
         }
 
         Long previousDriverId = booking.getDriverId();
         booking.setDriverId(driverId);
+        booking.setVehicleId(carId);
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         // The owner's choice ends a Ride Now search: out of the matching queue, the new driver
         // busy, and a different driver who held its offer freed and told it is gone.
@@ -361,6 +375,89 @@ public class OwnerService {
         return mapToResponse(updatedBooking, driver);
     }
     
+    /** My free drivers and my free cars that suit this Trip, for the assign screen. */
+    @Transactional(readOnly = true)
+    public com.travelplatform.dto.AssignOptions assignOptions(UUID bookingId) {
+        Long me = ownerScope.ownerId();
+        TravelBooking booking = ownBooking(bookingId, me);
+        if (booking.getServiceMode() != TravelBooking.ServiceMode.TRIP) {
+            throw new IllegalArgumentException("Only Trips are assigned from here");
+        }
+        List<com.travelplatform.dto.AssignOptions.DriverOption> freeDrivers = driverRepository
+                .findFreeOwnerTripDrivers(me, booking.getFromDate(), booking.getToDate(), bookingId).stream()
+                .map(d -> new com.travelplatform.dto.AssignOptions.DriverOption(d.getId(), d.getName(), d.getDefaultVehicleId()))
+                .toList();
+        List<com.travelplatform.dto.AssignOptions.VehicleOption> freeCars = vehicleRepository
+                .findFreeVehicles(me, categoryOf(booking), seatsOf(booking), needsAc(booking),
+                        booking.getFromDate(), booking.getToDate(), bookingId).stream()
+                .map(v -> new com.travelplatform.dto.AssignOptions.VehicleOption(
+                        v.getId(), v.getRegistrationNumber(), v.getModel(), v.getSeats(), v.isAc()))
+                .toList();
+        return new com.travelplatform.dto.AssignOptions(freeDrivers, freeCars);
+    }
+
+    /**
+     * A booking the calling owner may act on: their own Trip, or - for the platform owner - a
+     * City ride. Anything else is "not found", never "forbidden", so ids reveal nothing.
+     */
+    private TravelBooking ownBooking(UUID bookingId, Long me) {
+        return travelBookingRepository.findById(bookingId)
+                .filter(b -> b.getOwnerId() != null ? me.equals(b.getOwnerId()) : ownerScope.isPlatform())
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Booking not found"));
+    }
+
+    /** The car for a Trip: the one chosen, else the driver's usual one; mine, active and suitable. */
+    private com.travelplatform.entity.Vehicle suitableCar(TravelBooking booking, Driver driver, Long vehicleId) {
+        Long id = vehicleId != null ? vehicleId : driver.getDefaultVehicleId();
+        if (id == null) {
+            throw new IllegalArgumentException("Choose a car for this trip");
+        }
+        com.travelplatform.entity.Vehicle car = vehicleRepository.findById(id)
+                .filter(v -> booking.getOwnerId().equals(v.getOwnerId()))
+                .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Car not found"));
+        String plate = car.getRegistrationNumber();
+        if (!car.isActive()) {
+            throw new IllegalArgumentException(plate + " is not in use. Choose another car.");
+        }
+        if (car.getCategory() != categoryOf(booking)) {
+            throw new IllegalArgumentException("This trip was booked as " + label(categoryOf(booking))
+                    + ", and " + plate + " is " + label(car.getCategory()) + ".");
+        }
+        if (car.getSeats() < seatsOf(booking)) {
+            throw new IllegalArgumentException(plate + " seats " + car.getSeats() + "; this trip is for "
+                    + seatsOf(booking) + ".");
+        }
+        if (needsAc(booking) && !car.isAc()) {
+            throw new IllegalArgumentException("This is an AC trip, and " + plate + " has no AC.");
+        }
+        if (vehicleRepository.countOverlappingActiveBookings(car.getId(), booking.getFromDate(), booking.getToDate(),
+                booking.getId()) > 0) {
+            throw new com.travelplatform.exception.ConflictException(plate + " is already on a trip on these dates.");
+        }
+        return car;
+    }
+
+    private static com.travelplatform.entity.CarCategory categoryOf(TravelBooking b) {
+        return b.getCarCategory() != null ? b.getCarCategory() : com.travelplatform.entity.CarCategory.SEDAN;
+    }
+
+    private static int seatsOf(TravelBooking b) {
+        return b.getTravelMembers() == null ? 1 : Math.max(1, b.getTravelMembers());
+    }
+
+    private static boolean needsAc(TravelBooking b) {
+        return "AC".equalsIgnoreCase(b.getAcType());
+    }
+
+    private static String label(com.travelplatform.entity.CarCategory c) {
+        return switch (c) {
+            case HATCHBACK -> "a hatchback";
+            case SEDAN -> "a sedan";
+            case SUV -> "an SUV";
+            case TEMPO_TRAVELLER -> "a tempo traveller";
+        };
+    }
+
     private static String vehicleName(com.travelplatform.entity.VehicleType type) {
         return type == null ? "vehicle" : type.name().toLowerCase(java.util.Locale.ROOT);
     }
@@ -392,7 +489,9 @@ public class OwnerService {
             driverDetails.setMobile(driver.getMobile());
             driverDetails.setPhoto(driver.getPhoto());
             driverDetails.setLicenseNumber(driver.getLicenseNumber());
-            response.setDriver(driverDetails.withVehicle(driver));
+            // A Trip shows the car its owner put on it, which may not be the driver's own (TripCars).
+            response.setDriver(tripCars == null ? driverDetails.withVehicle(driver)
+                    : tripCars.apply(driverDetails.withVehicle(driver), booking));
         }
         
         return response.withDispatch(booking);

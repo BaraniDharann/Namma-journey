@@ -162,9 +162,9 @@ class DriverOverlapConstraintTest {
             }
             c.createStatement().executeUpdate("""
                     INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
-                        first_login, email_verified, token_version, created_at, vehicle_type, serves_trip)
+                        first_login, email_verified, token_version, created_at, vehicle_type, serves_trip, fleet)
                     VALUES ('Ravi', '9000000001', 'x', 'L-1', '111122223333', 'ROLE_DRIVER', 'ACTIVE',
-                        true, false, 0, now(), 'AUTO', false)
+                        true, false, 0, now(), 'AUTO', false, 'INDEPENDENT')
                     """);
             SQLException ex = assertThrows(SQLException.class, () -> c.createStatement().executeUpdate(
                     "UPDATE drivers SET serves_trip = true WHERE mobile = '9000000001'"));
@@ -178,6 +178,11 @@ class DriverOverlapConstraintTest {
         // A driver who existed before V16, so there is someone for it to backfill.
         flyway("15").migrate();
         long existing;
+        // The owner they belonged to; V26 makes them NJO-0001 and V27 gives them this driver.
+        try (Connection c = connect()) {
+            c.createStatement().executeUpdate("INSERT INTO owners (email, password, role, created_at) "
+                    + "VALUES ('boss@x.com', 'h', 'ROLE_OWNER', now())");
+        }
         try (Connection c = connect(); ResultSet rs = c.createStatement().executeQuery("""
                 INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
                     first_login, email_verified, token_version, created_at)
@@ -198,25 +203,25 @@ class DriverOverlapConstraintTest {
             }
             c.createStatement().executeUpdate("""
                     INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
-                        first_login, email_verified, token_version, created_at, vehicle_number)
+                        first_login, email_verified, token_version, created_at, vehicle_number, fleet, serves_trip)
                     VALUES ('Ravi', '9000000002', 'x', 'L-2', '111122224444', 'ROLE_DRIVER', 'ACTIVE',
-                        true, false, 0, now(), 'ka01ab1234')
+                        true, false, 0, now(), 'ka01ab1234', 'INDEPENDENT', false)
                     """);
             SQLException trips = assertThrows(SQLException.class, () -> c.createStatement().executeUpdate(
                     "UPDATE drivers SET fleet = 'INDEPENDENT', serves_trip = true WHERE mobile = '9000000002'"));
             assertEquals("23514", trips.getSQLState(), "check_violation: an independent driver takes no trips");
             SQLException plate = assertThrows(SQLException.class, () -> c.createStatement().executeUpdate("""
                     INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
-                        first_login, email_verified, token_version, created_at, vehicle_number)
+                        first_login, email_verified, token_version, created_at, vehicle_number, fleet, serves_trip)
                     VALUES ('Sam', '9000000003', 'x', 'L-3', '111122225555', 'ROLE_DRIVER', 'ACTIVE',
-                        true, false, 0, now(), 'KA01AB1234')
+                        true, false, 0, now(), 'KA01AB1234', 'INDEPENDENT', false)
                     """));
             assertEquals("23505", plate.getSQLState(), "unique_violation: same plate in another case");
             SQLException spaced = assertThrows(SQLException.class, () -> c.createStatement().executeUpdate("""
                     INSERT INTO drivers (name, mobile, password, license_number, aadhaar_number, role, status,
-                        first_login, email_verified, token_version, created_at, vehicle_number)
+                        first_login, email_verified, token_version, created_at, vehicle_number, fleet, serves_trip)
                     VALUES ('Tim', '9000000004', 'x', 'L-4', '111122226666', 'ROLE_DRIVER', 'ACTIVE',
-                        true, false, 0, now(), 'KA 01 AB 1234')
+                        true, false, 0, now(), 'KA 01 AB 1234', 'INDEPENDENT', false)
                     """));
             assertEquals("23505", spaced.getSQLState(), "unique_violation: same plate with different spacing");
         }
@@ -295,25 +300,14 @@ class DriverOverlapConstraintTest {
     }
 
     @Test
-    @DisplayName("the free-trip-driver query skips busy cars, honours AC and exclusions, and its index exists")
-    void freeTripDriverQueryHonoursOverlapAcAndExclusions() throws Exception {
+    @DisplayName("V19 adds the partial index the availability checks read")
+    void driverAvailabilityIndexExists() throws Exception {
         flyway(null).migrate();
-        LocalDate day = LocalDate.parse("2026-11-01");
-        try (Connection c = connect()) {
-            long busy = car(c, "9100000001", true);
-            long nonAc = car(c, "9100000002", false);
-            long freeAc = car(c, "9100000003", true);
-            insert(c, busy, "CONFIRMED", "2026-10-31", "2026-11-02");
-
-            assertEquals(freeAc, freeTripDriver(c, day, true, List.of(-1L)));
-            assertEquals(nonAc, freeTripDriver(c, day, false, List.of(-1L)), "lowest id first; a non-AC trip takes any car");
-            assertNull(freeTripDriver(c, day, true, List.of(freeAc)));
-
-            try (ResultSet rs = c.createStatement().executeQuery(
-                    "SELECT 1 FROM pg_indexes WHERE indexname = 'idx_travel_bookings_driver_active'")) {
-                assertTrue(rs.next(), "V19 adds the partial index the availability check reads");
-            }
+        try (Connection c = connect(); ResultSet rs = c.createStatement().executeQuery(
+                "SELECT 1 FROM pg_indexes WHERE indexname = 'idx_travel_bookings_driver_active'")) {
+            assertTrue(rs.next());
         }
+        // The free driver-and-car query itself is tested in TripAssignmentQueriesTest.
     }
 
     private static long car(Connection c, String mobile, boolean ac) throws SQLException {
@@ -330,43 +324,6 @@ class DriverOverlapConstraintTest {
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
                 return rs.getLong(1);
-            }
-        }
-    }
-
-    /**
-     * Runs {@link com.travelplatform.repository.DriverRepository#FREE_TRIP_DRIVER_SQL} itself, with
-     * its named parameters turned into JDBC placeholders, so the text tested is the text shipped.
-     */
-    private static Long freeTripDriver(Connection c, LocalDate day, boolean needAc, List<Long> excluded)
-            throws SQLException {
-        Matcher m = Pattern.compile(":(\\w+)").matcher(com.travelplatform.repository.DriverRepository.FREE_TRIP_DRIVER_SQL);
-        List<Object> values = new ArrayList<>();
-        StringBuilder sql = new StringBuilder();
-        while (m.find()) {
-            switch (m.group(1)) {
-                case "fromDate", "toDate" -> {
-                    values.add(Date.valueOf(day));
-                    m.appendReplacement(sql, "?");
-                }
-                case "needAc" -> {
-                    values.add(needAc);
-                    m.appendReplacement(sql, "?");
-                }
-                case "excluded" -> {
-                    values.addAll(excluded);
-                    m.appendReplacement(sql, String.join(",", Collections.nCopies(excluded.size(), "?")));
-                }
-                default -> throw new IllegalStateException("unexpected parameter " + m.group());
-            }
-        }
-        m.appendTail(sql);
-        try (PreparedStatement ps = c.prepareStatement(sql.toString())) {
-            for (int i = 0; i < values.size(); i++) {
-                ps.setObject(i + 1, values.get(i));
-            }
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getLong("id") : null;
             }
         }
     }

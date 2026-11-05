@@ -1,8 +1,10 @@
 package com.travelplatform.security;
 
 import com.travelplatform.config.JwtUtil;
+import com.travelplatform.entity.Admin;
 import com.travelplatform.entity.Owner;
 import com.travelplatform.entity.User;
+import com.travelplatform.repository.AdminRepository;
 import com.travelplatform.repository.OwnerRepository;
 import com.travelplatform.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,6 +70,10 @@ class SecurityEndpointsTest {
     private UserRepository users;
     @Autowired
     private OwnerRepository owners;
+    @Autowired
+    private AdminRepository admins;
+    @Autowired
+    private TokenVersionService tokenVersions;
 
     private User alice;
     private User bob;
@@ -104,8 +110,52 @@ class SecurityEndpointsTest {
         mvc.perform(get("/actuator/metrics")).andExpect(status().isUnauthorized());
         mvc.perform(get("/actuator/metrics").header("Authorization", aliceToken)).andExpect(status().isForbidden());
         mvc.perform(delete("/actuator/caches").header("Authorization", aliceToken)).andExpect(status().isForbidden());
-        mvc.perform(get("/actuator/metrics").header("Authorization", ownerToken)).andExpect(status().isOk());
+        // A travels owner is not the platform: server health is NJO-0001's only (V27).
+        mvc.perform(get("/actuator/metrics").header("Authorization", ownerToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/actuator/metrics").header("Authorization", platformToken())).andExpect(status().isOk());
         mvc.perform(get("/actuator/health")).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("platform screens (cities, City rides, independent drivers, payouts) are the platform owner's only")
+    void platformScreensArePlatformOnly() throws Exception {
+        for (String path : new String[]{"/api/owner/cities", "/api/owner/city-fares", "/api/owner/platform/city-rides",
+                "/api/owner/platform/drivers", "/api/owner/payouts", "/api/owner/dues/pending", "/api/owner/driver-applications"}) {
+            mvc.perform(get(path).header("Authorization", ownerToken)).andExpect(status().isForbidden());
+            mvc.perform(get(path).header("Authorization", platformToken())).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/owner/bookings").header("Authorization", ownerToken)).andExpect(status().isOk());
+        mvc.perform(get("/api/owner/me").header("Authorization", platformToken()))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.platform").value(true));
+        mvc.perform(get("/api/owner/me").header("Authorization", ownerToken))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.platform").value(false));
+    }
+
+    @Test
+    @DisplayName("an owner reads only their own notification feed")
+    void ownerReadsOnlyOwnFeed() throws Exception {
+        Owner me = owners.findById(Long.valueOf(jwt.extractUserId(ownerToken.substring(7)))).orElseThrow();
+        mvc.perform(get("/api/notifications").param("recipientId", me.getId().toString()).param("role", "ROLE_OWNER")
+                .header("Authorization", ownerToken)).andExpect(status().isOk());
+        mvc.perform(get("/api/notifications").param("recipientId", "owner").param("role", "ROLE_OWNER")
+                .header("Authorization", ownerToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/notifications").param("recipientId", String.valueOf(me.getId() + 1000)).param("role", "ROLE_OWNER")
+                .header("Authorization", ownerToken)).andExpect(status().isForbidden());
+    }
+
+    /** NJO-0001, the platform owner: created once per container (Owner IDs are unique). */
+    private String platformToken() {
+        Owner p = owners.findByOwnerCode("NJO-0001").orElseGet(() -> {
+            Owner o = new Owner();
+            o.setEmail("platform-" + UUID.randomUUID() + "@x.com");
+            o.setPassword("x");
+            o.setRole("ROLE_OWNER");
+            o.setOwnerCode("NJO-0001");
+            o.setStatus(com.travelplatform.entity.OwnerStatus.APPROVED);
+            return owners.save(o);
+        });
+        return "Bearer " + jwt.generateToken(p.getId().toString(), "ROLE_OWNER", p.getTokenVersion());
     }
 
     @Test
@@ -160,5 +210,82 @@ class SecurityEndpointsTest {
     @DisplayName("identity documents are not served without a signed link")
     void identityDocumentsNeedASignature() throws Exception {
         mvc.perform(get("/uploads/drivers/aadhaar_" + UUID.randomUUID() + ".jpg")).andExpect(status().isNotFound());
+    }
+
+    private Admin admin() {
+        Admin a = new Admin();
+        a.setEmail("admin-" + UUID.randomUUID() + "@x.com");
+        a.setPassword("x");
+        return admins.save(a);
+    }
+
+    @Test
+    @DisplayName("the admin API is for admins only - not owners, not passengers")
+    void adminEndpointsAreAdminOnly() throws Exception {
+        Admin a = admin();
+        String adminToken = "Bearer " + jwt.generateToken(a.getId().toString(), "ROLE_ADMIN", a.getTokenVersion());
+
+        mvc.perform(get("/api/admin/owners")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/admin/owners").header("Authorization", ownerToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/owners").header("Authorization", aliceToken)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/owners").header("Authorization", adminToken))
+                .andExpect(r -> org.junit.jupiter.api.Assertions.assertTrue(
+                        r.getResponse().getStatus() != 401 && r.getResponse().getStatus() != 403,
+                        "admin was refused: " + r.getResponse().getStatus()));
+        mvc.perform(get("/api/owner/bookings").header("Authorization", adminToken)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("an owner can apply and see the city list without an account")
+    void ownerSignupIsPublic() throws Exception {
+        mvc.perform(get("/api/public/cities")).andExpect(status().isOk());
+        // An empty form is refused by validation (400), not by authentication.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/auth/owner/signup").param("travelsName", "X"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("owner KYC documents are not served without a signed link")
+    void ownerDocumentsNeedASignature() throws Exception {
+        mvc.perform(get("/uploads/owners/pan_" + UUID.randomUUID() + ".jpg")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("an owner on their emailed password can only change it - nothing else")
+    void setupTokenOnlyReachesChangePassword() throws Exception {
+        Owner o = new Owner();
+        o.setEmail("setup-" + UUID.randomUUID() + "@x.com");
+        o.setPassword("x");
+        o.setStatus(com.travelplatform.entity.OwnerStatus.APPROVED);
+        o.setMustChangePassword(true);
+        o = owners.save(o);
+        String setup = "Bearer " + jwt.generateToken(o.getId().toString(), "ROLE_OWNER_SETUP", o.getTokenVersion());
+
+        mvc.perform(get("/api/owner/bookings").header("Authorization", setup)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/owner/change-password").header("Authorization", setup)
+                        .contentType("application/json").content("{}"))
+                .andExpect(r -> org.junit.jupiter.api.Assertions.assertTrue(
+                        r.getResponse().getStatus() != 401 && r.getResponse().getStatus() != 403,
+                        "setup token was refused: " + r.getResponse().getStatus()));
+    }
+
+    @Test
+    @DisplayName("the old owner bootstrap endpoint is gone")
+    void ownerBootstrapIsGone() throws Exception {
+        mvc.perform(post("/api/auth/owner/create-admin").contentType("application/json")
+                        .content("{\"email\":\"a@x.com\",\"password\":\"longpassword\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("an admin token stops working once the admin's tokens are revoked")
+    void adminTokenDiesWhenAdminRevoked() throws Exception {
+        Admin a = admin();
+        String adminToken = "Bearer " + jwt.generateToken(a.getId().toString(), "ROLE_ADMIN", a.getTokenVersion());
+
+        tokenVersions.revokeAdmin(a);
+
+        mvc.perform(get("/api/admin/owners").header("Authorization", adminToken)).andExpect(status().isUnauthorized());
     }
 }

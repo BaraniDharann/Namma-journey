@@ -87,10 +87,10 @@ public class TravelPackageController {
     @PostMapping("/api/owner/packages")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<TravelPackageResponse> createPackage(
-            @Valid @RequestBody TravelPackageRequest request,
-            @RequestParam Long ownerId) {
+            @Valid @RequestBody TravelPackageRequest request) {
+        // The owner is the caller (V27); an ownerId the browser used to send is ignored.
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(packageService.createPackage(request, ownerId));
+                .body(packageService.createPackage(request));
     }
 
     @PutMapping("/api/owner/packages/{id}")

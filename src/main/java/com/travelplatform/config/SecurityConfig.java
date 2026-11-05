@@ -38,6 +38,12 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
 
+    @Autowired
+    private com.travelplatform.repository.OwnerRepository ownerRepository;
+
+    @Value("${app.owners.platform-owner-code:NJO-0001}")
+    private String platformOwnerCode;
+
     @Value("${app.metrics.scrape-token:}")
     private String metricsScrapeToken;
 
@@ -73,7 +79,12 @@ public class SecurityConfig {
                 // Everything else under /actuator (metrics, caches - which accepts DELETE) is for
                 // the owner. It fell through to anyRequest().authenticated(), so any self-signed-up
                 // passenger could read internal metrics or evict every cache.
-                .requestMatchers("/actuator/**").hasRole("OWNER")
+                // ...and only the platform owner (NJO-0001): server health is not a travels owner's business.
+                .requestMatchers("/actuator/**").access((authentication, context) ->
+                        new org.springframework.security.authorization.AuthorizationDecision(
+                                authentication.get() != null && authentication.get().getAuthorities().stream()
+                                        .anyMatch(a -> "ROLE_OWNER".equals(a.getAuthority()))
+                                        && OwnerScope.current().map(OwnerScope.Bound::platform).orElse(false)))
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/places/**").permitAll()
                 .requestMatchers("/api/user/forgot-password").permitAll()
@@ -93,7 +104,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/user/**").hasRole("USER")
                 .requestMatchers("/api/driver/location/**").authenticated()
                 .requestMatchers("/api/driver/**").hasRole("DRIVER")
-                .requestMatchers("/api/owner/pricing/current").authenticated()
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                // An owner on the emailed one-time password (ROLE_OWNER_SETUP) can do this and nothing else.
+                .requestMatchers("/api/owner/change-password").hasAnyRole("OWNER", "OWNER_SETUP")
                 .requestMatchers("/api/owner/**").hasRole("OWNER")
                 .anyRequest().authenticated()
             )
@@ -107,7 +120,9 @@ public class SecurityConfig {
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            // After authentication: an owner request runs in that owner's row-level-security scope (V28).
+            .addFilterAfter(new OwnerScopeFilter(ownerRepository, platformOwnerCode), JwtAuthenticationFilter.class);
         
         return http.build();
     }

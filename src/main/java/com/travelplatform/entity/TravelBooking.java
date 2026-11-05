@@ -133,6 +133,19 @@ public class TravelBooking {
     @Column(name = "city_id")
     private Long cityId;
 
+    /** The travels owner a Trip is booked with. Always null for a City ride (platform). */
+    @Column(name = "owner_id")
+    private Long ownerId;
+
+    /** The car category a Trip was booked and priced by. Always null for a City ride. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "car_category", length = 20)
+    private CarCategory carCategory;
+
+    /** The owner's car on this Trip, set with the driver. */
+    @Column(name = "vehicle_id")
+    private Long vehicleId;
+
     /** The advance a Trip needs before it goes to a driver (V20). Null: none required. */
     @Column(name = "advance_amount", precision = 12, scale = 2)
     private java.math.BigDecimal advanceAmount;

@@ -15,8 +15,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -67,7 +67,8 @@ class TripAdvanceFlowTest {
         RazorpayProperties props = new RazorpayProperties();
         props.setKeyId("rzp_test_key");
         props.setKeySecret(SECRET);
-        service = new RazorpayPaymentService(payments, bookings, paymentService, gateway, props, new ObjectMapper());
+        service = new RazorpayPaymentService(payments, bookings, paymentService, gateway, props, new ObjectMapper(),
+                new TransactionTemplate(new NoOpTransactionManager()));
         ReflectionTestUtils.setField(service, "notificationService", notifications);
         ReflectionTestUtils.setField(service, "driverRepository", drivers);
         ReflectionTestUtils.setField(service, "outbox", outbox);

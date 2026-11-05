@@ -311,9 +311,21 @@ public class DriverDuesService {
         }
     }
 
+// Owner notices go to the platform owner's own feed (V27); "owner" only in hand-built tests.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripRateService tripRates;
+
+    private String platformFeed() {
+        try {
+            return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
+        } catch (IllegalStateException noPlatformOwnerYet) {
+            return "owner"; // a fresh database: the notice must not fail the work it reports
+        }
+    }
+
     private void ownerNotice(String type, String title, String message) {
         Notification n = new Notification();
-        n.setRecipientId("owner");
+        n.setRecipientId(platformFeed());
         n.setRecipientRole("ROLE_OWNER");
         n.setType(type);
         n.setTitle(title);

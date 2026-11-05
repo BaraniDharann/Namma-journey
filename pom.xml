@@ -256,6 +256,14 @@
             <version>3.5.3</version>
         </dependency>
 
+        <!-- Reads the JPEG 2000 photo inside an Aadhaar Secure QR, so the admin's browser can show
+             it as a JPEG (AadhaarPhotoConverter). An ImageIO plugin; nothing calls it directly. -->
+        <dependency>
+            <groupId>com.github.jai-imageio</groupId>
+            <artifactId>jai-imageio-jpeg2000</artifactId>
+            <version>1.4.0</version>
+        </dependency>
+
         <!-- Google ID token verification. Sign-in with Google hands the browser a signed JWT;
              the only thing that makes it proof of identity is checking that signature against
              Google's published keys. GoogleIdTokenVerifier does that (plus issuer, audience and

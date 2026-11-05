@@ -69,6 +69,15 @@ public class ReviewService {
             .collect(Collectors.toList());
     }
 
+    /** One owner's reviews (their Trips), or with {@code ownerId} null the platform's City rides. */
+    public List<ReviewResponse> getReviewsFor(Long ownerId) {
+        return reviewRepository.findAllByOrderByCreatedAtDesc()
+            .stream()
+            .filter(r -> java.util.Objects.equals(r.getOwnerId(), ownerId))
+            .map(this::mapToResponseWithBooking)
+            .collect(Collectors.toList());
+    }
+
     private ReviewResponse mapToResponse(Review review) {
         return new ReviewResponse(
             review.getId(),

@@ -45,6 +45,8 @@ public class DriverDetailsResponse {
     private java.time.LocalDateTime submittedAt;
     /** Minutes until automatic approval (V24); null when the owner decides this one. */
     private Long autoApproveInMinutes;
+    /** The car a travels owner's driver usually drives (V27); null for independent drivers. */
+    private Long defaultVehicleId;
 
     /** Copies the vehicle and City/Trip switches; shared by every mapper that shows a driver. */
     public DriverDetailsResponse withVehicle(com.travelplatform.entity.Driver driver) {
@@ -55,6 +57,16 @@ public class DriverDetailsResponse {
         this.vehicleSeats = driver.getVehicleSeats();
         this.servesCity = driver.isServesCity();
         this.servesTrip = driver.isServesTrip();
+        return this;
+    }
+
+    /** Replaces the vehicle with the car the owner put on this Trip (TripCars). */
+    public DriverDetailsResponse withTripCar(com.travelplatform.entity.Vehicle car) {
+        this.vehicleType = "CAR";
+        this.vehicleNumber = car.getRegistrationNumber();
+        this.vehicleModel = car.getModel();
+        this.vehicleAc = car.isAc();
+        this.vehicleSeats = car.getSeats();
         return this;
     }
 
@@ -69,6 +81,7 @@ public class DriverDetailsResponse {
         this.rejectionReason = driver.getRejectionReason();
         this.rcPhoto = sign.apply(driver.getRcPhoto());
         this.submittedAt = driver.getSubmittedAt();
+        this.defaultVehicleId = driver.getDefaultVehicleId();
         // Minutes, not a timestamp: the server clock's zone is not the owner's browser's.
         this.autoApproveInMinutes = driver.getAutoApproveAt() == null ? null
                 : Math.max(0, java.time.Duration.between(java.time.LocalDateTime.now(), driver.getAutoApproveAt()).toMinutes());

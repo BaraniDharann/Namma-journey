@@ -1,6 +1,7 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import { idempotencyHeaders } from './idempotency'
+import { shrinkFormDataImages } from './shrinkImage'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -23,6 +24,15 @@ api.interceptors.request.use((config) => {
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
     if (config.headers && 'Content-Type' in config.headers) delete config.headers['Content-Type']
     if (config.headers && 'content-type' in config.headers) delete config.headers['content-type']
+  }
+  return config
+})
+
+// Every upload (driver sign-up, document resubmission, owner sign-up, owner adding a driver,
+// end-of-trip photo) goes through here, so photos are shrunk once for all of them.
+api.interceptors.request.use(async (config) => {
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    config.data = await shrinkFormDataImages(config.data)
   }
   return config
 })
@@ -138,6 +148,10 @@ export function invalidateCache(urlPattern) {
   }
 }
 
+// Everything cached belongs to whoever was signed in: cleared on login and logout, so the next
+// account in this tab never sees the last one's bookings, drivers or /owner/me.
+export const clearApiCache = () => invalidateCache('')
+
 // --- Debounce utility ---
 const debounceTimers = new Map()
 function debouncedGet(url, delay = 300) {
@@ -177,6 +191,23 @@ export const driverForgotPassword = (data) => api.post('/auth/driver/forgot-pass
 export const driverRequestResetOtp = (mobile) => api.post('/auth/driver/request-reset-otp', { mobile })
 export const ownerForgotPassword = (data) => api.post('/auth/owner/forgot-password', data)
 export const userForgotPassword = (data) => api.post('/user/forgot-password', data)
+
+// Travels owner onboarding: apply, fix a rejected application, replace the emailed password.
+export const publicCities = () => api.get('/public/cities')
+export const ownerSignup = (formData) => api.post('/auth/owner/signup', formData, { timeout: 60000 })
+export const ownerResubmitPrefill = (token) => api.get(`/auth/owner/resubmit/${encodeURIComponent(token)}`)
+export const ownerResubmit = (token, formData) =>
+  api.post(`/auth/owner/resubmit/${encodeURIComponent(token)}`, formData, { timeout: 60000 })
+export const ownerChangePassword = (data) => api.post('/owner/change-password', data)
+
+// NammaJourney admin: reviewing owner applications.
+export const adminLogin = (data) => api.post('/auth/admin/login', data)
+export const adminOwners = (status) => api.get('/admin/owners', { params: { status } })
+export const adminOwner = (id) => api.get(`/admin/owners/${id}`)
+export const adminOwnerCheck = (id, type, data) => api.put(`/admin/owners/${id}/checks/${type}`, data)
+export const adminApproveOwner = (id) => api.post(`/admin/owners/${id}/approve`)
+export const adminRejectOwner = (id, reason) => api.post(`/admin/owners/${id}/reject`, { reason })
+export const adminResendCredentials = (id) => api.post(`/admin/owners/${id}/resend-credentials`)
 
 // Place Search API (debounced to avoid flooding on keystrokes)
 export const searchPlaces = (query) => debouncedGet(`/places/search?q=${encodeURIComponent(query)}`, 350)
@@ -257,31 +288,56 @@ export const updateDriverLocation = (data) => api.post(`/driver/location/update`
 export const getOwnerBookings = () => cachedGet('/owner/bookings')
 export const getAllReviews = () => cachedGet('/owner/reviews')
 export const getPendingPayments = () => cachedGet('/owner/payments/pending')
+// City-ride UPI payments and City rides: the platform owner's screens (403 for other owners).
+export const getPendingCityPayments = () => api.get('/owner/platform/payments/pending')
+export const getCityRides = () => api.get('/owner/platform/city-rides')
 /** Independent drivers' balances and UPI IDs; recording a transfer changes them, so never cached. */
 export const getPayouts = () => api.get('/owner/payouts')
 export const recordPayout = (driverId, data) => api.post(`/owner/payouts/${driverId}`, data)
 export const verifyPayment = (paymentId) => api.post(`/owner/payments/${paymentId}/verify`).then(res => { invalidateCache('payments'); invalidateCache('bookings'); invalidateCache('revenue'); return res })
-export const assignDriver = (bookingId, driverId) => api.post(`/owner/bookings/${bookingId}/assign-driver`, { driverId }).then(res => { invalidateCache('bookings'); return res })
-export const setPricing = (pricePerKm, ownerId) => api.post(`/owner/pricing/set?pricePerKm=${pricePerKm}&ownerId=${ownerId}`)
-export const setHourlyPricing = (pricePerHour, ownerId) => api.post(`/owner/pricing/set-hourly?pricePerHour=${pricePerHour}&ownerId=${ownerId}`)
+// vehicleId is optional: without it the driver's usual car goes on the trip. Silent: the modal shows the API's message.
+export const assignDriver = (bookingId, driverId, vehicleId) => api.post(`/owner/bookings/${bookingId}/assign-driver`, { driverId, vehicleId: vehicleId || null }, { _silent: true }).then(res => { invalidateCache('bookings'); return res })
+// Free drivers and suitable free cars for one Trip, each driver's usual car marked.
+export const getAssignOptions = (bookingId) => api.get(`/owner/bookings/${bookingId}/assign-options`, { _silent: true })
 export const getDriverTripPhoto = (bookingId) => api.get(`/owner/bookings/${bookingId}/driver-photo`)
-export const getCurrentPricing = () => cachedGet('/owner/pricing/current', 60000)
 export const getDailyRevenue = (date) => api.get(`/owner/revenue/daily?date=${date}`)
 export const getMonthlyRevenue = (year, month, opts = {}) => api.get(`/owner/revenue/monthly?year=${year}&month=${month}`, opts.silent ? { _silent: true } : {})
 // All 12 months in one request — the chart used to fire getMonthlyRevenue twelve times per view.
 export const getMonthlyRevenueSeries = (year, opts = {}) => api.get(`/owner/revenue/monthly-series?year=${year}`, opts.silent ? { _silent: true } : {})
 export const getYearlyRevenue = (year) => api.get(`/owner/revenue/yearly?year=${year}`)
+
+// Who is signed in: travels name, Owner ID, masked bank, assignment mode, and `platform` (NJO-0001 only).
+export const getOwnerMe = () => cachedGet('/owner/me', 60000, true)
+// Trip prices per car category, and whether Trips are assigned automatically or by hand.
+export const getTripRates = () => api.get('/owner/trip-rates')
+export const setTripRate = (category, rate) => api.put(`/owner/trip-rates/${category}`, rate, { _silent: true })
+export const setAssignmentMode = (mode) => api.put('/owner/assignment-mode', { mode }, { _silent: true }).then(res => { invalidateCache('/owner/me'); return res })
+
+// The owner's cars. Writes are silent: the Vehicles page shows the API's message itself.
+export const getOwnerVehicles = () => api.get('/owner/vehicles')
+export const createVehicle = (formData) => api.post('/owner/vehicles', formData, { timeout: 60000, _silent: true })
+export const updateVehicle = (id, data) => api.put(`/owner/vehicles/${id}`, data, { _silent: true })
+export const deactivateVehicle = (id) => api.post(`/owner/vehicles/${id}/deactivate`, null, { _silent: true })
+export const activateVehicle = (id) => api.post(`/owner/vehicles/${id}/activate`, null, { _silent: true })
 // Driver creation does multipart upload + DB writes + dispatches a welcome email — give it a
 // longer timeout than the default 15s and let axios pick the multipart boundary itself.
 export const createDriver = (formData) => api.post('/owner/drivers', formData, { timeout: 60000 })
   .then(res => { invalidateCache('drivers'); return res })
 export const getOwnerDrivers = () => cachedGet('/owner/drivers')
+// Independent City-ride drivers: platform owner only.
+export const getIndependentDrivers = () => api.get('/owner/platform/drivers')
+// My own drivers' licence (Sarathi) and RC (Vahan) checks; both must be VERIFIED before approving.
+export const getDriverChecks = (driverId) => api.get(`/owner/drivers/${driverId}/checks`)
+export const recordDriverCheck = (driverId, type, result, note) =>
+  api.put(`/owner/drivers/${driverId}/checks/${type}`, { result, note }, { _silent: true })
+export const setDriverDefaultVehicle = (driverId, vehicleId) =>
+  api.put(`/owner/drivers/${driverId}/default-vehicle`, { vehicleId }, { _silent: true }).then(res => { invalidateCache('drivers'); return res })
 // Uncached on purpose: an owner deciding on an application must always see the current state,
 // and the document URLs are signed and expire.
 export const getDriverApplications = (status) => api.get('/owner/driver-applications', { params: { status } })
-export const approveDriver = (driverId) => api.post(`/owner/drivers/${driverId}/approve`)
+export const approveDriver = (driverId, opts = {}) => api.post(`/owner/drivers/${driverId}/approve`, null, opts.silent ? { _silent: true } : {})
   .then(res => { invalidateCache('drivers'); return res })
-export const rejectDriver = (driverId, reason) => api.post(`/owner/drivers/${driverId}/reject`, { reason })
+export const rejectDriver = (driverId, reason, opts = {}) => api.post(`/owner/drivers/${driverId}/reject`, { reason }, opts.silent ? { _silent: true } : {})
   .then(res => { invalidateCache('drivers'); return res })
 export const getOwnerDriverById = (driverId) => api.get(`/owner/drivers/${driverId}`)
 export const deleteOwnerDriver = (driverId) => api.delete(`/owner/drivers/${driverId}`)
@@ -305,7 +361,8 @@ export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/prof
 
 // Public APIs (silent — landing page has fallbacks)
 export const getPublicReviews = () => cachedGet('/public/reviews', 5000, true)
-export const getPublicPricing = () => cachedGet('/public/pricing', 60000, true)
+// Trip prices by car category; only the categories that are priced come back.
+export const getPublicTripRates = () => cachedGet('/public/trip-rates', 60000, true)
 export const getPublicCityFares = () => cachedGet('/public/city-fares', 60000, true)
 
 // Travel Package APIs (Public)
@@ -322,7 +379,7 @@ export const cancelPackageBooking = (userId, bookingId, reason) => api.post(`/us
 
 // Travel Package APIs (Owner)
 export const getOwnerPackages = () => cachedGet('/owner/packages')
-export const createPackage = (data, ownerId) => api.post(`/owner/packages?ownerId=${ownerId}`, data).then(res => { invalidateCache('packages'); return res })
+export const createPackage = (data) => api.post('/owner/packages', data).then(res => { invalidateCache('packages'); return res })
 export const updatePackage = (id, data) => api.put(`/owner/packages/${id}`, data).then(res => { invalidateCache('packages'); return res })
 export const togglePackage = (id) => api.post(`/owner/packages/${id}/toggle`).then(res => { invalidateCache('packages'); return res })
 export const deletePackage = (id) => api.delete(`/owner/packages/${id}`).then(res => { invalidateCache('packages'); return res })
@@ -349,5 +406,15 @@ export const markNotificationAsRead = (notificationId) =>
 
 export const markAllNotificationsAsRead = (recipientId, role) =>
   api.put(`/notifications/read-all?recipientId=${recipientId}&role=${role}`)
+
+// The bell now polls only the count (see components/notificationPoll.js). cachedGet's short TTL
+// and in-flight dedup fold the focus + visibilitychange pair, and React StrictMode's double
+// effect, into one request. Call invalidateCache('/notifications') after marking anything read.
+export const getUnreadCountCached = (recipientId, role) =>
+  cachedGet(`/notifications/unread-count?recipientId=${recipientId}&role=${role}`, 2000, true)
+
+// Fetched when the panel opens, not on a timer. The server caps it anyway (default 50).
+export const getLatestNotifications = (recipientId, role, limit = 50) =>
+  api.get(`/notifications?recipientId=${recipientId}&role=${role}&limit=${limit}`, { _silent: true })
 
 export default api

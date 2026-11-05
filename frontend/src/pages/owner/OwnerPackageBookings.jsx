@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
+import { OWNER_NAV } from '../../components/owner/ownerNav'
 import Pagination, { usePagination } from '../../components/Pagination'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
@@ -7,21 +8,6 @@ import { inr } from '../../dash/metrics'
 import { getOwnerPackageBookings, confirmPackageBooking, cancelOwnerPackageBooking, completePackageBooking } from '../../utils/api'
 
 const STATUSES = ['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']
-
-const navItems = [
-  { path: '/owner/dashboard', icon: '', label: 'Dashboard' },
-  { path: '/owner/bookings', icon: '', label: 'All Bookings' },
-  { path: '/owner/drivers', icon: '', label: 'Drivers' },
-  { path: '/owner/driver-applications', icon: '', label: 'Applications' },
-  { path: '/owner/cities', icon: '', label: 'Cities' },
-  { path: '/owner/payments', icon: '', label: 'Payments' },
-  { path: '/owner/payouts', icon: '', label: 'Payouts' },
-  { path: '/owner/reviews', icon: '', label: 'Reviews' },
-  { path: '/owner/packages', icon: '', label: 'Packages' },
-  { path: '/owner/package-bookings', icon: '', label: 'Package Bookings' },
-  { path: '/owner/revenue', icon: '', label: 'Revenue' },
-  { path: '/owner/profile', icon: '', label: 'Profile' },
-]
 
 export default function OwnerPackageBookings() {
   const [bookings, setBookings] = useState([])
@@ -65,7 +51,7 @@ export default function OwnerPackageBookings() {
   const label = (s) => (s === 'ALL' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase())
 
   return (
-    <DashboardLayout navItems={navItems} role="ROLE_OWNER">
+    <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       <PageHead title="Package Bookings" sub="Manage all customer package bookings" />
 
       <div className="pc-grid">

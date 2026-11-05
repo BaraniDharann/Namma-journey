@@ -30,9 +30,11 @@ refuses to start rather than run on a value baked into the source.
       so every browser request from your actual domain is blocked until you change it.
 - [ ] `OTP_TEST_MODE=false` — **blocking.** When on, OTPs are written to the database instead of
       emailed. Anyone who can read the `otps` table can take over any account.
-- [ ] `OWNER_BOOTSTRAP_SECRET` — set it, create your first owner, then **clear it again**. While
-      it holds a value, `POST /api/auth/owner/create-admin` mints owner tokens, which is full
-      control of the platform.
+- [ ] `ADMIN_BOOTSTRAP_SECRET` — set it, create the first NammaJourney admin, then **clear it
+      again**. While it holds a value, `POST /api/auth/admin/bootstrap` mints an admin token (until
+      an admin exists). Travels owners are not bootstrapped: they apply at `/owner/signup` and an
+      admin approves them.
+- [ ] `ADMIN_NOTIFY_EMAIL` — where new owner applications and 36-hour reminders are emailed.
 - [ ] `RATELIMIT_TRUSTED_PROXIES` — **blocking behind a proxy.** Set to your load balancer or
       ingress range. Left empty behind a proxy, every request appears to come from the balancer
       and shares one rate-limit bucket. Set to `*`, any caller can spoof `X-Forwarded-For` and
@@ -139,14 +141,17 @@ seconds; killing it outright severs whatever booking or payment was mid-flight.
 - [ ] `curl -f http://<host>:8080/api/health` returns healthy
 - [ ] Flyway applied every migration:
       `SELECT version, description, success FROM flyway_schema_history ORDER BY installed_rank;`
-- [ ] Create the first owner, then clear `OWNER_BOOTSTRAP_SECRET` and restart:
+- [ ] Create the first admin, then clear `ADMIN_BOOTSTRAP_SECRET` and restart:
 
 ```bash
-curl -X POST http://<host>:8080/api/auth/owner/create-admin \
+curl -X POST http://<host>:8080/api/auth/admin/bootstrap \
   -H "Content-Type: application/json" \
-  -H "X-Bootstrap-Secret: $OWNER_BOOTSTRAP_SECRET" \
-  -d '{"email":"YOUR_OWNER_EMAIL","password":"YOUR_OWNER_PASSWORD","name":"Owner"}'
+  -H "X-Bootstrap-Secret: $ADMIN_BOOTSTRAP_SECRET" \
+  -d '{"email":"YOUR_ADMIN_EMAIL","password":"YOUR_ADMIN_PASSWORD"}'
 ```
+
+- [ ] Apply as a travels owner at `/owner/signup`, approve the application at `/admin/owners`,
+      and sign in with the emailed Owner ID
 
 - [ ] Sign up as a customer and confirm the OTP email actually arrives
 - [ ] Create a driver as the owner and confirm the credential email arrives

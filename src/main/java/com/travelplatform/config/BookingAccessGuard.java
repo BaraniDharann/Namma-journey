@@ -36,9 +36,6 @@ public class BookingAccessGuard {
     public boolean canAccess(String principalId, Authentication auth, String bookingId) {
         if (principalId == null || bookingId == null || auth == null) return false;
 
-        // Owners can monitor any trip; skip the booking lookup for them.
-        if (hasRole(auth, "ROLE_OWNER")) return true;
-
         UUID bookingUuid;
         try {
             bookingUuid = UUID.fromString(bookingId);
@@ -55,8 +52,23 @@ public class BookingAccessGuard {
         if (hasRole(auth, "ROLE_DRIVER")) {
             return booking.getDriverId() != null && booking.getDriverId().toString().equals(principalId);
         }
+        // A travels owner watches their own Trips; the platform owner also watches City rides (V27).
+        // Checked by id, not by the request's OwnerScope: a WebSocket subscribe has no HTTP request.
+        if (hasRole(auth, "ROLE_OWNER")) {
+            if (booking.getOwnerId() != null) {
+                return booking.getOwnerId().toString().equals(principalId);
+            }
+            try {
+                return tripRates != null && tripRates.platformOwnerId().toString().equals(principalId);
+            } catch (IllegalStateException noPlatformOwnerYet) {
+                return false;
+            }
+        }
         return false;
     }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.TripRateService tripRates;
 
     /**
      * May this driver publish positions for this booking? Only the assigned driver, and only while

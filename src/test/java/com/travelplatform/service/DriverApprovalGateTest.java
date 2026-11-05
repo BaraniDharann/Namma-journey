@@ -102,8 +102,8 @@ class DriverApprovalGateTest {
     @Test
     void queriesFilterOnApprovalAndFleet() {
         // Native SQL, so the enums appear as their stored names.
-        assertTrue(jpql("findFirstFreeTripDriver").contains("d.verification_status = 'APPROVED'"));
-        assertTrue(jpql("findFirstFreeTripDriver").contains("d.fleet = 'OWNER_FLEET'"));
+        assertTrue(jpql("findFirstFreeTripPair").contains("d.verification_status = 'APPROVED'"));
+        assertTrue(jpql("findFirstFreeTripPair").contains("d.fleet = 'OWNER_FLEET'"));
         assertTrue(jpql("findDispatchableAmong").contains("verificationStatus = com.travelplatform.entity.Driver.Verification.APPROVED"));
     }
 }

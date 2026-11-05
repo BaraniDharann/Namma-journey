@@ -44,14 +44,16 @@ public class AdminController {
             @RequestPart(value = "vehicleAc", required = false) String vehicleAc,
             @RequestPart(value = "vehicleSeats", required = false) String vehicleSeats,
             @RequestPart(value = "servesCity", required = false) String servesCity,
-            @RequestPart(value = "servesTrip", required = false) String servesTrip) {
+            @RequestPart(value = "servesTrip", required = false) String servesTrip,
+            @RequestPart(value = "defaultVehicleId", required = false) String defaultVehicleId) {
 
         // Multipart text parts arrive as strings; blank means "use the default".
         com.travelplatform.dto.VehicleRequest vehicle = new com.travelplatform.dto.VehicleRequest(
                 vehicleType, vehicleNumber, vehicleModel, flag(vehicleAc), seats(vehicleSeats),
                 flag(servesCity), flag(servesTrip));
         DriverCreationResponse response = adminDriverService.createDriver(
-            name, mobile, email, licenseNumber, aadhaarNumber, photo, licensePhoto, aadhaarPhoto, vehicle);
+            name, mobile, email, licenseNumber, aadhaarNumber, photo, licensePhoto, aadhaarPhoto, vehicle,
+            defaultVehicleId == null || defaultVehicleId.isBlank() ? null : Long.valueOf(defaultVehicleId.trim()));
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

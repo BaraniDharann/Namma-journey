@@ -51,12 +51,13 @@ CREATE INDEX idx_owners_email ON owners(email);
 -- hash of a password that was printed in this very file. Every deployment that ran this script
 -- ended up with the same known administrator credential.
 --
--- Create the first owner through the application instead, which does not hand out a shared
--- secret. Set OWNER_BOOTSTRAP_SECRET, then:
+-- Owners now apply at /owner/signup and a NammaJourney admin approves them; the approval
+-- email carries their Owner ID and a one-time password. Create the first admin with
+-- ADMIN_BOOTSTRAP_SECRET set:
 --
---   POST /api/auth/owner/create-admin   (header: X-Bootstrap-Secret)
+--   POST /api/auth/admin/bootstrap   (header: X-Bootstrap-Secret)
 --
--- and clear OWNER_BOOTSTRAP_SECRET again afterwards. See DEPLOYMENT_CHECKLIST.md.
+-- and clear ADMIN_BOOTSTRAP_SECRET again afterwards. See DEPLOYMENT_CHECKLIST.md.
 
 -- Insert Sample Driver for Testing (Optional)
 --

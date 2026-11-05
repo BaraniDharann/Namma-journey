@@ -34,6 +34,9 @@ public class AuthController {
     private com.travelplatform.service.DriverSignupService driverSignupService;
 
     @Autowired
+    private com.travelplatform.service.OwnerSignupService ownerSignupService;
+
+    @Autowired
     private com.travelplatform.security.RevokedTokenStore revokedTokens;
 
     @Autowired
@@ -128,18 +131,6 @@ public class AuthController {
     }
     
     /**
-     * CREATE ADMIN - Owner creates admin account
-     * POST /api/auth/owner/create-admin
-     */
-    @PostMapping("/owner/create-admin")
-    public ResponseEntity<AuthResponse> createAdmin(
-            @Valid @RequestBody AdminCreateRequest request,
-            @RequestHeader(value = "X-Bootstrap-Secret", required = false) String bootstrapSecret) {
-        AuthResponse response = authService.createAdmin(request, bootstrapSecret);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-    
-    /**
      * OWNER FORGOT PASSWORD - Reset password for owner
      * POST /api/auth/owner/forgot-password
      */
@@ -187,6 +178,29 @@ public class AuthController {
             @RequestPart(value = "rcPhoto", required = false) org.springframework.web.multipart.MultipartFile rcPhoto) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(driverSignupService.signup(form, photo, licensePhoto, aadhaarPhoto, rcPhoto));
+    }
+
+    /**
+     * TRAVELS OWNER APPLICATION - business, KYC and bank details plus three document images.
+     * POST /api/auth/owner/signup
+     */
+    @PostMapping(value = "/owner/signup", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<com.travelplatform.service.OwnerSignupService.SignupResult> ownerSignup(
+            @ModelAttribute com.travelplatform.dto.OwnerSignupForm form) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ownerSignupService.signup(form));
+    }
+
+    /** The rejected application behind an emailed resubmit link, to pre-fill the form. */
+    @GetMapping("/owner/resubmit/{token}")
+    public com.travelplatform.dto.OwnerResubmitPrefill ownerResubmitPrefill(@PathVariable String token) {
+        return ownerSignupService.prefill(token);
+    }
+
+    /** The fixed application. Documents not sent again are kept. */
+    @PostMapping(value = "/owner/resubmit/{token}", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public com.travelplatform.service.OwnerSignupService.SignupResult ownerResubmit(
+            @PathVariable String token, @ModelAttribute com.travelplatform.dto.OwnerSignupForm form) {
+        return ownerSignupService.resubmit(token, form);
     }
 
     /**

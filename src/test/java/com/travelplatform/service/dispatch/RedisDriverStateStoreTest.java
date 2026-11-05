@@ -104,7 +104,7 @@ class RedisDriverStateStoreTest {
     @Test
     @DisplayName("a missing card is loaded from the database and cached in Redis")
     void missingCardLoadedFromDatabase() {
-        assertEquals(new DriverCard(base, DriverState.IDLE, VehicleType.CAR, 4, true, true),
+        assertEquals(new DriverCard(base, DriverState.IDLE, VehicleType.CAR, 4, true, true, Driver.Fleet.OWNER_FLEET),
                 store.cards(List.of(base, 99L)).get(base));
         assertTrue(template.hasKey(RedisDriverStateStore.key(base)));
         assertFalse(template.hasKey(RedisDriverStateStore.key(99L)));

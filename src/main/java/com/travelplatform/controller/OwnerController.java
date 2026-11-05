@@ -41,12 +41,16 @@ public class OwnerController {
     private final com.travelplatform.service.DriverVerificationService driverVerificationService;
     private final com.travelplatform.service.DriverLedgerService ledgerService;
     private final com.travelplatform.service.DriverDuesService duesService;
+    private final com.travelplatform.service.TripRateService tripRateService;
+    private final com.travelplatform.config.OwnerScope ownerScope;
+    private final com.travelplatform.service.OwnerDriverReviewService ownerDriverReviewService;
 
     /** Self-signed-up drivers waiting for (or past) review; oldest first. */
     @GetMapping("/driver-applications")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<DriverDetailsResponse>> driverApplications(
             @RequestParam(required = false) com.travelplatform.entity.Driver.Verification status) {
+        ownerScope.requirePlatform();
         return ResponseEntity.ok(driverVerificationService.applications(status));
     }
 
@@ -54,7 +58,44 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<DriverDetailsResponse> approveDriver(
             @PathVariable Long id, org.springframework.security.core.Authentication authentication) {
+        // My own driver: my checklist decides. An independent driver: the platform's review.
+        if (ownerDriverReviewService.isMine(id)) {
+            return ResponseEntity.ok(ownerService.mapToDriverDetails(ownerDriverReviewService.approve(id)));
+        }
+        ownerScope.requirePlatform();
         return ResponseEntity.ok(driverVerificationService.approve(id, reviewerId(authentication)));
+    }
+
+    /** The owner's licence (Sarathi) and RC (Vahan) checks for one of their drivers. */
+    @GetMapping("/drivers/{id}/checks")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<com.travelplatform.entity.DriverVerificationCheck>> driverChecks(@PathVariable Long id) {
+        return ResponseEntity.ok(ownerDriverReviewService.checksFor(id));
+    }
+
+    /** Records one check: {result: VERIFIED|FAILED, note}. A failed check needs a note. */
+    @PutMapping("/drivers/{id}/checks/{type}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.entity.DriverVerificationCheck> recordDriverCheck(
+            @PathVariable Long id, @PathVariable String type, @RequestBody Map<String, String> body) {
+        com.travelplatform.entity.DriverVerificationCheck.Type t;
+        com.travelplatform.entity.DriverVerificationCheck.Result r;
+        try {
+            t = com.travelplatform.entity.DriverVerificationCheck.Type.valueOf(type.trim().toUpperCase(java.util.Locale.ROOT));
+            r = com.travelplatform.entity.DriverVerificationCheck.Result.valueOf(
+                    String.valueOf(body == null ? null : body.get("result")).trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Check LICENCE or RC, with result VERIFIED or FAILED");
+        }
+        return ResponseEntity.ok(ownerDriverReviewService.recordCheck(id, t, r, body.get("note")));
+    }
+
+    /** Sets a driver's usual car: {vehicleId}. */
+    @PutMapping("/drivers/{id}/default-vehicle")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<DriverDetailsResponse> setDefaultVehicle(@PathVariable Long id, @RequestBody Map<String, Long> body) {
+        adminDriverService.setDefaultVehicle(id, body == null ? null : body.get("vehicleId"));
+        return ResponseEntity.ok(ownerService.getDriverById(ownerScope.ownerId(), ownerScope.isPlatform(), id));
     }
 
     @PostMapping("/drivers/{id}/reject")
@@ -65,6 +106,10 @@ public class OwnerController {
         if (body == null) {
             throw new IllegalArgumentException("Give a reason of 5 to 500 characters");
         }
+        if (ownerDriverReviewService.isMine(id)) {
+            return ResponseEntity.ok(ownerService.mapToDriverDetails(ownerDriverReviewService.reject(id, body.get("reason"))));
+        }
+        ownerScope.requirePlatform();
         return ResponseEntity.ok(driverVerificationService.reject(id, body.get("reason"), reviewerId(authentication)));
     }
 
@@ -79,6 +124,7 @@ public class OwnerController {
     @GetMapping("/city-fares")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<com.travelplatform.entity.CityFare>> getCityFares() {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(cityFareService.all());
     }
 
@@ -88,6 +134,7 @@ public class OwnerController {
             @PathVariable String vehicleType,
             @RequestBody Map<String, BigDecimal> body,
             org.springframework.security.core.Authentication authentication) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         Long ownerId = null;
         try {
             ownerId = Long.valueOf(authentication.getName());
@@ -103,12 +150,14 @@ public class OwnerController {
     @GetMapping("/cities")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<com.travelplatform.entity.City>> getCities() {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(cityService.all());
     }
 
     @PostMapping("/cities")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.entity.City> createCity(@RequestBody com.travelplatform.entity.City city) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         // This endpoint only creates: never trust an id or timestamp from the body.
         city.setId(null);
         city.setCreatedAt(null);
@@ -119,6 +168,7 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.entity.City> updateCity(
             @PathVariable Long id, @RequestBody com.travelplatform.entity.City city) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(cityService.update(id, city));
     }
 
@@ -129,38 +179,53 @@ public class OwnerController {
             @PathVariable Long driverId,
             @RequestBody com.travelplatform.dto.VehicleRequest vehicle) {
         adminDriverService.updateVehicle(driverId, vehicle);
-        return ResponseEntity.ok(ownerService.getDriverById(driverId));
+        return ResponseEntity.ok(ownerService.getDriverById(ownerScope.ownerId(), ownerScope.isPlatform(), driverId));
     }
     
     @GetMapping("/bookings")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<TravelBooking>> getAllBookings() {
-        return ResponseEntity.ok(ownerService.getAllBookings());
-    }
-    
-    @PostMapping("/pricing/set")
-    @PreAuthorize("hasRole('OWNER')")
-    public ResponseEntity<Map<String, Object>> setPricePerKm(
-            @RequestParam BigDecimal pricePerKm,
-            @RequestParam Long ownerId) {
-        return ResponseEntity.ok(ownerService.setPricePerKm(pricePerKm, ownerId));
-    }
-    
-    @GetMapping("/pricing/current")
-    @PreAuthorize("hasAnyRole('OWNER','USER','DRIVER')")
-    public ResponseEntity<Map<String, Object>> getCurrentPrice() {
-        return ResponseEntity.ok(Map.of(
-            "pricePerKm", ownerService.getCurrentPricePerKm(),
-            "pricePerHour", ownerService.getCurrentPricePerHour()
-        ));
+        return ResponseEntity.ok(ownerService.getTripBookings(ownerScope.ownerId()));
     }
 
-    @PostMapping("/pricing/set-hourly")
+    /** The platform's City rides: a platform screen. */
+    @GetMapping("/platform/city-rides")
     @PreAuthorize("hasRole('OWNER')")
-    public ResponseEntity<Map<String, Object>> setPricePerHour(
-            @RequestParam BigDecimal pricePerHour,
-            @RequestParam Long ownerId) {
-        return ResponseEntity.ok(ownerService.setPricePerHour(pricePerHour, ownerId));
+    public ResponseEntity<List<TravelBooking>> getCityRides() {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(ownerService.getCityRides());
+    }
+
+    /** City-ride revenue for a year, month by month: a platform screen. */
+    @GetMapping("/platform/revenue/monthly-series")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Map<String, Object>> getCityRevenueSeries(@RequestParam int year) {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(ownerService.getMonthlyRevenueSeries(null, year));
+    }
+    
+    /** My Trip prices, one row per car category I offer. */
+    @GetMapping("/trip-rates")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<com.travelplatform.service.TripRateView>> getTripRates() {
+        return ResponseEntity.ok(tripRateService.ratesFor(ownerScope.ownerId()));
+    }
+
+    /** Sets my per-km and per-hour price for one car category: {perKm, perHour}. */
+    @PutMapping("/trip-rates/{category}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.service.TripRateView> setTripRate(
+            @PathVariable String category, @RequestBody Map<String, BigDecimal> body) {
+        return ResponseEntity.ok(tripRateService.set(ownerScope.ownerId(),
+                com.travelplatform.entity.CarCategory.parse(category), body.get("perKm"), body.get("perHour")));
+    }
+
+    /** AUTO: my Trips go to my first free driver and car. MANUAL: I assign each Trip myself. Body {mode}. */
+    @PutMapping("/assignment-mode")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Map<String, String>> setAssignmentMode(@RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(Map.of("assignmentMode",
+                ownerService.setAssignmentMode(ownerScope.ownerId(), body == null ? null : body.get("mode")).name()));
     }
 
     @GetMapping("/bookings/{bookingId}/driver-photo")
@@ -173,7 +238,7 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> getDailyRevenue(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return ResponseEntity.ok(ownerService.getDailyRevenue(date));
+        return ResponseEntity.ok(ownerService.getDailyRevenue(ownerScope.ownerId(), date));
     }
     
     @GetMapping("/revenue/monthly")
@@ -181,7 +246,7 @@ public class OwnerController {
     public ResponseEntity<Map<String, Object>> getMonthlyRevenue(
             @RequestParam int year, 
             @RequestParam int month) {
-        return ResponseEntity.ok(ownerService.getMonthlyRevenue(year, month));
+        return ResponseEntity.ok(ownerService.getMonthlyRevenue(ownerScope.ownerId(), year, month));
     }
     
     /**
@@ -191,13 +256,13 @@ public class OwnerController {
     @GetMapping("/revenue/monthly-series")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> getMonthlyRevenueSeries(@RequestParam int year) {
-        return ResponseEntity.ok(ownerService.getMonthlyRevenueSeries(year));
+        return ResponseEntity.ok(ownerService.getMonthlyRevenueSeries(ownerScope.ownerId(), year));
     }
 
     @GetMapping("/revenue/yearly")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, Object>> getYearlyRevenue(@RequestParam int year) {
-        return ResponseEntity.ok(ownerService.getYearlyRevenue(year));
+        return ResponseEntity.ok(ownerService.getYearlyRevenue(ownerScope.ownerId(), year));
     }
     
     @GetMapping("/revenue/trip/{tripId}")
@@ -223,25 +288,35 @@ public class OwnerController {
             @RequestParam(required = false) Boolean vehicleAc,
             @RequestParam(required = false) Integer vehicleSeats,
             @RequestParam(required = false) Boolean servesCity,
-            @RequestParam(required = false) Boolean servesTrip) {
+            @RequestParam(required = false) Boolean servesTrip,
+            @RequestParam(required = false) Long defaultVehicleId) {
         DriverCreationResponse response = adminDriverService.createDriver(
             name, mobile, email, licenseNumber, aadhaarNumber,
             photo, licensePhoto, aadhaarPhoto,
             new com.travelplatform.dto.VehicleRequest(vehicleType, vehicleNumber, vehicleModel,
-                    vehicleAc, vehicleSeats, servesCity, servesTrip));
+                    vehicleAc, vehicleSeats, servesCity, servesTrip), defaultVehicleId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
     
     @GetMapping("/reviews")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<ReviewResponse>> getAllReviews() {
-        return ResponseEntity.ok(reviewService.getAllReviews());
+        return ResponseEntity.ok(reviewService.getReviewsFor(ownerScope.ownerId()));
+    }
+
+    /** City-ride reviews: a platform screen. */
+    @GetMapping("/platform/reviews")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<ReviewResponse>> getCityReviews() {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(reviewService.getReviewsFor(null));
     }
     
     /** Independent drivers, their payout UPI IDs (decrypted for the owner only) and balances. */
     @GetMapping("/payouts")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<com.travelplatform.service.DriverLedgerService.PayoutRow>> getPayouts() {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(ledgerService.payoutSummary());
     }
 
@@ -250,6 +325,7 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.entity.DriverLedgerEntry> recordPayout(
             @PathVariable Long driverId, @RequestBody Map<String, String> body, java.security.Principal principal) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         com.travelplatform.entity.DriverLedgerEntry.Type type;
         java.math.BigDecimal amount;
         try {
@@ -266,6 +342,7 @@ public class OwnerController {
     @GetMapping("/dues/pending")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<com.travelplatform.service.DriverDuesService.PendingRow>> getPendingDues() {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(duesService.pending());
     }
 
@@ -273,6 +350,7 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.service.DriverDuesService.PaymentRow> confirmDues(
             @PathVariable Long paymentId, java.security.Principal principal) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(duesService.confirm(paymentId, "owner:" + principal.getName()));
     }
 
@@ -280,13 +358,22 @@ public class OwnerController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<com.travelplatform.service.DriverDuesService.PaymentRow> rejectDues(
             @PathVariable Long paymentId, java.security.Principal principal) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
         return ResponseEntity.ok(duesService.reject(paymentId, "owner:" + principal.getName()));
     }
 
     @GetMapping("/payments/pending")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<PaymentResponse>> getPendingPayments() {
-        return ResponseEntity.ok(paymentService.getPendingPayments());
+        return ResponseEntity.ok(paymentService.getPendingPayments(ownerScope.ownerId()));
+    }
+
+    /** City-ride UPI payments waiting for confirmation: a platform screen. */
+    @GetMapping("/platform/payments/pending")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<PaymentResponse>> getPendingCityPayments() {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(paymentService.getPendingPayments(null));
     }
     
     @PostMapping("/payments/{paymentId}/verify")
@@ -294,6 +381,7 @@ public class OwnerController {
     public ResponseEntity<PaymentResponse> verifyPayment(
             @PathVariable UUID paymentId,
             java.security.Principal principal) {
+        paymentService.requireVisibleTo(paymentId, ownerScope.ownerId(), ownerScope.isPlatform());
         // Verifying a payment settles a trip and books the fare into revenue, so the row records
         // which owner did it. Principal is the JWT subject, populated by JwtAuthenticationFilter.
         PaymentResponse response = paymentService.verifyPayment(paymentId, principal.getName());
@@ -305,20 +393,35 @@ public class OwnerController {
     public ResponseEntity<TravelBookingResponse> assignDriver(
             @PathVariable UUID bookingId,
             @Valid @RequestBody AssignDriverRequest request) {
-        TravelBookingResponse response = ownerService.assignDriver(bookingId, request.getDriverId());
+        TravelBookingResponse response = ownerService.assignDriver(bookingId, request.getDriverId(), request.getVehicleId());
         return ResponseEntity.ok(response);
+    }
+
+    /** My free drivers and suitable free cars for one of my Trips (each driver's usual car marked). */
+    @GetMapping("/bookings/{bookingId}/assign-options")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.dto.AssignOptions> assignOptions(@PathVariable UUID bookingId) {
+        return ResponseEntity.ok(ownerService.assignOptions(bookingId));
     }
 
     @GetMapping("/drivers")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<List<DriverDetailsResponse>> getAllDrivers() {
-        return ResponseEntity.ok(ownerService.getAllDrivers());
+        return ResponseEntity.ok(ownerService.getAllDrivers(ownerScope.ownerId()));
+    }
+
+    /** Independent (self-signup) City-ride drivers: a platform screen. */
+    @GetMapping("/platform/drivers")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<DriverDetailsResponse>> getIndependentDrivers() {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(ownerService.getIndependentDrivers());
     }
 
     @GetMapping("/drivers/{driverId}")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<DriverDetailsResponse> getDriverById(@PathVariable Long driverId) {
-        return ResponseEntity.ok(ownerService.getDriverById(driverId));
+        return ResponseEntity.ok(ownerService.getDriverById(ownerScope.ownerId(), ownerScope.isPlatform(), driverId));
     }
 
     @DeleteMapping("/drivers/{driverId}")
@@ -338,6 +441,8 @@ public class OwnerController {
     @PostMapping("/drivers/{driverId}/telegram-link")
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Map<String, String>> createTelegramLink(@PathVariable Long driverId) {
+        // Only for a driver this owner may see (their own, or an independent one for the platform).
+        ownerService.getDriverById(ownerScope.ownerId(), ownerScope.isPlatform(), driverId);
         return ResponseEntity.ok(Map.of(
                 "linkUrl", telegramLinkService.createLinkUrl(driverId),
                 "expiresInHours", "24"));

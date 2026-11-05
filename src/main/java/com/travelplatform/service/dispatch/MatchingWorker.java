@@ -445,6 +445,7 @@ public class MatchingWorker {
 
     private static boolean eligible(DriverCard card, RideTicket t) {
         return card != null && card.state() == DriverState.IDLE && card.active() && card.servesCity()
+                && card.fleet() == com.travelplatform.entity.Driver.Fleet.INDEPENDENT
                 && card.vehicle() == t.vehicle() && card.seats() >= t.passengers();
     }
 

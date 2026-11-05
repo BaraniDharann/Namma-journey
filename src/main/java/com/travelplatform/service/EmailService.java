@@ -262,6 +262,115 @@ public class EmailService {
                 HTML_FOOTER);
     }
 
+    // ---- Travels owner onboarding --------------------------------------------------------
+
+    /** Admin alerts (new owner applications, review reminders) go here, not to an owner. */
+    @Value("${app.admin.notify-email:nammajourney463@gmail.com}")
+    private String adminNotifyEmail;
+
+    /** Where links in emails point: the web app, not the API. */
+    @Value("${app.frontend-base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
+
+    private static final java.time.format.DateTimeFormatter WHEN =
+            java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a", java.util.Locale.ENGLISH);
+
+    public void sendOwnerApplicationReceived(String toEmail, String travelsName, java.time.LocalDateTime reviewBy) {
+        queue(toEmail, "We received your Namma Journey owner application", HTML_HEADER +
+                "<h2>Application received</h2>" +
+                "<p>Dear " + esc(travelsName) + ",</p>" +
+                "<p>Thank you for applying to list your travels on Namma Journey. Our team will verify your " +
+                "documents within 48 hours (by " + esc(WHEN.format(reviewBy)) + ").</p>" +
+                "<p>Once you are approved we will email your Owner ID and password.</p>" +
+                HTML_FOOTER);
+    }
+
+    /** A Trip with no driver yet: the owner assigns one (MANUAL), or none of theirs was free. */
+    public void sendOwnerTripNeedsDriver(String toEmail, String travelsName, com.travelplatform.entity.TravelBooking booking) {
+        queue(toEmail, "Trip needs a driver: " + booking.getFromPlace() + " to " + booking.getToPlace(), HTML_HEADER +
+                "<h2>A trip needs a driver</h2>" +
+                "<p>Dear " + esc(travelsName == null ? "owner" : travelsName) + ",</p>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>Route:</strong> " + esc(booking.getFromPlace()) + " to " + esc(booking.getToPlace()) + "</p>" +
+                "<p><strong>Dates:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</p>" +
+                (booking.getCarCategory() == null ? "" : "<p><strong>Car:</strong> "
+                        + esc(booking.getCarCategory().name().replace('_', ' ')) + "</p>") +
+                "<p><strong>Travellers:</strong> " + booking.getTravelMembers() + "</p>" +
+                "</div>" +
+                "<p><a href='" + esc(frontendBaseUrl + "/owner/bookings") + "'>Assign a driver and car</a></p>" +
+                HTML_FOOTER);
+    }
+
+    public void sendAdminNewOwnerApplication(com.travelplatform.entity.Owner owner, java.time.LocalDateTime reviewBy) {
+        String cities = owner.getCities() == null ? "" : owner.getCities().stream()
+                .map(com.travelplatform.entity.City::getName).sorted()
+                .collect(java.util.stream.Collectors.joining(", "));
+        queue(adminNotifyEmail, "New owner application: " + owner.getTravelsName(), HTML_HEADER +
+                "<h2>New travels owner application</h2>" +
+                "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                "<p><strong>Travels:</strong> " + esc(owner.getTravelsName()) + "</p>" +
+                "<p><strong>Contact:</strong> " + esc(owner.getContactName()) + ", " + esc(owner.getPhone()) + "</p>" +
+                "<p><strong>Cities:</strong> " + esc(cities) + "</p>" +
+                "<p><strong>Review by:</strong> " + esc(WHEN.format(reviewBy)) + "</p>" +
+                "</div>" +
+                "<p><a href='" + esc(frontendBaseUrl + "/admin/owners/" + owner.getId()) + "'>Open the application</a></p>" +
+                HTML_FOOTER);
+    }
+
+    /**
+     * The approved owner's Owner ID and one-time password. Sent now, not queued: queuing would
+     * write the password into the outbox table. Returns false if it could not be sent, so the
+     * admin is told and can resend (which makes a new password).
+     */
+    public boolean sendOwnerCredentialsNow(String toEmail, String travelsName, String ownerCode, String password) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(toEmail);
+            helper.setSubject("You are approved - your Namma Journey owner login");
+            helper.setText(HTML_HEADER +
+                    "<h2>Welcome to Namma Journey!</h2>" +
+                    "<p>Dear " + esc(travelsName) + ",</p>" +
+                    "<p>Your documents are verified and your travels is approved. Sign in with:</p>" +
+                    "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +
+                    "<p><strong>Owner ID:</strong> " + esc(ownerCode) + "</p>" +
+                    "<p><strong>Password:</strong> " + esc(password) + "</p>" +
+                    "</div>" +
+                    "<p><a href='" + esc(frontendBaseUrl + "/owner/login") + "'>Sign in</a>. You will be asked to " +
+                    "choose your own password the first time.</p>" +
+                    HTML_FOOTER, true);
+            if (deliver(message)) {
+                log.info("Owner credentials email sent for {}", ownerCode);
+            }
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to send owner credentials email for {}: {}", ownerCode, e.getMessage());
+            return false;
+        }
+    }
+
+    public void sendAdminReviewReminder(com.travelplatform.entity.Owner owner, java.time.LocalDateTime deadline) {
+        queue(adminNotifyEmail, "Reminder: owner application due by " + WHEN.format(deadline), HTML_HEADER +
+                "<h2>An owner application is still waiting</h2>" +
+                "<p><strong>" + esc(owner.getTravelsName()) + "</strong> applied " +
+                esc(WHEN.format(owner.getSubmittedAt())) + ". We promised a decision by " +
+                esc(WHEN.format(deadline)) + ".</p>" +
+                "<p><a href='" + esc(frontendBaseUrl + "/admin/owners/" + owner.getId()) + "'>Review it now</a></p>" +
+                HTML_FOOTER);
+    }
+
+    public void sendOwnerRejected(String toEmail, String travelsName, String reason, String resubmitUrl) {
+        queue(toEmail, "Your Namma Journey owner application needs changes", HTML_HEADER +
+                "<h2>Application not approved yet</h2>" +
+                "<p>Dear " + esc(travelsName) + ",</p>" +
+                "<p>We could not approve your application.</p>" +
+                "<p><strong>Reason:</strong> " + esc(reason) + "</p>" +
+                "<p><a href='" + esc(resubmitUrl) + "'>Fix your details and resubmit</a>. " +
+                "This link works once, for 14 days.</p>" +
+                HTML_FOOTER);
+    }
+
     private void queue(String to, String subject, String html) {
         if (to == null || to.isBlank()) {
             return;

@@ -59,7 +59,8 @@ class JwtAuthenticationFilterOutageTest {
         users = mock(UserRepository.class);
         revoked = mock(RevokedTokenStore.class);
         TokenVersionService versions = new TokenVersionService(
-                users, mock(DriverRepository.class), mock(OwnerRepository.class));
+                users, mock(DriverRepository.class), mock(OwnerRepository.class),
+                mock(com.travelplatform.repository.AdminRepository.class));
 
         filter = new JwtAuthenticationFilter();
         ReflectionTestUtils.setField(filter, "jwtUtil", jwt);

@@ -59,6 +59,9 @@ public class TravelBookingRequest {
     /** BIKE, AUTO or CAR. Required for a City ride; a Trip is always by car. */
     private String vehicleType;
 
+    /** HATCHBACK, SEDAN, SUV or TEMPO_TRAVELLER: the car a Trip is priced by. Missing means SEDAN. */
+    private String carCategory;
+
     @Min(value = 1, message = "Minimum 1 hour required")
     @Max(value = 24, message = "Maximum 24 hours allowed")
     private Integer bookingHours;

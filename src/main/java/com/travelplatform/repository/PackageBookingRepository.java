@@ -16,4 +16,9 @@ public interface PackageBookingRepository extends JpaRepository<PackageBooking, 
     List<PackageBooking> findByStatusOrderByBookingDateDesc(PackageBooking.BookingStatus status);
 
     List<PackageBooking> findAllByOrderByBookingDateDesc();
+
+    /** One owner's package bookings (V27), newest first, optionally of one status. */
+    List<PackageBooking> findByOwnerIdOrderByBookingDateDesc(Long ownerId);
+
+    List<PackageBooking> findByOwnerIdAndStatusOrderByBookingDateDesc(Long ownerId, PackageBooking.BookingStatus status);
 }

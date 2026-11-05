@@ -80,8 +80,7 @@ public class CacheConfig implements CachingConfigurer {
     // Per-cache TTLs — keys below are referenced by @Cacheable(value = "...")
     private static Map<String, Duration> cacheTtls() {
         Map<String, Duration> ttls = new HashMap<>();
-        ttls.put("pricing",             Duration.ofHours(12));   // Rarely changes, evicted on write
-        ttls.put("hourlyPricing",       Duration.ofHours(12));
+        ttls.put("tripRates",           Duration.ofHours(12));   // Per owner; rarely changes, evicted on write
         ttls.put("publicPackages",      Duration.ofMinutes(30)); // Public package listings
         ttls.put("publicPackageById",   Duration.ofMinutes(30));
         ttls.put("packagesByCategory",  Duration.ofMinutes(30));

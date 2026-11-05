@@ -1,5 +1,7 @@
 package com.travelplatform.service;
 
+import com.travelplatform.entity.CarCategory;
+import com.travelplatform.entity.OwnerTripRate;
 import com.travelplatform.dto.DriverDetailsResponse;
 import com.travelplatform.dto.ForgotPasswordRequest;
 import com.travelplatform.dto.RouteInfo;
@@ -65,6 +67,9 @@ public class UserService {
 
     // City rides: dispatch and fares. Null only in unit tests that build UserService by hand.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripCars tripCars;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private DispatchService dispatchService;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -82,6 +87,11 @@ public class UserService {
     // The matching engine's copy of driver state. Null only in unit tests that build UserService by hand.
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
+    // Trip prices per owner and car category (V27).
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private TripRateService tripRates;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.OwnerRepository ownerRepository;
 
     /**
      * Shown to the traveller both as the booking refusal and in the profile prompt, so the two
@@ -186,6 +196,10 @@ public class UserService {
             // Saved with nobody; DispatchService offers it to the nearest online driver once it commits.
             return saveWithDriver(userId, request, routeInfo, lostDrivers, false, cityId);
         }
+        // A MANUAL owner assigns every Trip by hand; it is saved with nobody and they are told.
+        if (!autoAssigns(tripRates.platformOwnerId())) {
+            return saveWithDriver(userId, request, routeInfo, lostDrivers, false, cityId);
+        }
         for (int attempt = 0; attempt < MAX_DRIVER_ATTEMPTS; attempt++) {
             try {
                 return saveWithDriver(userId, request, routeInfo, lostDrivers, true, cityId);
@@ -207,10 +221,17 @@ public class UserService {
                                                  List<Long> lostDrivers, boolean assign, Long cityId) {
         return transactionTemplate.execute(tx -> {
             Driver driver = null;
+            Long vehicleId = null;
             if (assign) {
-                driver = driverRepository.findFirstFreeTripDriver(request.getFromDate(), request.getToDate(),
-                                "AC".equalsIgnoreCase(request.getAcType()), excludedOrNobody(lostDrivers))
-                        .orElse(null);
+                // The booked owner's first free driver and car of the category (the usual car first).
+                DriverRepository.TripPair pair = driverRepository.findFirstFreeTripPair(tripRates.platformOwnerId(),
+                        tripCategory(request.getCarCategory()).name(), seatsFor(request),
+                        "AC".equalsIgnoreCase(request.getAcType()), request.getFromDate(), request.getToDate(),
+                        excludedOrNobody(lostDrivers)).orElse(null);
+                if (pair != null) {
+                    driver = driverRepository.findById(pair.getDriverId()).orElse(null);
+                    vehicleId = driver == null ? null : pair.getVehicleId();
+                }
             }
 
             TravelBooking savedBooking;
@@ -218,7 +239,7 @@ public class UserService {
                 // saveAndFlush, not save: the INSERT has to reach Postgres here, inside the try,
                 // or the constraint would only fire at commit where it can no longer be caught
                 // per attempt.
-                savedBooking = bookingRepository.saveAndFlush(buildBooking(userId, request, routeInfo, driver, cityId));
+                savedBooking = bookingRepository.saveAndFlush(buildBooking(userId, request, routeInfo, driver, vehicleId, cityId));
             } catch (DataIntegrityViolationException ex) {
                 if (driver != null && isDriverOverlap(ex)) {
                     throw new DriverTakenException(driver.getId());
@@ -240,6 +261,11 @@ public class UserService {
             if (driver != null && !savedBooking.isAdvanceDue()) {
                 notificationService.notifyDriverAssigned(savedBooking, driver);
             }
+            // No driver for a Trip (MANUAL owner, or nobody free): the owner has to pick one.
+            if (driver == null && savedBooking.getServiceMode() == TravelBooking.ServiceMode.TRIP
+                    && !savedBooking.isAdvanceDue()) {
+                notificationService.notifyTripNeedsDriver(savedBooking);
+            }
             if (driver != null && driverStates != null) {
                 driverStates.took(savedBooking); // a Trip for today holds the car, paid or not (no_driver_overlap)
             }
@@ -252,7 +278,8 @@ public class UserService {
         });
     }
 
-    private TravelBooking buildBooking(UUID userId, TravelBookingRequest request, RouteInfo routeInfo, Driver driver, Long cityId) {
+    private TravelBooking buildBooking(UUID userId, TravelBookingRequest request, RouteInfo routeInfo, Driver driver,
+                                       Long vehicleId, Long cityId) {
         int travelDays = (int) ChronoUnit.DAYS.between(request.getFromDate(), request.getToDate()) + 1;
 
         // Determine booking type and calculate amount
@@ -264,20 +291,29 @@ public class UserService {
         boolean city = "CITY".equalsIgnoreCase(request.getServiceMode());
         VehicleType vehicle = city ? VehicleType.parse(request.getVehicleType()) : VehicleType.CAR;
 
+        // A Trip is booked with an owner (the platform owner until customers choose one) and
+        // priced by that owner's rate for the car category.
+        Long tripOwner = city ? null : tripRates.platformOwnerId();
+        CarCategory category = city ? null : tripCategory(request.getCarCategory());
         if (city) {
             totalAmount = cityFareService.fare(vehicle, routeInfo.getDistanceKm(),
                     routeInfo.getTimeMinutes() == null ? 0 : routeInfo.getTimeMinutes());
-        } else if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
-            bookingType = TravelBooking.BookingType.HOUR_BASED;
-            bookingHours = request.getBookingHours();
-            pricePerHourAtBooking = ownerService.getCurrentPricePerHour();
-            totalAmount = Money.times(pricePerHourAtBooking, bookingHours);
         } else {
-            // Rounded to paise once, here: distances carry metres (461.237 km), money does not.
-            totalAmount = Money.times(ownerService.getCurrentPricePerKm(), routeInfo.getDistanceKm());
+            OwnerTripRate rate = tripRates.rate(tripOwner, category);
+            if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
+                bookingType = TravelBooking.BookingType.HOUR_BASED;
+                bookingHours = request.getBookingHours();
+                pricePerHourAtBooking = rate.getPerHour();
+                totalAmount = Money.times(pricePerHourAtBooking, bookingHours);
+            } else {
+                // Rounded to paise once, here: distances carry metres (461.237 km), money does not.
+                totalAmount = Money.times(rate.getPerKm(), routeInfo.getDistanceKm());
+            }
         }
 
         TravelBooking booking = new TravelBooking();
+        booking.setOwnerId(tripOwner);
+        booking.setCarCategory(category);
         booking.setServiceMode(city ? TravelBooking.ServiceMode.CITY : TravelBooking.ServiceMode.TRIP);
         booking.setVehicleType(vehicle);
         booking.setCityId(cityId);
@@ -304,6 +340,7 @@ public class UserService {
         booking.setPricePerHourAtBooking(pricePerHourAtBooking);
         booking.setBookingDate(LocalDateTime.now());
         booking.setDriverId(driver != null ? driver.getId() : null);
+        booking.setVehicleId(driver != null ? vehicleId : null);
         booking.setStatus(TravelBooking.BookingStatus.PENDING);
         if (city) {
             booking.setDispatchMode(TravelBooking.DispatchMode.RIDE_NOW);
@@ -315,6 +352,22 @@ public class UserService {
             booking.setHoldExpiresAt(advancePolicy.holdUntil(LocalDateTime.now()));
         }
         return booking;
+    }
+
+    /** Whether this owner's Trips get a driver automatically. Without an owner table (unit tests), today's AUTO. */
+    private boolean autoAssigns(Long ownerId) {
+        return ownerRepository == null || ownerRepository.findById(ownerId)
+                .map(o -> o.getAssignmentMode() == com.travelplatform.entity.Owner.AssignmentMode.AUTO)
+                .orElse(false);
+    }
+
+    private static int seatsFor(TravelBookingRequest request) {
+        return request.getTravelMembers() == null ? 1 : Math.max(1, request.getTravelMembers());
+    }
+
+    private static CarCategory tripCategory(String requested) {
+        CarCategory c = CarCategory.parse(requested);
+        return c != null ? c : CarCategory.SEDAN;
     }
 
     /** {@code NOT IN ()} is not valid SQL, so "nobody excluded" is a list holding an id no driver has. */
@@ -440,14 +493,17 @@ public class UserService {
         BigDecimal pricePerHourAtBooking = null;
         BigDecimal totalAmount;
 
+        // Re-priced at the same owner and car category it was booked with.
+        OwnerTripRate rate = tripRates.rate(booking.getOwnerId(),
+                booking.getCarCategory() != null ? booking.getCarCategory() : CarCategory.SEDAN);
         if ("HOUR_BASED".equalsIgnoreCase(request.getBookingType()) && request.getBookingHours() != null) {
             bookingType = TravelBooking.BookingType.HOUR_BASED;
             bookingHours = request.getBookingHours();
-            pricePerHourAtBooking = ownerService.getCurrentPricePerHour();
+            pricePerHourAtBooking = rate.getPerHour();
             totalAmount = Money.times(pricePerHourAtBooking, bookingHours);
         } else {
             // Rounded to paise once, here: distances carry metres (461.237 km), money does not.
-            totalAmount = Money.times(ownerService.getCurrentPricePerKm(), routeInfo.getDistanceKm());
+            totalAmount = Money.times(rate.getPerKm(), routeInfo.getDistanceKm());
         }
 
         booking.setUserName(request.getUserName());
@@ -613,7 +669,9 @@ public class UserService {
             driverDetails.setMobile(driver.getMobile());
             driverDetails.setPhoto(driver.getPhoto());
             driverDetails.setLicenseNumber(driver.getLicenseNumber());
-            response.setDriver(driverDetails.withVehicle(driver));
+            // A Trip shows the car its owner put on it, which may not be the driver's own (TripCars).
+            response.setDriver(tripCars == null ? driverDetails.withVehicle(driver)
+                    : tripCars.apply(driverDetails.withVehicle(driver), booking));
         }
 
         return response.withDispatch(booking);

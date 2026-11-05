@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -85,15 +86,33 @@ class UserServiceCityTripTest {
         user.setId(USER_ID);
         user.setPhone("9876543210");
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
-        when(ownerService.getCurrentPricePerKm()).thenReturn(new BigDecimal("14.0"));
         when(photoRepository.findByBookingId(any())).thenReturn(Optional.empty());
-        when(driverRepository.findById(any())).thenReturn(Optional.empty());
+        when(driverRepository.findById(any())).thenAnswer(i -> Optional.ofNullable(pairedDrivers.get(i.<Long>getArgument(0))));
         when(bookingRepository.saveAndFlush(any(TravelBooking.class))).thenAnswer(i -> {
             TravelBooking b = i.getArgument(0);
             b.setId(UUID.randomUUID());
             return b;
         });
         route(12.0, 35L);
+
+        // Trips are priced by the booked owner's rate for the car category (V27); until customers
+        // choose an owner, every Trip is the platform owner's.
+        tripRates = mock(TripRateService.class);
+        when(tripRates.platformOwnerId()).thenReturn(PLATFORM_OWNER);
+        when(tripRates.rate(eq(PLATFORM_OWNER), any())).thenAnswer(i -> rate(i.getArgument(1), "14.0", "200.00"));
+        ReflectionTestUtils.setField(service, "tripRates", tripRates);
+    }
+
+    private static final long PLATFORM_OWNER = 38L;
+    private TripRateService tripRates;
+
+    private static com.travelplatform.entity.OwnerTripRate rate(com.travelplatform.entity.CarCategory c, String km, String hour) {
+        com.travelplatform.entity.OwnerTripRate r = new com.travelplatform.entity.OwnerTripRate();
+        r.setOwnerId(PLATFORM_OWNER);
+        r.setCategory(c);
+        r.setPerKm(new BigDecimal(km));
+        r.setPerHour(new BigDecimal(hour));
+        return r;
     }
 
     private void route(double km, long minutes) {
@@ -154,7 +173,7 @@ class UserServiceCityTripTest {
         assertNull(b.getDriverId());
         verify(cityFareService).fare(VehicleType.BIKE, 12.0, 35L);
         verify(dispatchService).enqueueAfterCommit(b);
-        verify(driverRepository, never()).findFirstFreeTripDriver(any(), any(), anyBoolean(), any());
+        verify(driverRepository, never()).findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), any());
     }
 
     @Test
@@ -207,10 +226,10 @@ class UserServiceCityTripTest {
     void acTripNeedsAcCar() {
         route(460.0, 480L);
         // The AC match is in the query now: an AC trip asks only for AC cars, and car 1 is not one.
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), eq(true), eq(List.of(-1L))))
-                .thenReturn(Optional.of(driver(2L, true)));
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), eq(false), eq(List.of(-1L))))
-                .thenReturn(Optional.of(driver(1L, false)));
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), eq(true), any(), any(), eq(List.of(-1L))))
+                .thenReturn(pair(driver(2L, true)));
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), eq(false), any(), any(), eq(List.of(-1L))))
+                .thenReturn(pair(driver(1L, false)));
 
         service.createBooking(USER_ID, base());
 
@@ -226,8 +245,8 @@ class UserServiceCityTripTest {
     @DisplayName("a non-AC trip takes the first free car, AC or not")
     void nonAcTripTakesAnyCar() {
         route(460.0, 480L);
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), eq(false), eq(List.of(-1L))))
-                .thenReturn(Optional.of(driver(1L, false)));
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), eq(false), any(), any(), eq(List.of(-1L))))
+                .thenReturn(pair(driver(1L, false)));
         TravelBookingRequest r = base();
         r.setAcType("NON_AC");
 
@@ -240,12 +259,12 @@ class UserServiceCityTripTest {
     @DisplayName("an AC trip with only non-AC cars free is left for the owner")
     void acTripWithNoAcCar() {
         route(460.0, 480L);
-        when(driverRepository.findFirstFreeTripDriver(any(), any(), eq(true), eq(List.of(-1L)))).thenReturn(Optional.empty());
+        when(driverRepository.findFirstFreeTripPair(any(), any(), anyInt(), eq(true), any(), any(), eq(List.of(-1L)))).thenReturn(Optional.empty());
 
         service.createBooking(USER_ID, base());
 
         assertNull(saved().getDriverId());
-        verify(driverRepository, never()).findFirstFreeTripDriver(any(), any(), anyBoolean(), eq(List.of(1L)));
+        verify(driverRepository, never()).findFirstFreeTripPair(any(), any(), anyInt(), anyBoolean(), any(), any(), eq(List.of(1L)));
     }
 
     private static Driver driver(long id, boolean ac) {
@@ -255,5 +274,68 @@ class UserServiceCityTripTest {
         d.setStatus(Driver.Status.ACTIVE);
         d.setVehicleAc(ac);
         return d;
+    }
+
+    @Test
+    @DisplayName("a Trip is the platform owner's, priced by that owner's rate for the booked car category")
+    void tripPricedByOwnersCategoryRate() {
+        when(tripRates.rate(PLATFORM_OWNER, com.travelplatform.entity.CarCategory.SUV))
+                .thenReturn(rate(com.travelplatform.entity.CarCategory.SUV, "18.00", "250.00"));
+        route(100.0, 120L);
+        TravelBookingRequest r = base();
+        r.setCarCategory("SUV");
+
+        service.createBooking(USER_ID, r);
+
+        TravelBooking b = saved();
+        assertEquals(PLATFORM_OWNER, b.getOwnerId());
+        assertEquals(com.travelplatform.entity.CarCategory.SUV, b.getCarCategory());
+        assertEquals(new BigDecimal("1800.00"), b.getTotalAmount());
+    }
+
+    @Test
+    @DisplayName("an hourly Trip uses the category's per-hour rate")
+    void hourlyTripUsesCategoryPerHour() {
+        when(tripRates.rate(PLATFORM_OWNER, com.travelplatform.entity.CarCategory.SEDAN))
+                .thenReturn(rate(com.travelplatform.entity.CarCategory.SEDAN, "12.00", "250.00"));
+        TravelBookingRequest r = base();
+        r.setBookingType("HOUR_BASED");
+        r.setBookingHours(4);
+
+        service.createBooking(USER_ID, r);
+
+        TravelBooking b = saved();
+        assertEquals(com.travelplatform.entity.CarCategory.SEDAN, b.getCarCategory(), "no category given means a Sedan");
+        assertEquals(new BigDecimal("1000.00"), b.getTotalAmount());
+        assertEquals(new BigDecimal("250.00"), b.getPricePerHourAtBooking());
+    }
+
+    @Test
+    @DisplayName("a car category the owner has not priced is refused")
+    void unpricedCategoryRefused() {
+        when(tripRates.rate(PLATFORM_OWNER, com.travelplatform.entity.CarCategory.TEMPO_TRAVELLER))
+                .thenThrow(new IllegalArgumentException("This car type is not available"));
+        TravelBookingRequest r = base();
+        r.setCarCategory("TEMPO_TRAVELLER");
+
+        assertThrows(IllegalArgumentException.class, () -> service.createBooking(USER_ID, r));
+    }
+
+    @Test
+    @DisplayName("a City ride belongs to no owner and has no car category")
+    void cityRideHasNoOwner() {
+        service.createBooking(USER_ID, city("CAR", 2));
+
+        TravelBooking b = saved();
+        assertNull(b.getOwnerId());
+        assertNull(b.getCarCategory());
+    }
+
+    private final java.util.Map<Long, Driver> pairedDrivers = new java.util.HashMap<>();
+
+    /** The assignment query returns ids and the driver it names is then looked up: remember them. */
+    private Optional<com.travelplatform.repository.DriverRepository.TripPair> pair(Driver d) {
+        pairedDrivers.put(d.getId(), d);
+        return Optional.of(TestTripRates.tripPair(d.getId(), 1000L + d.getId()));
     }
 }

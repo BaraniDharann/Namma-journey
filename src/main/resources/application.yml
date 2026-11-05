@@ -75,7 +75,8 @@ spring:
   servlet:
     multipart:
       enabled: true
-      # Per photo as uploaded; ImageCompressor stores it at about 1 MB or less.
+      # Per photo as uploaded (the browser shrinks it first); ImageCompressor stores a profile
+      # photo at ~50 KB, a trip photo at ~150 KB and a document at ~300 KB.
       max-file-size: 30MB
       # Driver sign-up sends up to four documents at once.
       max-request-size: 125MB
@@ -142,6 +143,12 @@ app:
     auto-approve: ${DRIVER_AUTO_APPROVE:true}
     auto-approve-after: ${DRIVER_AUTO_APPROVE_AFTER:15m}
 
+  aadhaar:
+    # UIDAI's Secure QR signing certificate(s), comma-separated file paths. Download from
+    # uidai.gov.in > Developer section > UIDAI Certificate Details (Secure QR code). Empty = QR
+    # details are read but not verified. See AadhaarQrVerifier.
+    qr-certificates: ${AADHAAR_QR_CERTIFICATES:}
+
   trips:
     # Days before its date a confirmed trip may be started. 0 = not before the trip date.
     early-start-days: ${TRIP_EARLY_START_DAYS:0}
@@ -177,6 +184,17 @@ app:
     # Open (pending/confirmed/started) bookings one passenger may hold at once, so a single account
     # cannot tie up the whole fleet with reservations (TripRules).
     max-open-per-user: ${BOOKING_MAX_OPEN_PER_USER:5}
+
+  notifications:
+    # In-app notifications (the bell) are purged by age (NotificationPurgeJob), the shared owner
+    # bucket included: read ones after read-days, any after max-days. 0 switches a rule off.
+    # Deleted batch-size rows per statement, at most max-batches-per-run batches per run.
+    retention:
+      read-days: ${NOTIFICATION_READ_RETENTION_DAYS:30}
+      max-days: ${NOTIFICATION_MAX_RETENTION_DAYS:90}
+      batch-size: ${NOTIFICATION_PURGE_BATCH_SIZE:5000}
+      max-batches-per-run: ${NOTIFICATION_PURGE_MAX_BATCHES:200}
+      interval-ms: ${NOTIFICATION_PURGE_INTERVAL_MS:3600000}
 
   storage:
     # Where uploads (driver documents, trip photos) live:
@@ -251,12 +269,24 @@ app:
       endpoint: ${OUTBOX_SQS_ENDPOINT:}
 
   bootstrap:
-    # One-time secret for POST /api/auth/owner/create-admin, which creates the first owner
-    # account on a new deployment. That endpoint cannot require authentication (there is no
-    # account yet) and it returns an owner token — full control of the platform — so without
-    # this it is a race between the operator and anyone scanning the internet. Empty disables
-    # the endpoint, which is what every environment that already has an owner should use.
-    owner-secret: ${OWNER_BOOTSTRAP_SECRET:}
+    # One-time secret for POST /api/auth/admin/bootstrap, which creates the first NammaJourney
+    # admin (who approves travels owners). That endpoint cannot require authentication (there is
+    # no account yet) and it returns an admin token, so without this it is a race between the
+    # operator and anyone scanning the internet. Empty disables it; it also refuses once an admin
+    # exists. Owners are no longer bootstrapped: they apply at /owner/signup.
+    admin-secret: ${ADMIN_BOOTSTRAP_SECRET:}
+
+  # The web app's address, for links in emails (owner resubmit link, admin review link).
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+
+  owners:
+    # The platform owner: their own Trip fleet plus the platform screens (City rides, cities,
+    # independent drivers, payouts, dues, server health).
+    platform-owner-code: ${PLATFORM_OWNER_CODE:NJO-0001}
+
+  admin:
+    # Where admin alerts go: new owner applications, and the 36-hour review reminder.
+    notify-email: ${ADMIN_NOTIFY_EMAIL:nammajourney463@gmail.com}
 
   telegram:
     # Dispatch pushes to drivers over a Telegram bot. A driver cannot read email or open a

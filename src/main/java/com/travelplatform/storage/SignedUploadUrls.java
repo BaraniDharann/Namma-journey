@@ -28,7 +28,9 @@ import java.util.Base64;
 @Component
 public class SignedUploadUrls {
 
-    private static final String[] SENSITIVE_PREFIXES = {"uploads/drivers/aadhaar_", "uploads/drivers/license_", "uploads/drivers/rc_"};
+    private static final String[] SENSITIVE_PREFIXES = {"uploads/drivers/aadhaar_", "uploads/drivers/license_", "uploads/drivers/rc_",
+            // A travels owner's registration, PAN and Aadhaar - all KYC.
+            "uploads/owners/"};
 
     private final byte[] key;
     private final Duration ttl;

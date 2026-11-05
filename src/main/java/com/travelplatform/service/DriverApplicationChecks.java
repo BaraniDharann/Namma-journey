@@ -49,7 +49,7 @@ public final class DriverApplicationChecks {
      * 12 digits, not starting with 0 or 1 (UIDAI never issues those), last digit the Verhoeff
      * check digit of the other 11. A random 12-digit number passes 1 time in 10.
      */
-    static boolean validAadhaar(String raw) {
+    public static boolean validAadhaar(String raw) {
         if (raw == null) {
             return false;
         }
