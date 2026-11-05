@@ -25,27 +25,26 @@ import java.util.Iterator;
 /**
  * Turns an uploaded photo into a small, upright JPEG before it is stored.
  *
- * <p>Phone photos arrive at 3-12 MB; a licence or Aadhaar scan stays perfectly legible at 2000 px
- * on the long side, which as a JPEG is a few hundred KB. Since uploads now live in the database
- * (DatabaseFileStore), that is the difference between a few hundred and a few thousand drivers
- * fitting in a small Postgres plan.
+ * <p>Phone photos arrive at 3-12 MB. How small they become depends on what they show
+ * ({@link ImageProfile}): a profile photo is stored at 512 px and about 50 KB, a licence or RC at
+ * 1600 px and about 300 KB - small, but the fine print stays readable for verification.
  *
  * <p>Re-encoding also helps privacy and safety: EXIF metadata (including the GPS position where
  * the photo was taken) is dropped, and whatever the file really contained, what is stored is a
  * freshly drawn bitmap - never the uploaded bytes.
  *
- * <p>Large images are decoded with subsampling, so a 48-megapixel photo never needs 190 MB of
- * heap; an image claiming absurd dimensions is refused before any pixel is decoded.
+ * <p>Large images are decoded with subsampling to at most twice the stored size, so a
+ * 12-megapixel photo needs about 12 MB of heap rather than 48 MB; an image claiming absurd
+ * dimensions is refused before any pixel is decoded.
  */
 public final class ImageCompressor {
 
-    /** Long side of the stored image. Legible for documents, small for faces and odometers. */
-    static final int MAX_SIDE = 2000;
     /** Anything bigger is a decompression bomb, not a photo. */
     static final long MAX_PIXELS = 100_000_000L;
-    /** Try lower JPEG qualities until the result fits this. */
-    static final int TARGET_BYTES = 1024 * 1024;
-    private static final float[] QUALITIES = {0.82f, 0.72f, 0.6f, 0.5f};
+    /** Tried in order until the result fits the profile's target. Below 0.5 text starts to smear. */
+    private static final float[] QUALITIES = {0.82f, 0.72f, 0.62f, 0.5f};
+    /** When even the lowest quality is too big, shrink the long side by this much and try again. */
+    private static final double SHRINK_STEP = 0.85;
 
     private ImageCompressor() {
     }
@@ -56,22 +55,35 @@ public final class ImageCompressor {
         }
     }
 
-    /** @return JPEG bytes, longest side at most {@link #MAX_SIDE}, upright, without metadata */
-    public static byte[] toCompressedJpeg(byte[] original) {
-        BufferedImage decoded = decode(original);
-        BufferedImage upright = orient(decoded, exifOrientation(original));
-        BufferedImage scaled = scaleOnto(upright, MAX_SIDE);
-        byte[] out = null;
-        for (float q : QUALITIES) {
-            out = writeJpeg(scaled, q);
-            if (out.length <= TARGET_BYTES) {
-                break;
+    /**
+     * @return JPEG bytes, longest side at most the profile's {@code maxSide}, upright, without
+     *         metadata, and at or under its target size unless that would need fewer than
+     *         {@code minSide} pixels on the long side
+     */
+    public static byte[] toCompressedJpeg(byte[] original, ImageProfile profile) {
+        // Scale before rotating: the rotation then copies the small bitmap, not the decoded one.
+        BufferedImage image = orient(scaleOnto(decode(original, profile.maxSide), profile.maxSide),
+                exifOrientation(original));
+
+        int side = Math.max(image.getWidth(), image.getHeight());
+        while (true) {
+            byte[] out = null;
+            for (float q : QUALITIES) {
+                out = writeJpeg(image, q);
+                if (out.length <= profile.targetBytes) {
+                    return out;
+                }
             }
+            int next = (int) (side * SHRINK_STEP);
+            if (next < profile.minSide) {
+                return out; // readable beats small
+            }
+            image = scaleOnto(image, next);
+            side = next;
         }
-        return out;
     }
 
-    private static BufferedImage decode(byte[] original) {
+    private static BufferedImage decode(byte[] original, int maxSide) {
         try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(original))) {
             Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
             if (readers == null || !readers.hasNext()) {
@@ -85,9 +97,11 @@ public final class ImageCompressor {
                 if (w <= 0 || h <= 0 || w * h > MAX_PIXELS) {
                     throw new UnreadableImageException("This image is too large to process");
                 }
-                // Decode at roughly twice the target size at most; the final scale does the rest
-                // with proper interpolation.
-                int step = (int) Math.max(1, Math.max(w, h) / (MAX_SIDE * 2L));
+                // Decode at no more than twice the target size; the final scale does the rest
+                // with proper interpolation. Rounded up, so a 4032 px photo for a 1600 px target
+                // decodes at 2016 px (12 MB) instead of in full (48 MB).
+                long limit = maxSide * 2L;
+                int step = (int) Math.max(1, (Math.max(w, h) + limit - 1) / limit);
                 ImageReadParam param = reader.getDefaultReadParam();
                 param.setSourceSubsampling(step, step, 0, 0);
                 BufferedImage image = reader.read(0, param);
