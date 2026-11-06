@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validPan, validIfsc, validAadhaar, validUpi, validAccount, validPhone, ownerFormError } from './ownerForm'
+import { validPan, validIfsc, validAadhaar, validUpi, validAccount, validPhone, ownerFormError, ownerStepProblem } from './ownerForm'
 
 describe('owner application field checks (mirror OwnerApplicationChecks on the server)', () => {
   it('PAN: five letters, four digits, a letter', () => {
@@ -47,5 +47,15 @@ describe('ownerFormError', () => {
   })
   it('lets a resubmission keep the documents already sent', () => {
     expect(ownerFormError(good, { registrationDoc: null, panDoc: null, aadhaarDoc: null }, true)).toBe('')
+  })
+
+  it('checks one wizard step at a time and names the field to fix', () => {
+    const blank = { ...good, travelsName: '', panNumber: 'bad', upiId: 'x' }
+    expect(ownerStepProblem(0, blank, docs, false)).toEqual({ field: 'travelsName', message: 'Enter your travels name' })
+    expect(ownerStepProblem(1, blank, docs, false)?.field).toBe('panNumber')
+    expect(ownerStepProblem(2, blank, docs, false)?.field).toBe('upiId')
+    expect(ownerStepProblem(3, good, { ...docs, aadhaarDoc: null }, false)?.field).toBe('aadhaarDoc')
+    // A later step's problem does not hold up an earlier step.
+    expect(ownerStepProblem(0, { ...good, upiId: 'x' }, docs, false)).toBeNull()
   })
 })

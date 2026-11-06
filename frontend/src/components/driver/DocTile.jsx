@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react'
 import Icon from '../dash/Icon'
 
 /** An image upload tile that previews the chosen picture, so a driver can see it is the right one. */
-export default function DocTile({ label, icon, file, onChange, missing }) {
+export default function DocTile({ label, icon, file, onChange, missing, name }) {
   const preview = useMemo(() => (file ? URL.createObjectURL(file) : ''), [file])
   // Release the blob when the file changes or the tile goes away.
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
@@ -19,7 +19,7 @@ export default function DocTile({ label, icon, file, onChange, missing }) {
         ? <img src={preview} alt={`Preview of ${label}`} style={{ maxWidth: '100%', maxHeight: 84, borderRadius: 8, objectFit: 'cover' }} />
         : <Icon name={icon} size={24} />}
       <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--pc-muted)' }}>{file ? 'Tap to change' : 'Tap to upload'}</span>
-      <input type="file" accept="image/*" aria-label={label} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }}
+      <input type="file" accept="image/*" aria-label={label} name={name} aria-invalid={missing || undefined} style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }}
         onChange={(e) => onChange(e.target.files?.[0] || null)} />
     </label>
   )
