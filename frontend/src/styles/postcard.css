@@ -109,6 +109,9 @@
 .pc-rolechip { padding: 7px 13px; border-radius: 99px; background: var(--pc-panel); border: 1px solid var(--pc-line); font-size: 12.5px; font-weight: 800; color: var(--pc-ink-2); }
 .pc-main { flex: 1; overflow-y: auto; padding: 26px 28px 40px; }
 .pc-main > * { max-width: 1320px; margin-left: auto; margin-right: auto; }
+/* A sidebar click swaps only the content: a short fade here, while the rail and top bar stay put. */
+.pc-main-enter { animation: pc-main-in .22s cubic-bezier(.16, 1, .3, 1) both; }
+@keyframes pc-main-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 .pc-scrim { position: fixed; inset: 0; background: rgba(15, 42, 43, .45); z-index: 35; animation: pc-fade .2s ease; }
 
 /* notifications */

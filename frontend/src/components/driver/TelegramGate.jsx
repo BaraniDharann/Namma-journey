@@ -15,8 +15,20 @@ const POLL_OPEN_MS = 60000    // already connected: notice a later block within 
  * If the driver later blocks the bot, the backend unlinks them and this locks again.
  * When the Telegram integration is switched off on the server, nobody is locked out.
  */
+// The driver whose Telegram was last seen connected. Every driver page mounts its own gate, and
+// re-checking from 'checking' put a skeleton over each page on every sidebar click. A known-open
+// driver starts open; the check below still runs and locks the page if that has changed.
+let lastOpenDriver = null
+
 export default function TelegramGate({ driverId, children }) {
-  const [state, setState] = useState('checking') // checking | open | locked | error
+  const [state, setStateRaw] = useState(() => (driverId != null && lastOpenDriver === driverId ? 'open' : 'checking')) // checking | open | locked | error
+  const setState = useCallback((next) => {
+    setStateRaw((prev) => {
+      const value = typeof next === 'function' ? next(prev) : next
+      lastOpenDriver = value === 'open' ? driverId : (value === 'locked' ? null : lastOpenDriver)
+      return value
+    })
+  }, [driverId])
   const [link, setLink] = useState('')
   const [qr, setQr] = useState('')
   const [linkError, setLinkError] = useState('')
@@ -37,7 +49,7 @@ export default function TelegramGate({ driverId, children }) {
       // Keep the current state on a blip; only a first check that fails shows the error.
       setState((s) => (s === 'checking' ? 'error' : s))
     }
-  }, [driverId])
+  }, [driverId, setState])
 
   const newLink = useCallback(async () => {
     setLinkError('')
