@@ -420,6 +420,11 @@ button.pc-chip:hover { background: var(--pc-wash-2); color: var(--pc-ink); }
   .pc-rolechip { display: none; }
   .pc-minis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pc .data-table th, .pc .data-table td { padding: 11px 12px; }
+  /* A long panel note wraps under the title instead of pushing the page sideways. */
+  .pc-panel-hd { flex-wrap: wrap; row-gap: 4px; }
+  .pc-panel-meta { white-space: normal; min-width: 0; flex-wrap: wrap; }
+  /* Small buttons and chips stay easy to tap on a phone. */
+  .pc .pc-btn-sm, .pc button.pc-chip { min-height: 40px; }
 }
 @media (max-width: 420px) {
   .pc-strip { grid-template-columns: 1fr; }

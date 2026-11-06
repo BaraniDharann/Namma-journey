@@ -31,7 +31,7 @@ function PointOption({ name, point, checked, onPick, travelDate }) {
   return (
     <label className="bus-point">
       <input type="radio" name={name} checked={checked} onChange={onPick} />
-      <b>{clockText(point.at)}{otherDay && <small style={{ fontSize: 10.5, color: 'var(--pc-brand-deep)' }}>{whenText(point.at.slice(0, 10))}</small>}</b>
+      <b>{clockText(point.at)}{otherDay && <small style={{ fontSize: 12, color: 'var(--pc-brand-deep)' }}>{whenText(point.at.slice(0, 10))}</small>}</b>
       <span>
         <strong>{point.name}</strong>
         {point.address && <small>{point.address}</small>}

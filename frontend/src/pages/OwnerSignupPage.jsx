@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ownerSignup, ownerResubmit, ownerResubmitPrefill, publicCities } from '../utils/api'
 import { ownerFormError } from '../utils/ownerForm'
-import AuthShell, { Field, Alert, Submit } from '../components/auth/AuthShell'
+import AuthShell, { Field, Alert, Submit, CtaLink, FormSection } from '../components/auth/AuthShell'
+import Icon from '../components/dash/Icon'
 import DocTile from '../components/driver/DocTile'
 
 const EMPTY = {
@@ -20,8 +21,6 @@ const DOCUMENTS = [
 
 const CONSENT = 'I consent to NammaJourney verifying my Aadhaar offline (UIDAI Secure QR) for owner registration.'
 
-const sectionHead = { fontSize: 15, margin: '18px 0 10px', fontWeight: 700 }
-
 /**
  * A travels owner applying to list on NammaJourney: business, KYC and bank details plus three
  * document photos. With ?resubmit=<token> (from the rejection email) it pre-fills a rejected
@@ -37,11 +36,13 @@ export default function OwnerSignupPage() {
   const [panHint, setPanHint] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [done, setDone] = useState(null)
   const top = useRef(null)
+  const errorAt = useRef(null) // the error shows by the Apply button, where the person is looking
 
   useEffect(() => {
-    publicCities().then((r) => setCities(r.data || [])).catch(() => setError('Could not load the city list. Refresh to try again.'))
+    publicCities().then((r) => setCities(r.data || [])).catch(() => setLoadError('Could not load the city list. Refresh to try again.'))
   }, [])
 
   useEffect(() => {
@@ -56,7 +57,7 @@ export default function OwnerSignupPage() {
         setRejection(data.rejectionReason || '')
         setPanHint(data.panMasked || '')
       })
-      .catch((e) => setError(e.response?.data?.error || 'This link has expired. Please contact support.'))
+      .catch((e) => setLoadError(e.response?.data?.error || 'This link has expired. Please contact support.'))
   }, [resubmitToken])
 
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value })
@@ -68,7 +69,7 @@ export default function OwnerSignupPage() {
     e.preventDefault()
     const problem = ownerFormError(form, docs, !!resubmitToken)
     setError(problem)
-    if (problem) { top.current?.scrollIntoView({ behavior: 'smooth' }); return }
+    if (problem) { errorAt.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return }
     setLoading(true)
     try {
       const fd = new FormData()
@@ -81,7 +82,7 @@ export default function OwnerSignupPage() {
       setDone(res.data)
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || 'Could not send the application. Please check your details and try again.')
-      top.current?.scrollIntoView({ behavior: 'smooth' })
+      errorAt.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     } finally {
       setLoading(false)
     }
@@ -92,98 +93,108 @@ export default function OwnerSignupPage() {
     return (
       <AuthShell role="owner" title="Application received" sub="Thank you for applying to Namma Journey.">
         <Alert tone="ok">We will verify your documents within 48 hours{by ? ` (by ${by})` : ''}.</Alert>
-        <p className="au-sub">Once approved, your Owner ID and password are emailed to {form.email}.</p>
-        <p className="au-sub" style={{ marginTop: 16 }}><Link to="/owner/login">Go to owner sign in</Link></p>
+        <p className="au-sub">Once approved, your Owner ID and password are emailed to <strong>{form.email}</strong>.</p>
+        <CtaLink to="/owner/login" icon="crown" title="Go to owner sign in" line="Use the Owner ID and password from the approval email." />
       </AuthShell>
     )
   }
 
+  const chosen = form.cityIds.length
   return (
-    <AuthShell role="owner" title={resubmitToken ? 'Fix your application' : 'List your travels'}
+    <AuthShell role="owner" wide title={resubmitToken ? 'Fix your application' : 'List your travels'}
       sub={resubmitToken ? 'Correct the details below and send it again.' : 'Apply once. We verify your documents within 48 hours.'}
-      footer={<p className="au-sub" style={{ marginTop: 16 }}>Already approved? <Link to="/owner/login">Sign in</Link></p>}>
+      footer={<p className="au-alt">Already approved? <Link to="/owner/login">Sign in to the owner portal</Link></p>}>
       <div ref={top} />
+      <Alert>{loadError}</Alert>
       {rejection && <Alert>{`Why it was not approved: ${rejection}`}</Alert>}
-      <Alert>{error}</Alert>
       <form onSubmit={submit} className="au-form" noValidate>
-        <h2 style={sectionHead}>Your travels</h2>
-        <Field label="Travels name" icon="user">
-          <input type="text" value={form.travelsName} onChange={set('travelsName')} maxLength={255} required />
-        </Field>
-        <Field label="Contact person" icon="user">
-          <input type="text" value={form.contactName} autoComplete="name" onChange={set('contactName')} maxLength={255} required />
-        </Field>
-        <Field label="Email" icon="mail">
-          <input type="email" value={form.email} autoComplete="email" onChange={set('email')} required />
-        </Field>
-        <Field label="Mobile number" icon="phone">
-          <input type="tel" inputMode="numeric" maxLength={10} value={form.phone} autoComplete="tel"
-            onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} required />
-        </Field>
-
-        <fieldset style={{ border: 0, padding: 0, margin: '0 0 12px' }}>
-          <legend style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>Cities you serve</legend>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {cities.map((c) => (
-              <label key={c.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999,
-                border: '1px solid var(--au-line)', cursor: 'pointer', fontSize: 13 }}>
-                <input type="checkbox" checked={form.cityIds.includes(c.id)} onChange={() => toggleCity(c.id)} />
-                {c.name}
-              </label>
-            ))}
-            {!cities.length && <span className="au-sub">Loading cities…</span>}
+        <FormSection n={1} title="Your travels" hint="How customers and our team will know and reach you.">
+          <div className="au-grid2">
+            <Field label="Travels name" icon="bus">
+              <input type="text" placeholder="e.g. Sri Murugan Travels" value={form.travelsName} onChange={set('travelsName')} maxLength={255} required />
+            </Field>
+            <Field label="Contact person" icon="user">
+              <input type="text" placeholder="Full name" value={form.contactName} autoComplete="name" onChange={set('contactName')} maxLength={255} required />
+            </Field>
+            <Field label="Email" icon="mail">
+              <input type="email" placeholder="owner@example.com" value={form.email} autoComplete="email" onChange={set('email')} required />
+            </Field>
+            <Field label="Mobile number" icon="phone">
+              <input type="tel" inputMode="numeric" placeholder="10 digits" maxLength={10} value={form.phone} autoComplete="tel"
+                onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })} required />
+            </Field>
           </div>
-        </fieldset>
+          <fieldset style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            <legend className="au-label" style={{ marginBottom: 8 }}>Cities you serve</legend>
+            <div className="au-chips">
+              {cities.map((c) => (
+                <label key={c.id} className="au-chip">
+                  <input type="checkbox" checked={form.cityIds.includes(c.id)} onChange={() => toggleCity(c.id)} />
+                  <Icon name="check" size={16} />
+                  {c.name}
+                </label>
+              ))}
+              {!cities.length && !loadError && <span className="au-help">Loading cities…</span>}
+            </div>
+            {cities.length > 0 && (
+              <p className="au-chips-meta" aria-live="polite">{chosen ? `${chosen} selected` : 'Tap every city you run trips from'}</p>
+            )}
+          </fieldset>
+        </FormSection>
 
-        <h2 style={sectionHead}>Identity</h2>
-        <Field label={panHint ? `PAN (on file: ${panHint})` : 'PAN'} icon="id">
-          <input type="text" placeholder="ABCDE1234F" maxLength={10} value={form.panNumber}
-            onChange={(e) => setForm({ ...form, panNumber: e.target.value.toUpperCase() })} required />
-        </Field>
-        <Field label="Aadhaar number" icon="id">
-          <input type="text" inputMode="numeric" placeholder="12 digits - only the last 4 are kept" maxLength={12} value={form.aadhaarNumber}
-            onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value.replace(/\D/g, '') })} required />
-        </Field>
+        <FormSection n={2} title="Identity" hint="Used only to verify you. We keep just the last 4 digits of Aadhaar.">
+          <div className="au-grid2">
+            <Field label={panHint ? `PAN (on file: ${panHint})` : 'PAN'} icon="id">
+              <input type="text" placeholder="ABCDE1234F" maxLength={10} value={form.panNumber} autoCapitalize="characters"
+                onChange={(e) => setForm({ ...form, panNumber: e.target.value.toUpperCase() })} required />
+            </Field>
+            <Field label="Aadhaar number" icon="id">
+              <input type="text" inputMode="numeric" placeholder="12 digits" maxLength={12} value={form.aadhaarNumber}
+                onChange={(e) => setForm({ ...form, aadhaarNumber: e.target.value.replace(/\D/g, '') })} required />
+            </Field>
+          </div>
+        </FormSection>
 
-        <h2 style={sectionHead}>Bank and UPI</h2>
-        <Field label="Account holder name" icon="user">
-          <input type="text" value={form.bankAccountHolder} onChange={set('bankAccountHolder')} required />
-        </Field>
-        <Field label="Account number" icon="id">
-          <input type="text" inputMode="numeric" maxLength={18} value={form.bankAccountNumber}
-            onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value.replace(/\D/g, '') })} required />
-        </Field>
-        <Field label="IFSC" icon="id">
-          <input type="text" placeholder="SBIN0001234" maxLength={11} value={form.bankIfsc}
-            onChange={(e) => setForm({ ...form, bankIfsc: e.target.value.toUpperCase() })} required />
-        </Field>
-        <Field label="Bank name" icon="id">
-          <input type="text" value={form.bankName} onChange={set('bankName')} required />
-        </Field>
-        <Field label="UPI ID (customers pay you here)" icon="id">
-          <input type="text" placeholder="name@bank" value={form.upiId} onChange={set('upiId')} required />
-        </Field>
+        <FormSection n={3} title="Bank and UPI" hint="Where your trip earnings and customer UPI payments go.">
+          <div className="au-grid2">
+            <Field label="Account holder name" icon="user">
+              <input type="text" placeholder="As printed on the passbook" value={form.bankAccountHolder} onChange={set('bankAccountHolder')} required />
+            </Field>
+            <Field label="Bank name" icon="card">
+              <input type="text" placeholder="e.g. State Bank of India" value={form.bankName} onChange={set('bankName')} required />
+            </Field>
+            <Field label="Account number" icon="card">
+              <input type="text" inputMode="numeric" placeholder="9 to 18 digits" maxLength={18} value={form.bankAccountNumber}
+                onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value.replace(/\D/g, '') })} required />
+            </Field>
+            <Field label="IFSC" icon="id">
+              <input type="text" placeholder="SBIN0001234" maxLength={11} value={form.bankIfsc} autoCapitalize="characters"
+                onChange={(e) => setForm({ ...form, bankIfsc: e.target.value.toUpperCase() })} required />
+            </Field>
+            <div className="au-span2">
+              <Field label="UPI ID (customers pay you here)" icon="qr">
+                <input type="text" placeholder="name@bank" value={form.upiId} autoCapitalize="none" onChange={set('upiId')} required />
+              </Field>
+            </div>
+          </div>
+        </FormSection>
 
-        <h2 style={sectionHead}>Documents</h2>
-        <p className="au-sub" style={{ marginBottom: 10 }}>
-          Clear photos (JPEG or PNG, 5 MB max). For Aadhaar, photograph the side with the large QR code.
-          {resubmitToken && ' Leave a document empty to keep the one you sent before.'}
-        </p>
-        <div className="pc" style={{ background: 'none', marginBottom: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12 }}>
+        <FormSection n={4} title="Documents"
+          hint={`Clear photos, JPEG or PNG, up to 5 MB each. For Aadhaar, photograph the side with the large QR code.${resubmitToken ? ' Leave one empty to keep the photo you sent before.' : ''}`}>
+          <div className="pc au-docs">
             {DOCUMENTS.map((d) => (
               <DocTile key={d.key} label={d.label} icon={d.icon} file={docs[d.key]}
                 missing={!!error && !resubmitToken && !docs[d.key]}
                 onChange={(f) => setDocs((p) => ({ ...p, [d.key]: f }))} />
             ))}
           </div>
-        </div>
+          <label className="au-consent">
+            <input type="checkbox" checked={form.aadhaarConsent} onChange={(e) => setForm({ ...form, aadhaarConsent: e.target.checked })} />
+            <span>{CONSENT}</span>
+          </label>
+        </FormSection>
 
-        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, margin: '4px 0 16px' }}>
-          <input type="checkbox" checked={form.aadhaarConsent} onChange={(e) => setForm({ ...form, aadhaarConsent: e.target.checked })} />
-          <span>{CONSENT}</span>
-        </label>
-
+        <div ref={errorAt}><Alert>{error}</Alert></div>
         <Submit loading={loading} loadingText="Sending...">{resubmitToken ? 'Send for review again' : 'Apply'}</Submit>
       </form>
     </AuthShell>
