@@ -90,7 +90,8 @@ public class OwnerSignupService {
     public com.travelplatform.dto.OwnerResubmitPrefill prefill(String token) {
         Owner o = byResubmitToken(token);
         return new com.travelplatform.dto.OwnerResubmitPrefill(o.getTravelsName(), o.getContactName(), o.getEmail(),
-                o.getPhone(), o.getCities().stream().map(City::getId).sorted().toList(), o.getBankAccountHolder(),
+                o.getPhone(), o.getCities().stream().map(City::getId).sorted().toList(),
+                ServiceAreas.normalize(o.getServiceAreas()), o.getBankAccountHolder(),
                 o.getBankIfsc(), o.getBankName(), OwnerApplicationChecks.maskPan(o.getPanNumber()),
                 o.getRejectionReason());
     }
@@ -149,7 +150,8 @@ public class OwnerSignupService {
         if (!PHONE.matcher(phone).matches()) {
             throw new IllegalArgumentException("Enter a 10-digit Indian mobile phone number");
         }
-        List<City> cities = cities(form.getCityIds());
+        List<String> areas = ServiceAreas.normalize(form.getServiceAreas());
+        List<City> cities = cities(form.getCityIds(), areas.isEmpty());
         if (!OwnerApplicationChecks.validPan(form.getPanNumber())) {
             throw new IllegalArgumentException("PAN must look like ABCDE1234F");
         }
@@ -207,6 +209,8 @@ public class OwnerSignupService {
         owner.setContactName(contactName);
         owner.setPhone(phone);
         owner.setCities(new HashSet<>(cities));
+        owner.getServiceAreas().clear();
+        owner.getServiceAreas().addAll(areas);
         owner.setPanNumber(pan);
         owner.setPanHash(panHash);
         owner.setAadhaarLast4(OwnerApplicationChecks.aadhaarLast4(form.getAadhaarNumber()));
@@ -243,9 +247,12 @@ public class OwnerSignupService {
         return e;
     }
 
-    private List<City> cities(List<Long> ids) {
+    private List<City> cities(List<Long> ids, boolean required) {
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("Choose at least one city you serve");
+            if (required) {
+                throw new IllegalArgumentException("Choose where you serve: a city, a state or the whole of India");
+            }
+            return List.of();
         }
         List<Long> distinct = ids.stream().distinct().toList();
         List<City> found = cityRepository.findAllById(distinct);

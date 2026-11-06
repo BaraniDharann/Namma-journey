@@ -1,14 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ownerSignup, ownerResubmit, ownerResubmitPrefill, publicCities } from '../utils/api'
+import { ownerSignup, ownerResubmit, ownerResubmitPrefill } from '../utils/api'
+import ServiceAreaPicker from '../components/auth/ServiceAreaPicker'
 import { ownerStepProblem, OWNER_STEPS } from '../utils/ownerForm'
 import AuthShell, { Field, FieldError, Alert, Submit, CtaLink, FormSection, WizardSteps } from '../components/auth/AuthShell'
 import Icon from '../components/dash/Icon'
 import DocTile from '../components/driver/DocTile'
 
 const EMPTY = {
-  travelsName: '', contactName: '', email: '', phone: '', cityIds: [],
+  // cityIds: City-ride zones from the earlier form, kept only for a resubmission that had them.
+  travelsName: '', contactName: '', email: '', phone: '', cityIds: [], serviceAreas: [],
   panNumber: '', aadhaarNumber: '',
   bankAccountHolder: '', bankAccountNumber: '', bankIfsc: '', bankName: '', upiId: '',
   aadhaarConsent: false,
@@ -42,7 +44,6 @@ export default function OwnerSignupPage() {
   const resubmitToken = params.get('resubmit')
   const [form, setForm] = useState(EMPTY)
   const [docs, setDocs] = useState({ registrationDoc: null, panDoc: null, aadhaarDoc: null })
-  const [cities, setCities] = useState([])
   const [rejection, setRejection] = useState(null)
   const [panHint, setPanHint] = useState('')
   const [loading, setLoading] = useState(false)
@@ -57,16 +58,13 @@ export default function OwnerSignupPage() {
   const moved = useRef(false)
 
   useEffect(() => {
-    publicCities().then((r) => setCities(r.data || [])).catch(() => setLoadError('Could not load the city list. Refresh to try again.'))
-  }, [])
-
-  useEffect(() => {
     if (!resubmitToken) return
     ownerResubmitPrefill(resubmitToken)
       .then(({ data }) => {
         setForm((f) => ({
           ...f, travelsName: data.travelsName || '', contactName: data.contactName || '', email: data.email || '',
-          phone: data.phone || '', cityIds: data.cityIds || [], bankAccountHolder: data.bankAccountHolder || '',
+          phone: data.phone || '', cityIds: data.cityIds || [], serviceAreas: data.serviceAreas || [],
+          bankAccountHolder: data.bankAccountHolder || '',
           bankIfsc: data.bankIfsc || '', bankName: data.bankName || '',
         }))
         setRejection(data.rejectionReason || '')
@@ -85,7 +83,6 @@ export default function OwnerSignupPage() {
   const clearIf = (k) => { if (badField === k) { setBadField(''); setError('') } }
   const setValue = (k, v) => { setForm((f) => ({ ...f, [k]: v })); clearIf(k) }
   const set = (k) => (e) => setValue(k, e.target.value)
-  const toggleCity = (id) => setValue('cityIds', form.cityIds.includes(id) ? form.cityIds.filter((c) => c !== id) : [...form.cityIds, id])
 
   const goTo = (s) => { moved.current = true; setError(''); setBadField(''); setStep(s); setReached((r) => Math.max(r, s)) }
 
@@ -116,6 +113,7 @@ export default function OwnerSignupPage() {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => {
         if (k === 'cityIds') v.forEach((id) => fd.append('cityIds', String(id)))
+        else if (k === 'serviceAreas') v.forEach((code) => fd.append('serviceAreas', code))
         else fd.append(k, String(v ?? ''))
       })
       DOCUMENTS.forEach((d) => { if (docs[d.key]) fd.append(d.key, docs[d.key]) })
@@ -153,7 +151,6 @@ export default function OwnerSignupPage() {
 
   const bad = (k) => (badField === k ? { 'aria-invalid': true } : {})
   const err = (k) => (badField === k ? error : '')
-  const chosen = form.cityIds.length
   const last = step === OWNER_STEPS - 1
   const s = STEPS[step]
   return (
@@ -189,23 +186,11 @@ export default function OwnerSignupPage() {
                     onChange={(e) => setValue('phone', e.target.value.replace(/\D/g, ''))} required />
                 </Field>
               </div>
-              <fieldset className={`au-fieldset${badField === 'cityIds' ? ' is-bad' : ''}`}>
-                <legend className="au-label">Cities you serve</legend>
-                <div className="au-chips">
-                  {cities.map((c) => (
-                    <label key={c.id} className="au-chip">
-                      <input type="checkbox" name="cityIds" checked={form.cityIds.includes(c.id)} onChange={() => toggleCity(c.id)} />
-                      <Icon name="check" size={16} />
-                      {c.name}
-                    </label>
-                  ))}
-                  {!cities.length && !loadError && <span className="au-help">Loading cities…</span>}
-                </div>
-                {cities.length > 0 && !err('cityIds') && (
-                  <p className="au-chips-meta" aria-live="polite">{chosen ? `${chosen} selected` : 'Tap every city you run trips from'}</p>
-                )}
-                <FieldError>{err('cityIds')}</FieldError>
-              </fieldset>
+              <div>
+                <ServiceAreaPicker value={form.serviceAreas} error={err('serviceAreas')}
+                  onChange={(v) => setValue('serviceAreas', v)} />
+                <FieldError>{err('serviceAreas')}</FieldError>
+              </div>
             </>)}
 
             {step === 1 && (

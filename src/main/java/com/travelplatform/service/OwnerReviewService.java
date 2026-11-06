@@ -225,6 +225,6 @@ public class OwnerReviewService {
     }
 
     private static List<String> cityNames(Owner o) {
-        return o.getCities() == null ? List.of() : o.getCities().stream().map(City::getName).sorted().toList();
+        return ServiceAreas.describe(o);
     }
 }

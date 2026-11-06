@@ -7,6 +7,6 @@ import java.util.List;
  * again: whoever holds the link should not be shown them.
  */
 public record OwnerResubmitPrefill(String travelsName, String contactName, String email, String phone,
-                                   List<Long> cityIds, String bankAccountHolder, String bankIfsc,
+                                   List<Long> cityIds, List<String> serviceAreas, String bankAccountHolder, String bankIfsc,
                                    String bankName, String panMasked, String rejectionReason) {
 }

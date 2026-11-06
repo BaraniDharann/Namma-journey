@@ -93,6 +93,14 @@ public class Owner {
     @ToString.Exclude
     private Set<City> cities = new HashSet<>();
 
+    /** Where they run trips: INDIA, STATE:&lt;state&gt; or CITY:&lt;state&gt;:&lt;city&gt; (see ServiceAreas). */
+    @ElementCollection
+    @CollectionTable(name = "owner_service_areas", joinColumns = @JoinColumn(name = "owner_id"))
+    @Column(name = "area", length = 160, nullable = false)
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    private Set<String> serviceAreas = new HashSet<>();
+
     @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "pan_number")
     @JsonIgnore

@@ -48,7 +48,7 @@ export function ownerStepProblem(step, f, docs, documentsOptional) {
     if (!f.contactName?.trim()) return p('contactName', "Enter the contact person's name")
     if (!/^\S+@\S+\.\S+$/.test(f.email?.trim() ?? '')) return p('email', 'Enter a valid email address')
     if (!validPhone(f.phone)) return p('phone', 'Enter a 10-digit mobile number')
-    if (!f.cityIds?.length) return p('cityIds', 'Choose at least one city you serve')
+    if (!f.serviceAreas?.length && !f.cityIds?.length) return p('serviceAreas', 'Choose where you serve: a city, a state or the whole of India')
   }
   if (step === 1) {
     if (!validPan(f.panNumber)) return p('panNumber', 'PAN must look like ABCDE1234F')

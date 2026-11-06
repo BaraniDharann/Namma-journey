@@ -160,11 +160,11 @@ export function FormSection({ n, title, hint, headRef, children }) {
  * reopened; later ones are locked until the steps before them are complete.
  */
 export function WizardSteps({ steps, current, reached, onPick }) {
-  const pct = steps.length > 1 ? (current / (steps.length - 1)) * 100 : 0
+  const frac = steps.length > 1 ? current / (steps.length - 1) : 0
   return (
     <nav className="au-wiz" aria-label="Application steps">
       <p className="au-wiz-count">Step {current + 1} of {steps.length}<span> · {steps[current].title}</span></p>
-      <ol className="au-wiz-list" style={{ '--au-wiz-pct': `${pct}%` }}>
+      <ol className="au-wiz-list" style={{ '--au-wiz-frac': frac }}>
         {steps.map((st, i) => {
           const state = i === current ? 'is-on' : i < current ? 'is-done' : ''
           return (

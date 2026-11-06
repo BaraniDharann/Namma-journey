@@ -175,6 +175,26 @@ class OwnerSignupServiceTest {
     }
 
     @Test
+    @DisplayName("an owner can serve a state, a city or all of India with no City-ride zones chosen")
+    void serviceAreasWithoutZones() {
+        OwnerSignupForm f = form();
+        f.setCityIds(null);
+        f.setServiceAreas(List.of("STATE:tamil nadu", "CITY:Tamil Nadu:Madurai", "CITY:Kerala:Kochi", "CITY::Ooty"));
+        service.signup(f);
+
+        ArgumentCaptor<Owner> saved = ArgumentCaptor.forClass(Owner.class);
+        verify(owners).save(saved.capture());
+        Owner o = saved.getValue();
+        assertTrue(o.getCities().isEmpty());
+        // Madurai is inside all of Tamil Nadu, so it is not kept twice.
+        assertEquals(java.util.Set.of("STATE:Tamil Nadu", "CITY:Kerala:Kochi", "CITY::Ooty"), o.getServiceAreas());
+        assertEquals(List.of("All of Tamil Nadu", "Kochi, Kerala", "Ooty"), ServiceAreas.describe(o));
+
+        assertRefused(x -> { x.setCityIds(null); x.setServiceAreas(List.of("STATE:Atlantis")); }, "state");
+        assertRefused(x -> { x.setCityIds(null); x.setServiceAreas(List.of()); }, "serve");
+    }
+
+    @Test
     @DisplayName("bad numbers, unknown cities, missing consent or documents are refused before anything is stored")
     void invalidNumbersAreRefusedBeforeAnythingIsStored() {
         assertRefused(f -> f.setPanNumber("ABCD1234F"), "PAN");

@@ -71,8 +71,7 @@ public class OwnerService {
     public com.travelplatform.dto.OwnerProfileView profile(Long ownerId, boolean platform) {
         com.travelplatform.entity.Owner o = ownerRepository.findById(ownerId)
                 .orElseThrow(() -> new com.travelplatform.exception.ResourceNotFoundException("Owner not found"));
-        List<String> cities = o.getCities() == null ? List.of()
-                : o.getCities().stream().map(com.travelplatform.entity.City::getName).sorted().toList();
+        List<String> cities = ServiceAreas.describe(o);
         return new com.travelplatform.dto.OwnerProfileView(o.getId(), o.getOwnerCode(), o.getTravelsName(),
                 o.getContactName(), o.getPhone(), o.getEmail(), cities, o.getBankAccountHolder(),
                 o.getBankAccountNumber() == null ? null : OwnerApplicationChecks.maskAccount(o.getBankAccountNumber()),
