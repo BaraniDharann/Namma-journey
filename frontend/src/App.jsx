@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react'
+import React, { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { motion } from 'framer-motion'
@@ -77,12 +77,17 @@ function PageLoader() {
   )
 }
 
-/** Every route fades up on arrival — one shared entrance for the whole app. */
+// Signed-in screens share one sidebar shell (DashboardLayout). Moving between them must not
+// fade or slide the whole screen, or every sidebar click looks like a page reload; the shell
+// fades just its content area instead.
+const SHELL_ROUTE = /^\/(owner|user|driver|admin)\/(?!login$|signup$|change-password$)/
+
+/** Every public route fades up on arrival; the signed-in shell keeps one stable key. */
 function PageFade({ children }) {
   const { pathname } = useLocation()
   return (
     <motion.div
-      key={pathname}
+      key={SHELL_ROUTE.test(pathname) ? 'app-shell' : pathname}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
@@ -98,6 +103,32 @@ function ProtectedRoute({ children, role }) {
   if (!user) return <Navigate to="/login" replace />
   if (role && user.role !== role) return <Navigate to="/" replace />
   return children
+}
+
+// Each role's screens, fetched in the background once someone signs in, so the first click on
+// a sidebar item opens the page at once instead of waiting for its code to download.
+const ROLE_PAGES = {
+  ROLE_OWNER: import.meta.glob('./pages/owner/**/*.jsx'),
+  ROLE_USER: import.meta.glob('./pages/user/*.jsx'),
+  ROLE_DRIVER: import.meta.glob('./pages/driver/*.jsx'),
+  ROLE_ADMIN: import.meta.glob('./pages/admin/*.jsx'),
+}
+
+function PreloadRolePages() {
+  const { user } = useAuth()
+  const role = user?.role
+  useEffect(() => {
+    const loaders = ROLE_PAGES[role]
+    if (!loaders) return undefined
+    const run = () => Object.values(loaders).forEach((load) => load().catch(() => {}))
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: 4000 })
+      return () => window.cancelIdleCallback?.(id)
+    }
+    const t = setTimeout(run, 1500)
+    return () => clearTimeout(t)
+  }, [role])
+  return null
 }
 
 function getDashboard(role) {
@@ -181,7 +212,10 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      {/* v7_startTransition: while a page's code loads, keep the current screen on show instead
+          of swapping the whole app for the full-screen loader. */}
+      <BrowserRouter future={{ v7_startTransition: true }}>
+        <PreloadRolePages />
         <CelebrationProvider>
           <AppRoutes />
         </CelebrationProvider>

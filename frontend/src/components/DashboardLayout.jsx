@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getLatestNotifications, getUnreadCountCached, invalidateCache, markNotificationAsRead, markAllNotificationsAsRead } from '../utils/api'
-import useOwnerMe from '../hooks/useOwnerMe'
+import useOwnerMe, { clearOwnerMe } from '../hooks/useOwnerMe'
 import { visibleNav } from './owner/ownerNav'
 import { createCountPoller } from './notificationPoll'
 import Icon, { navIcon, navTint } from './dash/Icon'
@@ -35,6 +35,11 @@ const BOOKING_ROUTES = {
 
 const ROLE_LABEL = { ROLE_USER: 'Traveller', ROLE_DRIVER: 'Driver', ROLE_OWNER: 'Owner', ROLE_ADMIN: 'Admin' }
 
+// Every page renders its own copy of this shell, so a sidebar click mounts a fresh one. These
+// carry the bits a fresh shell would otherwise reset (and visibly blink) across that remount.
+let lastUnread = 0
+let lastNavScroll = 0
+
 /**
  * The Postcard shell every owner, driver and traveller page renders inside: teal rail with
  * line icons (mapped from each page's routes, so pages keep passing their nav items as is),
@@ -48,7 +53,18 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
   const navigate = useNavigate()
   const [railOpen, setRailOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [unreadCount, setUnreadCountState] = useState(lastUnread)
+  const setUnreadCount = useCallback((n) => { lastUnread = n; setUnreadCountState(n) }, [])
+  const navRef = useRef(null)
+  // Put the sidebar back where it was scrolled to, before paint, so long menus don't jump to the top.
+  useLayoutEffect(() => {
+    const nav = navRef.current
+    if (!nav) return undefined
+    nav.scrollTop = lastNavScroll
+    const remember = () => { lastNavScroll = nav.scrollTop }
+    nav.addEventListener('scroll', remember, { passive: true })
+    return () => nav.removeEventListener('scroll', remember)
+  }, [])
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
 
@@ -62,7 +78,13 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
   const displayName = user?.name || user?.email || roleLabel
   const current = navItems.find((n) => n.path === location.pathname)
 
-  const handleLogout = () => { logout(); navigate('/') }
+  const handleLogout = () => {
+    lastUnread = 0
+    lastNavScroll = 0
+    clearOwnerMe()
+    logout()
+    navigate('/')
+  }
 
   const userRole = user?.role
   // Admins have no notification feed; their alerts arrive by email.
@@ -92,7 +114,7 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
     })
     poller.start()
     return () => poller.stop()
-  }, [recipientId, userRole, loadList])
+  }, [recipientId, userRole, loadList, setUnreadCount])
 
   const toggleDropdown = () => {
     if (!dropdownOpen) loadList()
@@ -157,7 +179,7 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
           <span><b title={displayName}>{displayName}</b><small>{roleLabel}</small></span>
         </div>
 
-        <nav className="pc-nav">
+        <nav className="pc-nav" ref={navRef}>
           {navItems.map((item) => {
             const on = location.pathname === item.path
             return (
@@ -231,7 +253,7 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
           <span className="pc-rolechip">{roleLabel}</span>
         </header>
 
-        <main className="pc-main dashboard-content">
+        <main key={location.pathname} className="pc-main dashboard-content pc-main-enter">
           {role === 'ROLE_DRIVER'
             ? (
               <ApplicationGate driverId={user?.userId}>
