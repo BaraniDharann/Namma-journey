@@ -302,9 +302,7 @@ public class EmailService {
     }
 
     public void sendAdminNewOwnerApplication(com.travelplatform.entity.Owner owner, java.time.LocalDateTime reviewBy) {
-        String cities = owner.getCities() == null ? "" : owner.getCities().stream()
-                .map(com.travelplatform.entity.City::getName).sorted()
-                .collect(java.util.stream.Collectors.joining(", "));
+        String cities = String.join(", ", ServiceAreas.describe(owner));
         queue(adminNotifyEmail, "New owner application: " + owner.getTravelsName(), HTML_HEADER +
                 "<h2>New travels owner application</h2>" +
                 "<div style='background-color:#f5f5f5;padding:15px;border-radius:5px;margin:20px 0;'>" +

@@ -17,7 +17,10 @@ public class OwnerSignupForm {
     private String contactName;
     private String email;
     private String phone;
+    /** City-ride zones (the earlier form); optional now that serviceAreas exists. */
     private List<Long> cityIds;
+    /** INDIA, STATE:&lt;state&gt; or CITY:&lt;state&gt;:&lt;city&gt; - see ServiceAreas. */
+    private List<String> serviceAreas;
     private String panNumber;
     /** Validated, then only its last 4 digits are kept. */
     private String aadhaarNumber;

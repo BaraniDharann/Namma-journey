@@ -92,7 +92,7 @@ function RoleSwitch({ current }) {
 }
 
 /** A labelled input with a leading icon. `aside` sits at the right of the label row. */
-export function Field({ label, icon, aside, children }) {
+export function Field({ label, icon, aside, error, children }) {
   return (
     <label className="au-field">
       <span className="au-label-row"><span className="au-label">{label}</span>{aside}</span>
@@ -100,8 +100,15 @@ export function Field({ label, icon, aside, children }) {
         {icon && <Icon name={icon} size={18} className="au-input-ic" />}
         {children}
       </span>
+      <FieldError>{error}</FieldError>
     </label>
   )
+}
+
+/** The problem with one field, shown right under it so it is seen where the cursor is. */
+export function FieldError({ children }) {
+  if (!children) return null
+  return <span className="au-field-err" role="alert"><Icon name="alert" size={16} />{children}</span>
 }
 
 /** Password input with a show/hide toggle. It stays type="password" until asked. */
@@ -132,18 +139,47 @@ export function CtaLink({ to, icon, title, line }) {
 }
 
 /** A numbered part of a long form, so people can see where they are and how much is left. */
-export function FormSection({ n, title, hint, children }) {
+export function FormSection({ n, title, hint, headRef, children }) {
   return (
     <section className="au-sec" aria-labelledby={`au-sec-${n}`}>
       <header className="au-sec-head">
         <span className="au-sec-n" aria-hidden="true">{n}</span>
         <span>
-          <h2 id={`au-sec-${n}`} className="au-sec-t">{title}</h2>
+          <h2 id={`au-sec-${n}`} className="au-sec-t" ref={headRef} tabIndex={headRef ? -1 : undefined}>{title}</h2>
           {hint && <p className="au-sec-hint">{hint}</p>}
         </span>
       </header>
       {children}
     </section>
+  )
+}
+
+/**
+ * The step bar of a multi-step form: numbered dots joined by a progress line, a tick on steps
+ * already passed, and the current step's name. Steps up to the furthest one opened can be
+ * reopened; later ones are locked until the steps before them are complete.
+ */
+export function WizardSteps({ steps, current, reached, onPick }) {
+  const frac = steps.length > 1 ? current / (steps.length - 1) : 0
+  return (
+    <nav className="au-wiz" aria-label="Application steps">
+      <p className="au-wiz-count">Step {current + 1} of {steps.length}<span> · {steps[current].title}</span></p>
+      <ol className="au-wiz-list" style={{ '--au-wiz-frac': frac }}>
+        {steps.map((st, i) => {
+          const state = i === current ? 'is-on' : i < current ? 'is-done' : ''
+          return (
+            <li key={st.title} className={state}>
+              <button type="button" onClick={() => onPick(i)} disabled={i > reached || i === current}
+                aria-current={i === current ? 'step' : undefined}
+                aria-label={`Step ${i + 1}: ${st.title}${i < current ? ' (done)' : ''}`}>
+                <span className="au-wiz-dot">{i < current ? <Icon name="check" size={16} /> : i + 1}</span>
+                <span className="au-wiz-l">{st.short || st.title}</span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </nav>
   )
 }
 

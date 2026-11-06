@@ -98,6 +98,141 @@
 .au-consent { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; cursor: pointer; font-size: 14px; line-height: 1.5; color: var(--au-ink-2); background: color-mix(in oklab, var(--rc) 6%, #fff); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--rc) 18%, transparent); }
 .au-consent input { width: 22px; height: 22px; flex: none; margin: 0; accent-color: var(--rc); }
 
+/* multi-step form: step bar */
+.au-wizard { gap: 18px; scroll-margin-top: 16px; }
+.au-wiz-count { margin: 0 0 12px; font-size: 13px; font-weight: 800; color: var(--rc-deep); letter-spacing: .01em; }
+.au-wiz-count span { color: var(--au-muted); font-weight: 700; }
+.au-wiz-list {
+  --au-wiz-frac: 0;
+  position: relative; list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+/* the rail behind the dots, filled up to the current step */
+.au-wiz-list::before, .au-wiz-list::after {
+  content: ''; position: absolute; top: 21px; left: 12.5%; height: 3px; border-radius: 3px;
+}
+.au-wiz-list::before { right: 12.5%; background: #f1e6d8; }
+.au-wiz-list::after { right: 12.5%; background: var(--rc); transform: scaleX(var(--au-wiz-frac)); transform-origin: left; transition: transform .45s var(--au-ease); }
+.au-wiz-list li { position: relative; z-index: 1; display: flex; justify-content: center; }
+.au-wiz-list button {
+  display: grid; justify-items: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 0 2px;
+  border: 0; background: none; font: inherit; cursor: pointer; color: var(--au-muted);
+}
+.au-wiz-list button:disabled { cursor: default; }
+.au-wiz-list button:focus-visible { outline: 2px solid var(--rc); outline-offset: 2px; border-radius: 12px; }
+.au-wiz-dot {
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 15px; font-weight: 800; color: #8a9c9b; background: #fff; border: 2px solid #eadccb;
+  transition: background .3s ease, color .3s ease, border-color .3s ease, box-shadow .3s ease;
+}
+.au-wiz-l { font-size: 13px; font-weight: 700; line-height: 1.2; text-align: center; }
+.au-wiz-list li.is-done .au-wiz-dot { color: #fff; background: var(--rc); border-color: var(--rc); }
+.au-wiz-list li.is-done .au-wiz-l { color: var(--au-ink-2); }
+.au-wiz-list li.is-done button:hover .au-wiz-dot { box-shadow: 0 0 0 5px color-mix(in oklab, var(--rc) 16%, transparent); }
+.au-wiz-list li.is-on .au-wiz-dot { color: var(--rc-deep); border-color: var(--rc); background: color-mix(in oklab, var(--rc) 10%, #fff); box-shadow: 0 0 0 5px color-mix(in oklab, var(--rc) 16%, transparent); }
+.au-wiz-list li.is-on .au-wiz-l { color: var(--rc-deep); font-weight: 800; }
+/* phones: the dots and the "Step 2 of 4 · Identity" line say it; labels would wrap */
+@media (max-width: 479px) {
+  .au-wiz-l { display: none; }
+  .au-wiz-dot { width: 40px; height: 40px; font-size: 14px; }
+  .au-wiz-list::before, .au-wiz-list::after { top: 20px; }
+}
+@media (min-width: 480px) { .au-wiz-count span { display: none; } }
+.au-wizard .au-sec { border-top: 0; padding-top: 4px; }
+.au-sec-t:focus { outline: none; }
+.au-sec-t:focus-visible { outline: 2px solid var(--rc); outline-offset: 4px; border-radius: 4px; }
+
+/* Back + Next row: Next takes the room, Back stays a clear second choice */
+.au-wiz-nav { display: flex; gap: 10px; align-items: stretch; }
+.au-wiz-nav .au-submit { flex: 1; }
+.au-btn2 {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; padding: 0 18px;
+  border-radius: 14px; border: 1.5px solid var(--au-line); background: #fff; cursor: pointer;
+  font: inherit; font-size: 15px; font-weight: 800; color: var(--au-ink-2);
+  transition: border-color .2s ease, background .2s ease;
+}
+.au-btn2:hover { border-color: color-mix(in oklab, var(--rc) 40%, transparent); background: color-mix(in oklab, var(--rc) 5%, #fff); }
+.au-btn2:focus-visible { outline: 2px solid var(--rc); outline-offset: 2px; }
+
+/* a field that needs fixing */
+.au-input input[aria-invalid='true'], .au-input input[aria-invalid='true']:focus { border-color: #dc2626; background: #fff; box-shadow: 0 0 0 4px rgba(220, 38, 38, .14); }
+.au-field-err { display: flex; align-items: flex-start; gap: 6px; font-size: 13.5px; font-weight: 700; line-height: 1.4; color: #b91c1c; }
+.au-field-err .pc-ic { flex: none; margin-top: 1px; }
+.au-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.au-fieldset legend { margin-bottom: 8px; }
+.au-fieldset.is-bad .au-chip { border-color: #fca5a5; }
+.au-consent.is-bad { box-shadow: inset 0 0 0 1.5px #dc2626; background: #fef2f2; }
+
+/* where an owner runs trips (ServiceAreaPicker) */
+.sa { display: grid; gap: 12px; min-width: 0; }
+.sa-picked { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.sa-picked li {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 4px 0 14px; border-radius: 999px;
+  font-size: 14px; font-weight: 800; color: #fff; background: var(--rc);
+}
+.sa-picked button { width: 32px; height: 32px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; color: #fff; background: rgba(255, 255, 255, .18); }
+.sa-picked button:hover { background: rgba(255, 255, 255, .32); }
+.sa-picked button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.sa-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 12px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; font-weight: 600; color: var(--rc-deep); background: color-mix(in oklab, var(--rc) 8%, #fff); }
+.sa-note .pc-ic { flex: none; margin-top: 2px; }
+
+.sa-search { position: relative; }
+.sa-search input[type='search']::-webkit-search-cancel-button { cursor: pointer; }
+.sa-results {
+  list-style: none; margin: 6px 0 0; padding: 6px; border-radius: 16px; background: #fff;
+  border: 1px solid var(--au-line); box-shadow: 0 18px 40px -18px rgba(110, 72, 30, .35);
+  max-height: 340px; overflow-y: auto; overscroll-behavior: contain;
+}
+.sa-results button {
+  width: 100%; min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 0; border-radius: 12px;
+  background: none; cursor: pointer; font: inherit; text-align: left; color: var(--au-ink);
+}
+.sa-results button > .pc-ic:first-child { flex: none; color: var(--rc); }
+.sa-results button > span { flex: 1; display: grid; min-width: 0; }
+.sa-results b { font-size: 15px; font-weight: 800; }
+.sa-results small { font-size: 13px; color: var(--au-muted); }
+.sa-results button:hover:not(:disabled), .sa-results button:focus-visible { background: color-mix(in oklab, var(--rc) 8%, #fff); outline: none; }
+.sa-results button:disabled { cursor: default; opacity: .6; }
+.sa-results .sa-on { color: var(--rc-deep); }
+.sa-empty { padding: 12px; font-size: 14px; color: var(--au-muted); }
+
+.sa-quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.sa-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 700; color: var(--au-ink-2); background: #fffcf8; border: 1.5px solid var(--au-line);
+  transition: background .2s ease, border-color .2s ease, color .2s ease;
+}
+.sa-chip .pc-ic { color: var(--rc); }
+.sa-chip:hover:not(:disabled) { border-color: color-mix(in oklab, var(--rc) 40%, transparent); }
+.sa-chip.is-on { color: var(--rc-deep); background: color-mix(in oklab, var(--rc) 10%, #fff); border-color: var(--rc); }
+.sa-chip:disabled { cursor: default; }
+.sa-chip:focus-visible { outline: 2px solid var(--rc); outline-offset: 2px; }
+.sa-city { font-weight: 600; min-height: 40px; }
+
+.sa-browse { border-radius: 16px; border: 1.5px solid var(--au-line); background: #fffcf8; }
+.sa-browse > summary, .sa-state > summary {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; cursor: pointer; list-style: none;
+  font-weight: 800; color: var(--au-ink);
+}
+.sa-browse > summary::-webkit-details-marker, .sa-state > summary::-webkit-details-marker { display: none; }
+.sa-browse > summary::after, .sa-state > summary::after {
+  content: ''; width: 8px; height: 8px; margin-left: auto; flex: none;
+  border-right: 2px solid var(--au-muted); border-bottom: 2px solid var(--au-muted); transform: rotate(45deg) translateY(-2px); transition: transform .2s ease;
+}
+.sa-browse[open] > summary::after, .sa-state[open] > summary::after { transform: rotate(225deg) translateY(-2px); }
+.sa-browse > summary small { font-size: 13px; font-weight: 600; color: var(--au-muted); }
+.sa-browse > summary:focus-visible, .sa-state > summary:focus-visible { outline: 2px solid var(--rc); outline-offset: -2px; border-radius: 14px; }
+.sa-states { border-top: 1px solid var(--au-line); max-height: 420px; overflow-y: auto; overscroll-behavior: contain; }
+.sa-state + .sa-state { border-top: 1px solid var(--au-line); }
+.sa-state > summary { min-height: 48px; font-weight: 700; font-size: 15px; }
+.sa-state > summary em { font-style: normal; font-size: 12px; font-weight: 800; padding: 3px 9px; border-radius: 999px; color: #fff; background: var(--rc); }
+.sa-state-body { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 16px 16px; }
+@media (max-width: 479px) {
+  .sa-browse > summary small { display: none; }
+  .sa-state-body { padding: 4px 12px 14px; }
+}
+.sa.is-bad .sa-quick .sa-chip { border-color: #fca5a5; }
+
 /* the one thing to do next, as a card link */
 .au-cta {
   display: flex; align-items: center; gap: 12px; min-height: 64px; margin-top: 18px; padding: 12px 16px; border-radius: 16px; text-decoration: none;
@@ -208,8 +343,8 @@
 .au-step { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #93a5a4; background: #f4ede4; transition: background .3s ease, color .3s ease, box-shadow .3s ease; }
 .au-step.is-on { color: #fff; background: var(--rc); box-shadow: 0 0 0 4px color-mix(in oklab, var(--rc) 20%, transparent); }
 .au-step-bar { flex: 1; height: 3px; border-radius: 3px; background: #f1e6d8; overflow: hidden; }
-.au-step-bar i { display: block; height: 100%; width: 0; background: var(--rc); transition: width .5s var(--au-ease); }
-.au-step-bar.is-on i { width: 100%; }
+.au-step-bar i { display: block; height: 100%; width: 100%; background: var(--rc); transform: scaleX(0); transform-origin: left; transition: transform .5s var(--au-ease); }
+.au-step-bar.is-on i { transform: scaleX(1); }
 .au-step-l { font-size: 12px; font-weight: 700; color: var(--au-muted); }
 
 /* the other two doors */

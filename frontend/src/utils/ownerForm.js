@@ -36,25 +36,49 @@ export function validAadhaar(s) {
 const DOCS = [['registrationDoc', 'Business registration document'], ['panDoc', 'PAN card'], ['aadhaarDoc', 'Aadhaar card']]
 const MAX_DOC_BYTES = 5 * 1024 * 1024
 
-/** The first problem with the application, in plain words; '' when it can be sent. */
-export function ownerFormError(f, docs, documentsOptional) {
-  if (!f.travelsName?.trim()) return 'Enter your travels name'
-  if (!f.contactName?.trim()) return "Enter the contact person's name"
-  if (!/^\S+@\S+\.\S+$/.test(f.email?.trim() ?? '')) return 'Enter a valid email address'
-  if (!validPhone(f.phone)) return 'Enter a 10-digit mobile number'
-  if (!f.cityIds?.length) return 'Choose at least one city you serve'
-  if (!validPan(f.panNumber)) return 'PAN must look like ABCDE1234F'
-  if (!validAadhaar(f.aadhaarNumber)) return 'Aadhaar number is not valid - check the 12 digits'
-  if (!f.bankAccountHolder?.trim()) return 'Enter the bank account holder name'
-  if (!validAccount(f.bankAccountNumber)) return 'Bank account number must be 9 to 18 digits'
-  if (!validIfsc(f.bankIfsc)) return 'IFSC must look like SBIN0001234'
-  if (!f.bankName?.trim()) return 'Enter the bank name'
-  if (!validUpi(f.upiId)) return 'UPI ID must look like name@bank'
-  for (const [key, label] of DOCS) {
-    const file = docs[key]
-    if (!file && !documentsOptional) return `Upload the ${label} image`
-    if (file?.size > MAX_DOC_BYTES) return `${label} must be 5 MB or smaller`
+/**
+ * The first problem on one step of the application wizard (0 travels, 1 identity, 2 bank,
+ * 3 documents), as { field, message }, or null when the step is complete. `field` is the form
+ * key to put the cursor on.
+ */
+export function ownerStepProblem(step, f, docs, documentsOptional) {
+  const p = (field, message) => ({ field, message })
+  if (step === 0) {
+    if (!f.travelsName?.trim()) return p('travelsName', 'Enter your travels name')
+    if (!f.contactName?.trim()) return p('contactName', "Enter the contact person's name")
+    if (!/^\S+@\S+\.\S+$/.test(f.email?.trim() ?? '')) return p('email', 'Enter a valid email address')
+    if (!validPhone(f.phone)) return p('phone', 'Enter a 10-digit mobile number')
+    if (!f.serviceAreas?.length && !f.cityIds?.length) return p('serviceAreas', 'Choose where you serve: a city, a state or the whole of India')
   }
-  if (!f.aadhaarConsent) return 'Please give consent for offline Aadhaar verification'
+  if (step === 1) {
+    if (!validPan(f.panNumber)) return p('panNumber', 'PAN must look like ABCDE1234F')
+    if (!validAadhaar(f.aadhaarNumber)) return p('aadhaarNumber', 'Aadhaar number is not valid - check the 12 digits')
+  }
+  if (step === 2) {
+    if (!f.bankAccountHolder?.trim()) return p('bankAccountHolder', 'Enter the bank account holder name')
+    if (!validAccount(f.bankAccountNumber)) return p('bankAccountNumber', 'Bank account number must be 9 to 18 digits')
+    if (!validIfsc(f.bankIfsc)) return p('bankIfsc', 'IFSC must look like SBIN0001234')
+    if (!f.bankName?.trim()) return p('bankName', 'Enter the bank name')
+    if (!validUpi(f.upiId)) return p('upiId', 'UPI ID must look like name@bank')
+  }
+  if (step === 3) {
+    for (const [key, label] of DOCS) {
+      const file = docs[key]
+      if (!file && !documentsOptional) return p(key, `Upload the ${label} image`)
+      if (file?.size > MAX_DOC_BYTES) return p(key, `${label} must be 5 MB or smaller`)
+    }
+    if (!f.aadhaarConsent) return p('aadhaarConsent', 'Please give consent for offline Aadhaar verification')
+  }
+  return null
+}
+
+export const OWNER_STEPS = 4
+
+/** The first problem with the whole application, in plain words; '' when it can be sent. */
+export function ownerFormError(f, docs, documentsOptional) {
+  for (let s = 0; s < OWNER_STEPS; s++) {
+    const problem = ownerStepProblem(s, f, docs, documentsOptional)
+    if (problem) return problem.message
+  }
   return ''
 }
