@@ -103,7 +103,10 @@ export default function OwnerCities() {
 
       <Panel title="Your cities" meta={cities ? `${cities.filter((c) => c.active).length} active` : undefined}>
         {!cities ? <Skeleton rows={3} /> : cities.length === 0 ? (
-          <Empty icon="map" title="No cities yet">Add the first one to start taking City rides.</Empty>
+          <Empty icon="map" title="No cities yet"
+            action={!draft && <button type="button" className="pc-btn pc-btn-sm" onClick={() => { setError(''); setDraft({ ...EMPTY }) }}><Icon name="plus" size={14} />Add city</button>}>
+            Add the first one to start taking City rides, e.g. Chennai, 25 km around the centre.
+          </Empty>
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
             {cities.map((c) => (

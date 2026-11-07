@@ -11,7 +11,7 @@ import ApplicationGate from './driver/ApplicationGate'
 import TelegramGate from './driver/TelegramGate'
 import DriverDispatch from './driver/DriverDispatch'
 import useOwnerFleet from '../hooks/useOwnerFleet'
-import { ownerMenu } from '../utils/ownerFleet'
+import { ownerMenu, isBusPath } from '../utils/ownerFleet'
 import { userMenu } from '../utils/userMenu'
 
 function timeAgo(dateStr) {
@@ -76,7 +76,9 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
 
   const roleLabel = ROLE_LABEL[role] || 'Traveller'
   const displayName = user?.name || user?.email || roleLabel
-  const current = navItems.find((n) => n.path === location.pathname)
+  // The one Bus item stands for every bus screen (Buses, a trip, a route...), so it stays lit there.
+  const isOn = (path) => location.pathname === path || (path === '/owner/bus' && isBusPath(location.pathname))
+  const current = navItems.find((n) => isOn(n.path))
 
   const handleLogout = () => {
     lastUnread = 0
@@ -181,7 +183,7 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
 
         <nav className="pc-nav" ref={navRef}>
           {navItems.map((item) => {
-            const on = location.pathname === item.path
+            const on = isOn(item.path)
             return (
               <Link key={item.path} to={item.path} className={on ? 'is-on' : undefined} aria-current={on ? 'page' : undefined}>
                 <span className={`pc-navic pc-tint-${navTint(item.path)}`}><Icon name={navIcon(item.path)} size={18} /></span>

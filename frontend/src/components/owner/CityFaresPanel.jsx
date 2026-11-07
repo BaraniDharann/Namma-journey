@@ -55,7 +55,7 @@ export default function CityFaresPanel({ span = 12 }) {
   }
 
   return (
-    <Panel span={span} title="City ride fares" meta="5 km · 15 min example">
+    <Panel span={span} title="City ride fares" meta="Suggested fares — edit and save">
       {error && <div className="pc-error" role="alert" style={{ marginBottom: 12 }}><Icon name="alert" size={16} /><span>{error}</span></div>}
       {!fares ? <Skeleton rows={3} /> : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
@@ -63,7 +63,7 @@ export default function CityFaresPanel({ span = 12 }) {
             <div key={type} style={{ padding: 14, borderRadius: 14, background: 'var(--pc-wash)', border: '1px solid var(--pc-line)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
                 <b style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 15 }}><Icon name={VEHICLES[type].icon} size={20} />{VEHICLES[type].label}</b>
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--pc-muted)' }}>e.g. {inr(sample(type))}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--pc-muted)' }}>5 km, 15 min: {inr(sample(type))}</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {FIELDS.map(([key, text]) => (

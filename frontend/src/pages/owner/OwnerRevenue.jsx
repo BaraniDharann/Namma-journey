@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { OWNER_NAV } from '../../components/owner/ownerNav'
-import { getDailyRevenue, getMonthlyRevenue, getMonthlyRevenueSeries, getYearlyRevenue, getOwnerBookings, getOwnerDrivers } from '../../utils/api'
+import { getDailyRevenue, getMonthlyRevenue, getMonthlyRevenueSeries, getYearlyRevenue, getOwnerBookings, getOwnerDrivers, getOwnerVehicles } from '../../utils/api'
+import ExpensesPanel from '../../components/expenses/ExpensesPanel'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { AreaChart, BarChart, Donut } from '../../components/dash/charts'
@@ -116,6 +117,12 @@ async function downloadPDF(title, subtitle, headers, rows, filename, summaryInfo
 }
 
 export default function OwnerRevenue() {
+  const [cars, setCars] = useState([])
+  useEffect(() => {
+    getOwnerVehicles()
+      .then((r) => setCars((r.data || []).map((v) => ({ id: v.id, label: v.model ? `${v.registrationNumber} · ${v.model}` : v.registrationNumber }))))
+      .catch(() => setCars([]))
+  }, [])
   const [tab, setTab] = useState('monthly')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -346,14 +353,17 @@ export default function OwnerRevenue() {
           {/* Period stats below bar chart */}
           {!loading && data && (
             <div className="pc-minis" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--pc-line)' }}>
-              {displayFields.map(([key, val]) => (
-                <div key={key} style={{ textTransform: 'capitalize', overflowWrap: 'anywhere' }}>
-                  <b style={{ color: key.toLowerCase().includes('revenue') ? 'var(--pc-brand-deep)' : 'var(--pc-ink)', textTransform: 'none' }}>
-                    {typeof val === 'number' && key.toLowerCase().includes('revenue') ? inr(val) : String(val)}
-                  </b>
-                  {key.replace(/([A-Z])/g, ' $1').trim()}
-                </div>
-              ))}
+              {[['totalTrips', 'Trips'], ['totalRevenue', 'Revenue (₹)'], ['totalDistance', 'Distance (km)'], ['totalTravelDays', 'Travel days']]
+                .map(([key, label]) => [key, label, displayFields.find(([k]) => k === key)?.[1]])
+                .filter(([, , val]) => val != null)
+                .map(([key, label, val]) => (
+                  <div key={key} style={{ overflowWrap: 'anywhere' }}>
+                    <b style={{ color: key === 'totalRevenue' ? 'var(--pc-brand-deep)' : 'var(--pc-ink)' }}>
+                      {key === 'totalRevenue' ? inr(Number(val)) : Number(val).toLocaleString('en-IN', { maximumFractionDigits: 1 })}
+                    </b>
+                    {label}
+                  </div>
+                ))}
             </div>
           )}
           {loading && <div style={{ marginTop: 16 }}><Skeleton rows={2} /></div>}
@@ -440,6 +450,11 @@ export default function OwnerRevenue() {
           )}
         </Panel>
       </div>
+
+      <section id="car-expenses" aria-labelledby="car-expenses-h" style={{ marginTop: 28 }}>
+        <PageHead title={<span id="car-expenses-h">Car expenses &amp; profit</span>} sub="Fuel, tolls, driver pay and repairs per car, and what each car earns after them" />
+        <ExpensesPanel kind="CAR" vehicles={cars} />
+      </section>
     </DashboardLayout>
   )
 }

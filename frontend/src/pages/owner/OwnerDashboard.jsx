@@ -5,7 +5,10 @@ import { OWNER_NAV } from '../../components/owner/ownerNav'
 import { useAuth } from '../../context/AuthContext'
 import {
   getOwnerBookings, getPendingPayments, getAllReviews, getMonthlyRevenue, getMonthlyRevenueSeries, getOwnerDrivers,
+  getTripRates, getOwnerVehicles, getCities, getDriverApplications,
 } from '../../utils/api'
+import useOwnerMe from '../../hooks/useOwnerMe'
+import useOwnerFleet from '../../hooks/useOwnerFleet'
 import Icon from '../../components/dash/Icon'
 import { Panel, PanelLink, PageHead, SummaryStrip, TaskList, StatusPill, Empty, Skeleton, ErrorNote } from '../../components/dash/ui'
 import { Gauge, Heatmap } from '../../components/dash/charts'
@@ -34,7 +37,9 @@ function useOwnerData() {
       settle(getMonthlyRevenue(now.getFullYear(), now.getMonth() + 1, { silent: true })),
       settle(getMonthlyRevenue(prev.getFullYear(), prev.getMonth() + 1, { silent: true })),
       settle(getMonthlyRevenueSeries(now.getFullYear(), { silent: true })),
-    ]).then(([bookings, payments, reviews, drivers, rev, revPrev, series]) => {
+      settle(getTripRates()),
+      settle(getOwnerVehicles()),
+    ]).then(([bookings, payments, reviews, drivers, rev, revPrev, series, rates, vehicles]) => {
       const list = (r) => (Array.isArray(r.data) ? r.data : r.data?.content || [])
       setState({
         loading: false,
@@ -44,6 +49,9 @@ function useOwnerData() {
         drivers: list(drivers), driversOk: drivers.ok,
         revenue: rev.data, revenuePrev: revPrev.data,
         series: series.data, seriesOk: series.ok,
+        // null when the call failed, so a hiccup never shows a setup step that is already done
+        rates: rates.ok ? list(rates) : null,
+        vehicles: vehicles.ok ? list(vehicles) : null,
       })
     })
   }, [])
@@ -51,9 +59,27 @@ function useOwnerData() {
   return [state, load]
 }
 
+/** The platform owner's City-ride setup: cities added, driver applications waiting. */
+function usePlatformSetup(platform) {
+  const [state, setState] = useState({ cities: null, applications: null })
+  useEffect(() => {
+    if (!platform) return undefined
+    let live = true
+    Promise.all([
+      getCities().then((r) => r.data || [], () => null),
+      getDriverApplications('UNDER_REVIEW').then((r) => r.data || [], () => null),
+    ]).then(([cities, applications]) => { if (live) setState({ cities, applications }) })
+    return () => { live = false }
+  }, [platform])
+  return state
+}
+
 export default function OwnerDashboard() {
   const { user } = useAuth()
   const [d, reload] = useOwnerData()
+  const me = useOwnerMe()
+  const fleetType = useOwnerFleet(user?.userId ?? 'owner')
+  const platform = usePlatformSetup(!!me?.platform)
   const bookings = d.bookings || []
   const drivers = d.drivers || []
   const payments = d.payments || []
@@ -89,7 +115,18 @@ export default function OwnerDashboard() {
     { icon: 'wallet', count: payments.length, label: `${payments.length === 1 ? 'payment' : 'payments'} of ${inr(m.paymentsDue)} to verify`, cta: 'Verify', to: '/owner/payments' },
     { icon: 'alert', count: m.notSetUp, label: m.notSetUp === 1 ? 'driver still setting up' : 'drivers still setting up', cta: 'Review', to: '/owner/drivers' },
   ]
-  const openTasks = tasks.filter((t) => t.count > 0).length
+  // Steps a new owner must finish before travellers can book them. Bus-only fleets skip the car steps.
+  const cars = fleetType !== 'BUSES'
+  const setup = [
+    cars && d.rates?.length === 0 && { icon: 'rupee', label: 'Set a price for at least one car type', cta: 'Set prices', to: '/owner/pricing' },
+    cars && d.vehicles?.length === 0 && { icon: 'car', label: 'Add your first car', cta: 'Add car', to: '/owner/vehicles' },
+    cars && d.driversOk && drivers.length === 0 && { icon: 'users', label: 'Add your first driver', cta: 'Add driver', to: '/owner/drivers' },
+    me?.platform && platform.cities?.length === 0 && { icon: 'map', label: 'Add a city for City rides', cta: 'Add city', to: '/owner/cities' },
+  ].filter(Boolean).map((t) => ({ ...t, count: true }))
+  const applications = platform.applications?.length || 0
+  tasks.unshift(...setup)
+  tasks.push({ icon: 'id', count: applications, label: applications === 1 ? 'driver application to review' : 'driver applications to review', cta: 'Review', to: '/owner/driver-applications' })
+  const openTasks = tasks.filter((t) => t.count === true || t.count > 0).length
 
   const change = !m.thisMonth ? `${inr(m.lastMonth)} last month` : m.change == null ? 'no figures for last month'
     : <><span className={m.change >= 0 ? 'pc-up' : 'pc-down'}>{m.change >= 0 ? '▲' : '▼'} {Math.abs(m.change).toFixed(1)}%</span> vs last month</>
@@ -104,7 +141,7 @@ export default function OwnerDashboard() {
       <div className="pc-grid">
         <section className="pc-today" aria-label="Needs you today">
           <div>
-            <h2>{d.loading ? 'Checking today…' : openTasks ? `${openTasks} thing${openTasks === 1 ? '' : 's'} need${openTasks === 1 ? 's' : ''} you today` : "You're all caught up"}</h2>
+            <h2>{d.loading ? 'Checking today…' : setup.length ? "Finish setting up — travellers can't book you yet" : openTasks ? `${openTasks} thing${openTasks === 1 ? '' : 's'} need${openTasks === 1 ? 's' : ''} you today` : "You're all caught up"}</h2>
             <p>{m.pending} pending booking{m.pending === 1 ? '' : 's'}, {m.onRoad} trip{m.onRoad === 1 ? '' : 's'} on the road right now.</p>
           </div>
           {d.loading ? <Skeleton rows={2} /> : <TaskList tasks={tasks} tone="hero" />}

@@ -402,7 +402,7 @@ function DeleteConfirmModal({ driver, deleting, error, onConfirm, onClose }) {
 }
 
 // `independent`: the platform's own City-ride drivers instead of my Trip fleet.
-function DriverList({ independent = false, vehicles = [] }) {
+function DriverList({ independent = false, vehicles = [], hasIndependentTab = false }) {
   const [drivers, setDrivers] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
@@ -448,7 +448,10 @@ function DriverList({ independent = false, vehicles = [] }) {
   if (drivers.length === 0) {
     return (
       <Panel span={12} title={title}>
-        <Empty icon="car" title="No drivers yet">{independent ? 'Approved driver applications show up here.' : 'Add a driver for your Trips to get started.'}</Empty>
+        <Empty icon="car" title="No drivers yet">
+          {independent ? 'Approved driver applications show up here.'
+            : `Add a driver for your Trips to get started.${hasIndependentTab ? ' Independent drivers are in the next tab.' : ''}`}
+        </Empty>
       </Panel>
     )
   }
@@ -532,6 +535,12 @@ export default function OwnerDrivers() {
   const [success, setSuccess] = useState(null)
 
   useEffect(() => { getOwnerVehicles().then((r) => setVehicles(r.data || [])).catch(() => {}) }, [])
+  // How many independent drivers work with the platform owner, for the tab label.
+  const [independentCount, setIndependentCount] = useState(null)
+  useEffect(() => {
+    if (!me?.platform) return
+    getIndependentDrivers().then((r) => setIndependentCount((r.data || []).length)).catch(() => {})
+  }, [me?.platform])
   const activeCars = vehicles.filter((v) => v.active)
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
@@ -564,14 +573,15 @@ export default function OwnerDrivers() {
 
   return (
     <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
-      <PageHead title="Driver Management" sub="Your Trip drivers: add, check and approve">
+      <PageHead title="Driver Management" sub={me?.platform ? 'Your own Trip drivers, and independent drivers who work with you' : 'Your own Trip drivers: add, check and approve'}>
         <button type="button" onClick={() => setTab(tab === 'create' ? 'list' : 'create')} className={tab === 'create' ? 'pc-btn pc-btn-ghost' : 'pc-btn'}>
           <Icon name={tab === 'create' ? 'back' : 'plus'} />{tab === 'create' ? 'Driver List' : 'Add Driver'}
         </button>
       </PageHead>
 
-      <div className="pc-chips" role="tablist" aria-label="Driver views" style={{ marginBottom: 18 }}>
-        {[['list', 'users', 'Driver List'], ['create', 'plus', 'Add Trip fleet driver'], ...(me?.platform ? [['independent', 'id', 'Independent drivers']] : [])].map(([key, icon, label]) => (
+      {/* Adding a driver is the Add Driver button above; the tabs only switch between lists. */}
+      <div className="pc-chips" role="tablist" aria-label="Driver views" style={{ marginBottom: 18, flexWrap: 'nowrap', overflowX: 'auto' }}>
+        {[['list', 'users', 'My drivers'], ...(me?.platform ? [['independent', 'id', `Independent drivers${independentCount != null ? ` (${independentCount})` : ''}`]] : [])].map(([key, icon, label]) => (
           <button
             key={key}
             type="button"
@@ -579,7 +589,7 @@ export default function OwnerDrivers() {
             aria-selected={tab === key}
             onClick={() => setTab(key)}
             className="pc-chip"
-            style={{ border: 'none', cursor: 'pointer', ...(tab === key ? { background: 'var(--pc-ink)', color: 'var(--pc-panel)' } : {}) }}
+            style={{ border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, ...(tab === key ? { background: 'var(--pc-ink)', color: 'var(--pc-panel)' } : {}) }}
           ><Icon name={icon} size={14} />{label}</button>
         ))}
       </div>
@@ -594,7 +604,7 @@ export default function OwnerDrivers() {
                 <button type="button" onClick={() => setSuccess(null)} aria-label="Dismiss" style={{ color: 'inherit', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 4 }}><Icon name="x" size={16} /></button>
               </div>
             )}
-            <DriverList key={success?.id} vehicles={vehicles} />
+            <DriverList key={success?.id} vehicles={vehicles} hasIndependentTab={!!me?.platform} />
           </>
         ) : tab === 'independent' && me?.platform ? (
           <DriverList independent />

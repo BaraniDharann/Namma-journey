@@ -3,7 +3,7 @@ import {
   stopPairs, roundFare, fillMiddleFares, fareKey, faresToGrid, gridToFares, remapFareGrid,
   DEFAULT_POLICY, slabText, normalisePolicy, policyProblems, routeProblems, runDaysText,
 } from './busFares'
-import { ownerMenu, BUS_NAV_ITEMS } from './ownerFleet'
+import { ownerMenu, BUS_NAV_ITEMS, isBusPath } from './ownerFleet'
 import { expiringDocs, daysUntil } from './busText'
 
 describe('fare grid', () => {
@@ -107,11 +107,27 @@ describe('owner menu by fleet type', () => {
     expect(paths(ownerMenu(items, 'CARS'))).toEqual(paths(items))
     expect(paths(ownerMenu(items, null))).toEqual(paths(items))
   })
-  it('buses drop car items and add bus items before Profile', () => {
-    expect(paths(ownerMenu(items, 'BUSES'))).toEqual(['/owner/dashboard', ...paths(BUS_NAV_ITEMS), '/owner/profile'])
+  it('buses drop car items and add the one Bus item right after Dashboard', () => {
+    expect(BUS_NAV_ITEMS).toHaveLength(1)
+    expect(paths(ownerMenu(items, 'BUSES'))).toEqual(['/owner/dashboard', '/owner/bus', '/owner/profile'])
   })
-  it('both show everything', () => {
-    expect(paths(ownerMenu(items, 'BOTH'))).toEqual(['/owner/dashboard', '/owner/drivers', ...paths(BUS_NAV_ITEMS), '/owner/profile'])
+  it('both show everything, Bus right after Dashboard', () => {
+    expect(paths(ownerMenu(items, 'BOTH'))).toEqual(['/owner/dashboard', '/owner/bus', '/owner/drivers', '/owner/profile'])
+  })
+  it('old per-screen bus items passed by a page never show as extra menu items', () => {
+    const withOld = [...items, { path: '/owner/buses' }, { path: '/owner/bus-trips' }]
+    expect(paths(ownerMenu(withOld, 'BOTH'))).toEqual(['/owner/dashboard', '/owner/bus', '/owner/drivers', '/owner/profile'])
+  })
+})
+
+describe('bus paths', () => {
+  it('every bus screen counts as the Bus section, car screens do not', () => {
+    for (const p of ['/owner/bus', '/owner/buses', '/owner/buses/3', '/owner/bus-routes', '/owner/bus-trips/9', '/owner/bus-expenses', '/owner/bus-earnings']) {
+      expect(isBusPath(p)).toBe(true)
+    }
+    for (const p of ['/owner/bookings', '/owner/dashboard', '/owner/business']) {
+      expect(isBusPath(p)).toBe(false)
+    }
   })
 })
 

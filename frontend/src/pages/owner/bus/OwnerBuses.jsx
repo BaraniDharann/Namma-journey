@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import DashboardLayout from '../../../components/DashboardLayout'
+import BusTabs from '../../../components/bus/BusTabs'
 import Icon from '../../../components/dash/Icon'
 import { Panel, PageHead, Empty, Skeleton, ErrorNote } from '../../../components/dash/ui'
 import { BusPill, ownerNavItems, mutedStyle } from '../../../components/bus/busUi'
@@ -23,6 +24,7 @@ export default function OwnerBuses() {
       <PageHead title="Buses" sub="Add a bus, draw its seats, upload its papers and send it for approval">
         <Link to="/owner/buses/new" className="pc-btn"><Icon name="plus" />Add bus</Link>
       </PageHead>
+      <BusTabs />
 
       <div className="pc-grid">
         <Panel span={12} title="Your buses" meta={buses ? `${buses.length}` : null}>

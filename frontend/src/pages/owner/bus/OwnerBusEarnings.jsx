@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import DashboardLayout from '../../../components/DashboardLayout'
+import BusTabs from '../../../components/bus/BusTabs'
 import Icon from '../../../components/dash/Icon'
 import { Panel, PageHead, Empty, Skeleton, SummaryStrip } from '../../../components/dash/ui'
 import { BusPill, ownerNavItems } from '../../../components/bus/busUi'
@@ -26,6 +27,7 @@ export default function OwnerBusEarnings() {
   return (
     <DashboardLayout navItems={ownerNavItems} role="ROLE_OWNER">
       <PageHead title="Bus earnings" sub="One payout per completed trip, the morning after: fares travelled plus cancellation charges kept, less the platform commission" />
+      <BusTabs />
 
       <div className="pc-grid">
         <SummaryStrip

@@ -6,15 +6,17 @@ import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, Skeleton } from '../../components/dash/ui'
 import FleetTypePanel from '../../components/bus/FleetTypePanel'
 
-function Rows({ rows }) {
+// `missing` is what a blank field says, e.g. why a bank detail matters.
+function Rows({ rows, missing = 'Not added' }) {
   return (
     <div className="pc-rows">
-      {rows.map(([icon, k, v]) => (
+      {rows.map(([icon, k, v, blank = missing]) => (
         <div key={k} className="pc-row" style={{ gridTemplateColumns: 'auto minmax(0, 1fr)' }}>
           <span style={{ color: 'var(--pc-muted)', display: 'inline-flex' }}><Icon name={icon} size={18} /></span>
           <div>
             <small style={{ marginTop: 0, textTransform: 'uppercase', letterSpacing: '.05em' }}>{k}</small>
-            <div className="pc-row-title" style={{ overflowWrap: 'anywhere' }}>{v || '—'}</div>
+            {v ? <div className="pc-row-title" style={{ overflowWrap: 'anywhere' }}>{v}</div>
+              : <div style={{ fontSize: 13, color: 'var(--pc-muted)' }}>{blank}</div>}
           </div>
         </div>
       ))}
@@ -57,13 +59,18 @@ export default function OwnerProfile() {
         </Panel>
         <Panel span={6} title="Payouts" meta="masked for safety">
           {!me ? <Skeleton rows={4} height={18} /> : (
-            <Rows rows={[
-              ['user', 'Account holder', me.bankAccountHolder],
-              ['card', 'Account', me.bankAccountMasked],
-              ['id', 'IFSC', me.bankIfsc],
-              ['wallet', 'Bank', me.bankName],
-              ['qr', 'UPI ID', me.upiId],
-            ]} />
+            <>
+              <Rows missing="Not added — needed to receive money" rows={[
+                ['user', 'Account holder', me.bankAccountHolder],
+                ['card', 'Account', me.bankAccountMasked],
+                ['id', 'IFSC', me.bankIfsc],
+                ['wallet', 'Bank', me.bankName],
+                ['qr', 'UPI ID', me.upiId],
+              ]} />
+              <p style={{ margin: '14px 0 0', fontSize: 12.5, color: 'var(--pc-muted)' }}>
+                To add or change bank, UPI or phone details, email <a href="mailto:nammajourney463@gmail.com">nammajourney463@gmail.com</a>.
+              </p>
+            </>
           )}
         </Panel>
         <FleetTypePanel span={6} />
