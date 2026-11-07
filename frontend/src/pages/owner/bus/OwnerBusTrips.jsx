@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import DashboardLayout from '../../../components/DashboardLayout'
+import BusTabs from '../../../components/bus/BusTabs'
 import { Panel, PageHead, Empty, Skeleton, ErrorNote } from '../../../components/dash/ui'
 import { BusPill, ownerNavItems, labelStyle, mutedStyle } from '../../../components/bus/busUi'
 import { getBusTrips } from '../../../utils/busApi'
@@ -21,6 +22,7 @@ export default function OwnerBusTrips() {
   return (
     <DashboardLayout navItems={ownerNavItems} role="ROLE_OWNER">
       <PageHead title="Bus trips" sub="Each date a published route runs. Open one for its seat chart and passenger list" />
+      <BusTabs />
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 18 }}>
         <div>

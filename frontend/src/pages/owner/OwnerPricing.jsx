@@ -46,6 +46,13 @@ export default function OwnerPricing() {
   const edit = (cat, key, value) => setDrafts((d) => ({ ...d, [cat]: { ...d[cat], [key]: value } }))
 
   const save = async (cat) => {
+    // The server needs both prices; say which one is missing instead of a vague error.
+    const label = CAR_CATEGORIES.find((c) => c.value === cat)?.label || 'this car type'
+    if (drafts[cat].perKm === '' || drafts[cat].perHour === '') {
+      setSaved(null)
+      setError(`Enter both the per-km and the per-hour price for ${label}.`)
+      return
+    }
     setSaving(cat); setError(''); setSaved(null)
     try {
       const r = await setTripRate(cat, { perKm: Number(drafts[cat].perKm), perHour: Number(drafts[cat].perHour) })
@@ -79,6 +86,7 @@ export default function OwnerPricing() {
         <Panel span={12} title="Trip prices" meta="100 km or 8 h example">
           <p style={{ fontSize: 13, color: 'var(--pc-ink-2)', marginBottom: 14 }}>
             Travellers can only book the car types you have priced. Distance trips use the per-km price; hourly trips use the per-hour price.
+            <br /><b>Fill both per-km and per-hour, then Save.</b>
           </p>
           {error && <div className="pc-error" role="alert" style={{ marginBottom: 12 }}><Icon name="alert" size={16} /><span>{error}</span></div>}
           {loadError ? <ErrorNote onRetry={load} /> : !drafts ? <Skeleton rows={3} /> : (
@@ -86,6 +94,7 @@ export default function OwnerPricing() {
               {CAR_CATEGORIES.map(({ value, label, seats }) => {
                 const d = drafts[value]
                 const incomplete = d.perKm === '' || d.perHour === ''
+                const blank = d.perKm === '' && d.perHour === ''
                 return (
                   <div key={value} style={{ padding: 14, borderRadius: 14, background: 'var(--pc-wash)', border: '1px solid var(--pc-line)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
@@ -108,7 +117,7 @@ export default function OwnerPricing() {
                       </div>
                     )}
                     <button type="button" className={saved === value ? 'pc-btn pc-btn-teal pc-btn-sm' : 'pc-btn pc-btn-sm'} style={{ marginTop: 10, width: '100%' }}
-                      disabled={!!saving || incomplete} onClick={() => save(value)}>
+                      disabled={!!saving || blank} onClick={() => save(value)}>
                       {saving === value ? 'Saving…' : saved === value ? <><Icon name="check" size={14} />Saved</> : `Save ${label} price`}
                     </button>
                   </div>

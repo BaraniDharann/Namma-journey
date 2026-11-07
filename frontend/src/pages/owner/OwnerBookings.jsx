@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import { OWNER_NAV } from '../../components/owner/ownerNav'
 import Pagination, { usePagination } from '../../components/Pagination'
@@ -122,15 +123,16 @@ export default function OwnerBookings() {
       />
       {me?.platform && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <button type="button" className={`pc-btn pc-btn-sm ${scope === 'trips' ? 'pc-btn-teal' : ''}`} onClick={() => setScope('trips')}>My Trips</button>
-          <button type="button" className={`pc-btn pc-btn-sm ${scope === 'city' ? 'pc-btn-teal' : ''}`} onClick={() => setScope('city')}>City rides</button>
+          <button type="button" aria-pressed={scope === 'trips'} className={scope === 'trips' ? 'pc-btn pc-btn-sm' : 'pc-btn pc-btn-ghost pc-btn-sm'} onClick={() => setScope('trips')}>My Trips</button>
+          <button type="button" aria-pressed={scope === 'city'} className={scope === 'city' ? 'pc-btn pc-btn-sm' : 'pc-btn pc-btn-ghost pc-btn-sm'} onClick={() => setScope('city')}>City rides</button>
         </div>
       )}
 
       <div className="pc-grid">
         <Panel span={12}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
-            <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
+            {/* A 320px basis puts the chips on their own line on phones, so the search gets the full width. */}
+            <div style={{ flex: '1 1 320px', minWidth: 0, position: 'relative' }}>
               <span aria-hidden="true" style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--pc-muted)', display: 'flex' }}><Icon name="search" size={16} /></span>
               <input className="input-field" aria-label="Search bookings" style={{ width: '100%', paddingLeft: 38 }} placeholder="Search by customer, route..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
@@ -160,7 +162,9 @@ export default function OwnerBookings() {
           {loading ? <div style={{ padding: '0 20px 20px' }}><Skeleton rows={6} /></div>
             : filtered.length === 0 ? (
               <Empty icon="calendar" title="No bookings found">
-                {search || filter !== 'ALL' ? 'Try a different search or status filter.' : 'New bookings will show up here as soon as travellers make them.'}
+                {search || filter !== 'ALL' || needsDriverOnly ? 'Try a different search or status filter.' : scope === 'city' ? 'City rides will show up here as soon as travellers book them.' : (
+                  <>New bookings will show up here as soon as travellers make them. Travellers can only book car types you&apos;ve priced. <Link to="/owner/pricing">Set your prices</Link></>
+                )}
               </Empty>
             ) : (
               <div style={{ overflowX: 'auto' }}>

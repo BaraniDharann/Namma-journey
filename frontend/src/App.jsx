@@ -57,6 +57,8 @@ const AdminBusApprovals   = lazy(() => import('./pages/admin/AdminBusApprovals')
 const AdminBusDetail      = lazy(() => import('./pages/admin/AdminBusDetail'))
 const AdminBusPayouts     = lazy(() => import('./pages/admin/AdminBusPayouts'))
 const OwnerBusEarnings    = lazy(() => import('./pages/owner/bus/OwnerBusEarnings'))
+const OwnerBusToday       = lazy(() => import('./pages/owner/bus/OwnerBusToday'))
+const OwnerBusExpenses    = lazy(() => import('./pages/owner/bus/OwnerBusExpenses'))
 // Bus module: customer search, seat map and tickets
 const BusSearchPage       = lazy(() => import('./pages/bus/BusSearchPage'))
 const BusTripPage         = lazy(() => import('./pages/bus/BusTripPage'))
@@ -183,6 +185,8 @@ function AppRoutes() {
         <Route path="/owner/profile"   element={<ProtectedRoute role="ROLE_OWNER"><OwnerProfile /></ProtectedRoute>} />
         <Route path="/owner/packages" element={<ProtectedRoute role="ROLE_OWNER"><OwnerPackages /></ProtectedRoute>} />
         <Route path="/owner/package-bookings" element={<ProtectedRoute role="ROLE_OWNER"><OwnerPackageBookings /></ProtectedRoute>} />
+        <Route path="/owner/bus"            element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusToday /></ProtectedRoute>} />
+        <Route path="/owner/bus-expenses"   element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusExpenses /></ProtectedRoute>} />
         <Route path="/owner/buses"          element={<ProtectedRoute role="ROLE_OWNER"><OwnerBuses /></ProtectedRoute>} />
         <Route path="/owner/buses/:id"      element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusWizard /></ProtectedRoute>} />
         <Route path="/owner/bus-routes"     element={<ProtectedRoute role="ROLE_OWNER"><OwnerBusRoutes /></ProtectedRoute>} />

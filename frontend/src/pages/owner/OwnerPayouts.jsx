@@ -113,7 +113,7 @@ export default function OwnerPayouts() {
   return (
     <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
       {active && <TransferModal row={active} onClose={() => setActive(null)} onSaved={saved} />}
-      <PageHead title="Payouts" sub="What you owe independent drivers for rides paid to you, and the commission they owe on cash rides." />
+      <PageHead title="Driver payouts" sub="What you owe independent drivers for rides paid to you, and the commission they owe on cash rides." />
 
       <div className="pc-grid">
         <SummaryStrip
@@ -161,21 +161,26 @@ export default function OwnerPayouts() {
               : (
                 <div style={{ overflowX: 'auto' }}>
                   <table className="data-table">
-                    <thead><tr><th>Driver</th><th>Payout UPI ID</th><th style={{ textAlign: 'right' }}>Balance</th><th>Action</th></tr></thead>
+                    {/* Three columns (the UPI ID sits under the driver) so the table fits a phone without scrolling. */}
+                    <thead><tr><th>Driver</th><th style={{ textAlign: 'right' }}>Balance</th><th>Action</th></tr></thead>
                     <tbody>
                       {rows.map(r => {
                         const b = Number(r.balance)
                         return (
                           <tr key={r.driverId}>
-                            <td><strong>{r.name}</strong><div style={{ fontSize: 12, color: 'var(--pc-muted)' }}>{r.mobile}</div></td>
-                            <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{r.upiId || <span style={{ color: 'var(--pc-muted)', fontFamily: 'inherit' }}>Not added yet</span>}</td>
+                            <td style={{ overflowWrap: 'anywhere' }}>
+                              <strong>{r.name}</strong><div style={{ fontSize: 12, color: 'var(--pc-muted)' }}>{r.mobile}</div>
+                              <div style={{ fontSize: 12, marginTop: 2 }}>
+                                UPI: {r.upiId ? <span style={{ fontFamily: 'monospace' }}>{r.upiId}</span> : <span style={{ color: 'var(--pc-muted)' }}>Not added yet</span>}
+                              </div>
+                            </td>
                             <td style={{ textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 800, color: b > 0 ? 'var(--pc-ink)' : b < 0 ? 'var(--pc-bad)' : 'var(--pc-muted)' }}>
                               {b < 0 ? `owes ${inr(-b)}` : inr(b)}
                             </td>
                             <td>
-                              {b > 0 && (r.upiId
-                                ? <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => setActive(r)}><Icon name="wallet" size={14} />Pay</button>
-                                : <span style={{ fontSize: 12, color: 'var(--pc-muted)' }}>Waiting for UPI ID</span>)}
+                              {b >= 0 && (r.upiId
+                                ? b > 0 && <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => setActive(r)}><Icon name="wallet" size={14} />Pay</button>
+                                : <span style={{ fontSize: 12, color: 'var(--pc-muted)' }}>Ask the driver to add a UPI ID in their app</span>)}
                               {b < 0 && <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => setActive(r)}><Icon name="check" size={14} />Record collection</button>}
                             </td>
                           </tr>

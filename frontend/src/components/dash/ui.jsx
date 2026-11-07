@@ -57,7 +57,8 @@ export function SummaryStrip({ items, loading }) {
 
 /** "Needs you now": counts that link to the page that resolves them. */
 export function TaskList({ tasks, tone = 'light' }) {
-  const live = tasks.filter((t) => t.count > 0)
+  // `count: true` is a to-do with no number (a setup step), shown without a count.
+  const live = tasks.filter((t) => t.count === true || t.count > 0)
   if (!live.length) {
     return (
       <div className={`pc-tasks pc-tasks-${tone}`}>
@@ -70,7 +71,7 @@ export function TaskList({ tasks, tone = 'light' }) {
       {live.map((t) => (
         <Link key={t.label} to={t.to} className="pc-task">
           <Icon name={t.icon} />
-          <b>{t.count}</b>
+          {t.count !== true && <b>{t.count}</b>}
           <span>{t.label}</span>
           <em>{t.cta}<Icon name="arrow" size={14} /></em>
         </Link>

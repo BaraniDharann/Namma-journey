@@ -52,8 +52,8 @@ export default function OwnerPayments() {
       <PageHead title="Payments" sub="Verify and manage payments" />
       {me?.platform && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <button type="button" className={`pc-btn pc-btn-sm ${scope === 'trips' ? 'pc-btn-teal' : ''}`} onClick={() => setScope('trips')}>My Trips</button>
-          <button type="button" className={`pc-btn pc-btn-sm ${scope === 'city' ? 'pc-btn-teal' : ''}`} onClick={() => setScope('city')}>City rides</button>
+          <button type="button" aria-pressed={scope === 'trips'} className={scope === 'trips' ? 'pc-btn pc-btn-sm' : 'pc-btn pc-btn-ghost pc-btn-sm'} onClick={() => setScope('trips')}>My Trips</button>
+          <button type="button" aria-pressed={scope === 'city'} className={scope === 'city' ? 'pc-btn pc-btn-sm' : 'pc-btn pc-btn-ghost pc-btn-sm'} onClick={() => setScope('city')}>City rides</button>
         </div>
       )}
 
@@ -63,13 +63,13 @@ export default function OwnerPayments() {
           items={[
             { icon: 'clock', label: 'Pending Payments', value: payments.length.toLocaleString('en-IN'), sub: payments.length ? 'waiting for you to verify' : 'nothing waiting' },
             { icon: 'wallet', label: 'Pending Amount', value: inr(totalPending), sub: 'across pending payments' },
-            { icon: 'check', label: 'Verified Today', value: verified.length.toLocaleString('en-IN'), sub: 'this session' },
+            { icon: 'check', label: 'Verified today', value: verified.length.toLocaleString('en-IN'), sub: verified.length ? 'confirmed by you' : 'none yet' },
           ]}
         />
 
         <Panel span={12} pad={false} title="Pending Verifications" meta={loading ? null : `${payments.length} pending`}>
           {loading ? <div style={{ padding: '0 20px 20px' }}><Skeleton rows={5} /></div>
-            : payments.length === 0 ? <Empty icon="check" title="All payments verified!">No pending payments</Empty>
+            : payments.length === 0 ? <Empty icon="wallet" title="No payments yet">Cash and UPI payments you need to confirm will appear here.</Empty>
               : (
                 <div style={{ overflowX: 'auto' }}>
                   <table className="data-table">
