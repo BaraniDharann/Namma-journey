@@ -157,6 +157,9 @@
 
 .pc-panel { background: var(--pc-panel); border-radius: var(--pc-r); padding: 18px 20px; box-shadow: var(--pc-shadow); min-width: 0; position: relative; }
 .pc-panel.pc-nopad { padding: 0; overflow: hidden; }
+/* The panel being typed in sits above its neighbours, so a suggestion list (town search, place
+   search) opening from it is never painted under the next panel. */
+.pc-panel:focus-within { z-index: 5; }
 .pc-panel.pc-nopad > .pc-panel-hd { padding: 18px 20px 12px; margin: 0; }
 .pc-panel-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .pc-panel-hd h2 { font-family: var(--pc-fd); font-size: 15px; font-weight: 700; letter-spacing: -.01em; margin: 0; color: var(--pc-ink); }
