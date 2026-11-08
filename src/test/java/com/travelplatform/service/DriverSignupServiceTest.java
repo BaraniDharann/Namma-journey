@@ -23,6 +23,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
@@ -309,7 +310,9 @@ class DriverSignupServiceTest {
         assertEquals(false, r.get("firstLogin"));
         assertTrue(d.isEmailVerified());
         verify(drivers).save(d);
-        verify(notifications).notifyDriverApplication(d, false);
+        // City-ride drivers are approved automatically; no owner is asked to review them.
+        verify(notifications, never()).notifyDriverApplication(any(), anyBoolean());
+        assertNotNull(d.getAutoApproveAt());
     }
 
     @Test

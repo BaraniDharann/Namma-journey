@@ -23,7 +23,7 @@ const pickDetails = (b) => ({
   permitType: b.permitType || 'STAGE_CARRIAGE', amenities: b.amenities || [],
 })
 
-/** What still stops this bus from being sent for approval (the server checks the same). */
+/** What still stops this bus from going into service (the server checks the same). */
 function submitBlockers(bus) {
   const out = []
   if (!(bus.seats || []).length) out.push('Save a seat layout.')
@@ -82,7 +82,7 @@ function DocumentRow({ type, name, doc, disabled, onUpload }) {
   )
 }
 
-/** Add or edit a bus in four steps, then send it to Namma Journeys for approval. */
+/** Add or edit a bus in four steps, then put it in service (approved owners need no second review). */
 export default function OwnerBusWizard() {
   const { id } = useParams()
   const isNew = !id || id === 'new'
@@ -158,7 +158,7 @@ export default function OwnerBusWizard() {
     if (window.confirm('Remove this photo?')) run(() => deleteBusPhoto(bus.id, photoId), 'Photo removed.')
   }
 
-  const submit = () => run(() => submitBus(bus.id), 'Sent for approval. We will let you know once it is checked.')
+  const submit = () => run(() => submitBus(bus.id), 'This bus is in service. Add it to a route to start selling seats.')
 
   if (loading) {
     return (
@@ -187,7 +187,7 @@ export default function OwnerBusWizard() {
       )}
       {pending && (
         <div style={{ ...wellStyle, marginBottom: 16, display: 'flex', gap: 10, alignItems: 'center' }}>
-          <Icon name="clock" size={16} /><span style={{ fontSize: 13 }}>Waiting for approval. You can change this bus again once it has been checked.</span>
+          <Icon name="clock" size={16} /><span style={{ fontSize: 13 }}>Putting this bus in service. Refresh in a moment.</span>
         </div>
       )}
       <Notice notice={notice} onClose={() => setNotice(null)} />
@@ -245,7 +245,7 @@ export default function OwnerBusWizard() {
                 )}
               </fieldset>
             </form>
-            {detailsLocked && <p style={{ ...mutedStyle, marginTop: 12 }}>Details are fixed once a bus is sent for approval.</p>}
+            {detailsLocked && <p style={{ ...mutedStyle, marginTop: 12 }}>Details are fixed once a bus is in service.</p>}
           </Panel>
         )}
 
@@ -302,21 +302,21 @@ export default function OwnerBusWizard() {
               <p style={{ ...mutedStyle, marginTop: 10 }}>Outside, inside and the berths: travellers see these before they book.</p>
             </Panel>
 
-            <Panel span={4} title="Send for approval">
+            <Panel span={4} title="Put in service">
               {status === 'APPROVED' ? (
-                <p style={{ fontSize: 13, margin: 0 }}>This bus is approved. Add it to a route to start selling seats.</p>
+                <p style={{ fontSize: 13, margin: 0 }}>This bus is in service. Add it to a route to start selling seats.</p>
               ) : pending ? (
-                <p style={{ fontSize: 13, margin: 0 }}>Sent{bus.submittedAt ? ` on ${new Date(bus.submittedAt).toLocaleDateString('en-IN')}` : ''}. Waiting for approval.</p>
+                <p style={{ fontSize: 13, margin: 0 }}>Sent{bus.submittedAt ? ` on ${new Date(bus.submittedAt).toLocaleDateString('en-IN')}` : ''}. Going into service.</p>
               ) : (
                 <>
                   {blockers.length > 0 ? (
                     <ul style={{ fontSize: 13, paddingLeft: 18, margin: '0 0 12px' }}>{blockers.map((b) => <li key={b}>{b}</li>)}</ul>
                   ) : (
-                    <p style={{ fontSize: 13, margin: '0 0 12px' }}>Everything is in place. Namma Journeys will check the papers and photos.</p>
+                    <p style={{ fontSize: 13, margin: '0 0 12px' }}>Everything is in place. Put the bus in service, then add it to a route.</p>
                   )}
                   {seatsDirty && <p style={{ ...mutedStyle, margin: '0 0 12px' }}>Save the seat layout first.</p>}
                   <button type="button" className="pc-btn" style={{ width: '100%' }} disabled={busy || !canSubmit} onClick={submit}>
-                    <Icon name="send" />{status === 'REJECTED' ? 'Send again' : 'Submit for approval'}
+                    <Icon name="send" />Put in service
                   </button>
                 </>
               )}

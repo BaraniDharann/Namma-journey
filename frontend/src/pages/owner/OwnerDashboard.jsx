@@ -5,7 +5,7 @@ import { OWNER_NAV } from '../../components/owner/ownerNav'
 import { useAuth } from '../../context/AuthContext'
 import {
   getOwnerBookings, getPendingPayments, getAllReviews, getMonthlyRevenue, getMonthlyRevenueSeries, getOwnerDrivers,
-  getTripRates, getOwnerVehicles, getCities, getDriverApplications,
+  getTripRates, getOwnerVehicles, getCities,
 } from '../../utils/api'
 import useOwnerMe from '../../hooks/useOwnerMe'
 import useOwnerFleet from '../../hooks/useOwnerFleet'
@@ -59,16 +59,13 @@ function useOwnerData() {
   return [state, load]
 }
 
-/** The platform owner's City-ride setup: cities added, driver applications waiting. */
+/** The platform owner's City-ride setup: cities added. City-ride drivers are approved automatically. */
 function usePlatformSetup(platform) {
-  const [state, setState] = useState({ cities: null, applications: null })
+  const [state, setState] = useState({ cities: null })
   useEffect(() => {
     if (!platform) return undefined
     let live = true
-    Promise.all([
-      getCities().then((r) => r.data || [], () => null),
-      getDriverApplications('UNDER_REVIEW').then((r) => r.data || [], () => null),
-    ]).then(([cities, applications]) => { if (live) setState({ cities, applications }) })
+    getCities().then((r) => r.data || [], () => null).then((cities) => { if (live) setState({ cities }) })
     return () => { live = false }
   }, [platform])
   return state
@@ -123,9 +120,7 @@ export default function OwnerDashboard() {
     cars && d.driversOk && drivers.length === 0 && { icon: 'users', label: 'Add your first driver', cta: 'Add driver', to: '/owner/drivers' },
     me?.platform && platform.cities?.length === 0 && { icon: 'map', label: 'Add a city for City rides', cta: 'Add city', to: '/owner/cities' },
   ].filter(Boolean).map((t) => ({ ...t, count: true }))
-  const applications = platform.applications?.length || 0
   tasks.unshift(...setup)
-  tasks.push({ icon: 'id', count: applications, label: applications === 1 ? 'driver application to review' : 'driver applications to review', cta: 'Review', to: '/owner/driver-applications' })
   const openTasks = tasks.filter((t) => t.count === true || t.count > 0).length
 
   const change = !m.thisMonth ? `${inr(m.lastMonth)} last month` : m.change == null ? 'no figures for last month'

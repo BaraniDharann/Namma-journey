@@ -43,8 +43,8 @@ public class DriverSignupService {
     /** Self-signups are approved automatically this long after confirming their email (V24); false = the owner decides every one. */
     @Value("${app.drivers.auto-approve:true}")
     private boolean autoApprove = true;
-    @Value("${app.drivers.auto-approve-after:15m}")
-    private java.time.Duration autoApproveAfter = java.time.Duration.ofMinutes(15);
+    @Value("${app.drivers.auto-approve-after:0s}")
+    private java.time.Duration autoApproveAfter = java.time.Duration.ZERO;
 
     @Autowired
     private DriverRepository driverRepository;
@@ -182,18 +182,12 @@ public class DriverSignupService {
             throw new BadCredentialsException("Invalid or expired OTP");
         }
         driver.setEmailVerified(true);
-        // The owner's window to Reject or Hold starts now, when the application first reaches them,
-        // not at sign-up: a driver who confirmed a day later would otherwise be approved unseen.
+        // City-ride drivers are approved automatically once their email is confirmed (the approval
+        // round picks this up within a minute). No owner reviews them, so no owner is notified.
         if (autoApprove) {
             driver.setAutoApproveAt(LocalDateTime.now().plus(autoApproveAfter));
         }
         driverRepository.save(driver);
-        try {
-            notificationService.notifyDriverApplication(driver, false);
-        } catch (RuntimeException e) {
-            // The email is confirmed; a missed in-app notice must not turn it into an error.
-            log.warn("Owner notice for driver {} failed: {}", driver.getId(), e.toString());
-        }
 
         String token = jwtUtil.generateToken(driver.getId().toString(), driver.getRole(), driver.getTokenVersion());
         Map<String, Object> response = new HashMap<>();

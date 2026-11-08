@@ -81,25 +81,15 @@ public class DriverAutoApprovalService {
             return;
         }
 
+        // City-ride drivers are approved automatically and never wait for an owner: owners only see
+        // the drivers they add themselves. What the checks notice is kept in the log for the record.
         List<String> problems = DriverApplicationChecks.problems(d);
-        if (!problems.isEmpty()) {
-            driverRepository.holdAutoApproval(driverId, Driver.Verification.UNDER_REVIEW);
-            String why = String.join("; ", problems);
-            ownerNotice("DRIVER_NEEDS_REVIEW", "Driver needs your review",
-                    d.getName() + " (" + d.getMobile() + ") was not approved automatically: " + why + ".");
-            alerts.send("⚠️ <b>Not approved automatically</b>\n\n" + OwnerTelegramAlerts.driverLines(d)
-                            + "\n<b>Why:</b> " + escapeHtml(why) + "\n\nCheck the documents and decide.",
-                    OwnerTelegramAlerts.decisionButtons(driverId), null);
-            log.info("Driver {} held for the owner: {}", driverId, why);
-            return;
-        }
-
         verificationService.approve(driverId, null);
-        ownerNotice("DRIVER_AUTO_APPROVED", "Driver approved automatically",
-                d.getName() + " (" + d.getMobile() + ") was approved automatically. "
-                        + "You can still block them from the Drivers page.");
-        alerts.send("✅ <b>Driver approved automatically</b>\n\n" + OwnerTelegramAlerts.driverLines(d), List.of(), null);
-        log.info("Driver {} approved automatically", driverId);
+        if (problems.isEmpty()) {
+            log.info("Driver {} approved automatically", driverId);
+        } else {
+            log.warn("Driver {} approved automatically; checks noted: {}", driverId, String.join("; ", problems));
+        }
     }
 
     /**
@@ -156,28 +146,5 @@ public class DriverAutoApprovalService {
                  | com.travelplatform.exception.ResourceNotFoundException e) {
             return new OwnerTelegramAlerts.Outcome("Already decided", "ℹ️ Already decided - see the Applications page.", List.of());
         }
-    }
-
-// Owner notices go to the platform owner's own feed (V27); "owner" only in hand-built tests.
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private TripRateService tripRates;
-
-    private String platformFeed() {
-        try {
-            return tripRates == null ? "owner" : tripRates.platformOwnerId().toString();
-        } catch (IllegalStateException noPlatformOwnerYet) {
-            return "owner"; // a fresh database: the notice must not fail the work it reports
-        }
-    }
-
-    private void ownerNotice(String type, String title, String message) {
-        Notification n = new Notification();
-        n.setRecipientId(platformFeed());
-        n.setRecipientRole("ROLE_OWNER");
-        n.setType(type);
-        n.setTitle(title);
-        n.setMessage(message);
-        n.setCreatedAt(LocalDateTime.now());
-        notifications.save(n);
     }
 }

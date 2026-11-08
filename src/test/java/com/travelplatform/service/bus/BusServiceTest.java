@@ -145,7 +145,7 @@ class BusServiceTest {
         b.setStatus(Bus.Status.REJECTED);
         b.setRejectionReason("Blurry RC");
         BusView v = service.submit(3L);
-        assertEquals("PENDING", v.status());
+        assertEquals("APPROVED", v.status()); // an approved owner's bus goes live without a second review
         assertNotNull(v.submittedAt());
         assertEquals(null, v.rejectionReason());
         // Document links are signed; the bare path is never handed out.
