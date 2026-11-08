@@ -73,7 +73,7 @@ export default function ExpensesPanel({ kind, vehicles, trips = [], onChange }) 
     <div className="pc-grid">
       <SummaryStrip loading={!summary && !failed} items={[
         { icon: 'wallet', label: 'Revenue', value: inr(summary?.revenue), sub: kind === 'BUS' ? 'Fares on trips in these dates' : 'Payments received in these dates' },
-        { icon: 'rupee', tint: 'pink', label: 'Expenses', value: inr(summary?.expenses), sub: `${list?.length || 0} entries` },
+        { icon: 'rupee', tint: 'pink', label: 'Expenses', value: inr(summary?.expenses), sub: `${list?.length || 0} ${list?.length === 1 ? 'entry' : 'entries'}` },
         { icon: 'chart', label: 'Profit', value: inr(summary?.profit), sub: 'Revenue − expenses', tint: Number(summary?.profit) < 0 ? 'pink' : 'green' },
       ]} />
 

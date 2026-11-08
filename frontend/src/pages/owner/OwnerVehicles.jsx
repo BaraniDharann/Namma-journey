@@ -131,7 +131,7 @@ export default function OwnerVehicles() {
 
   return (
     <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
-      <PageHead title="Vehicles" sub={vehicles ? `${vehicles.filter((v) => v.active).length} cars in use${missing ? ` · ${missing} need a registration number` : ''}` : 'Your cars for Trips'}>
+      <PageHead title="Vehicles" sub={vehicles ? `${((n) => `${n} ${n === 1 ? 'car' : 'cars'}`)(vehicles.filter((v) => v.active).length)} in use${missing ? ` · ${missing} need a registration number` : ''}` : 'Your cars for Trips'}>
         {editing !== 'new' && <button type="button" className="pc-btn" onClick={() => setEditing('new')}><Icon name="plus" />Add car</button>}
       </PageHead>
 

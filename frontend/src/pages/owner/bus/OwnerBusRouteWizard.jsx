@@ -232,7 +232,7 @@ export default function OwnerBusRouteWizard() {
                   <option value="">Choose an approved bus</option>
                   {approved.map((b) => <option key={b.id} value={b.id}>{b.name} · {b.registrationNumber}{b.typeLabel ? ` · ${b.typeLabel}` : ''}</option>)}
                 </select>
-                {!approved.length && <p style={{ ...mutedStyle, marginTop: 6 }}>No approved bus yet. <Link to="/owner/buses">Add one</Link> and send it for approval first.</p>}
+                {!approved.length && <p style={{ ...mutedStyle, marginTop: 6 }}>No bus in service yet. <Link to="/owner/buses">Add one</Link> and put it in service first.</p>}
               </div>
               <div>
                 <label htmlFor="rt-name" style={labelStyle}>Route name</label>

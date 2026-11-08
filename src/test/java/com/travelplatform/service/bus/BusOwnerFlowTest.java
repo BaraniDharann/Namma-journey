@@ -210,8 +210,7 @@ class BusOwnerFlowTest {
             p.setPath("/uploads/buses/" + busId + "/photo.jpg");
             return photos.save(p);
         });
-        assertEquals("PENDING", asOwner(() -> busService.submit(busId)).status());
-        assertEquals("APPROVED", tx.execute(s -> adminService.approve(busId, 1L)).status());
+        assertEquals("APPROVED", asOwner(() -> busService.submit(busId)).status()); // live at once: no admin review of buses
 
         // Editing keeps the existing point's id and adds the new one.
         long koyambedu = draft.stops().get(0).points().get(0).id();

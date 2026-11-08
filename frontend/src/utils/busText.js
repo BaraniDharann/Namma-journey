@@ -2,8 +2,8 @@
 
 export const BUS_STATUS = {
   DRAFT: ['wait', 'Draft'],
-  PENDING: ['go', 'Pending approval'],
-  APPROVED: ['ok', 'Approved'],
+  PENDING: ['go', 'Going into service'],
+  APPROVED: ['ok', 'In service'],
   REJECTED: ['stop', 'Rejected'],
 }
 
@@ -72,7 +72,8 @@ export function uploadUrl(path) {
   return `${base}${path.startsWith('/') ? '' : '/'}${path}`
 }
 
-export const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+// A loss reads "−₹2,500", not "₹-2,500".
+export const inr = (n) => { const v = Number(n || 0); return `${v < 0 ? '−' : ''}₹${Math.abs(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })}` }
 
 export const dateText = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '—')
 

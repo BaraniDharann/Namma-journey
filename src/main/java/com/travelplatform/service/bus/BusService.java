@@ -201,17 +201,15 @@ public class BusService {
     }
 
     /**
-     * Sends the bus for the admin's review. Needs at least one seat, all four documents valid
-     * beyond today, and a photo. A rejected bus is fixed and submitted again.
+     * Puts the bus in service. The owner was already approved by the admin, so a bus they add needs
+     * no second review: it goes live as soon as it has at least one seat, all four documents valid
+     * beyond today, and a photo. (A bus left PENDING by the old review flow goes live the same way.)
      */
     @Transactional
     public BusView submit(Long id) {
         Bus b = mine(id);
         if (b.getStatus() == Bus.Status.APPROVED) {
-            throw new ConflictException("This bus is already approved");
-        }
-        if (b.getStatus() == Bus.Status.PENDING) {
-            return mapper.view(b);
+            throw new ConflictException("This bus is already in service");
         }
         if (seats.countByBusId(id) == 0) {
             throw new IllegalArgumentException("Add the seat layout before submitting");
@@ -231,8 +229,10 @@ public class BusService {
         if (photos.countByBusId(id) == 0) {
             throw new IllegalArgumentException("Add at least one photo of the bus before submitting");
         }
-        b.setStatus(Bus.Status.PENDING);
-        b.setSubmittedAt(LocalDateTime.now(clock));
+        LocalDateTime now = LocalDateTime.now(clock);
+        b.setStatus(Bus.Status.APPROVED);
+        b.setSubmittedAt(now);
+        b.setReviewedAt(now);
         b.setRejectionReason(null);
         return mapper.view(buses.save(b));
     }

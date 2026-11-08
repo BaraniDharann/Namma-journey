@@ -8,7 +8,7 @@ import { BusPill, ownerNavItems, mutedStyle } from '../../../components/bus/busU
 import { getBuses } from '../../../utils/busApi'
 import { BUS_STATUS, docName, expiringDocs, daysUntil } from '../../../utils/busText'
 
-/** The owner's buses with where each stands: draft, waiting for approval, approved or rejected. */
+/** The owner's buses with where each stands: draft or in service. */
 export default function OwnerBuses() {
   const [buses, setBuses] = useState(null)
   const [failed, setFailed] = useState(false)
@@ -21,7 +21,7 @@ export default function OwnerBuses() {
 
   return (
     <DashboardLayout navItems={ownerNavItems} role="ROLE_OWNER">
-      <PageHead title="Buses" sub="Add a bus, draw its seats, upload its papers and send it for approval">
+      <PageHead title="Buses" sub="Add a bus, draw its seats, upload its papers and put it in service">
         <Link to="/owner/buses/new" className="pc-btn"><Icon name="plus" />Add bus</Link>
       </PageHead>
       <BusTabs />

@@ -11,7 +11,6 @@ import VehicleFields, { DEFAULT_VEHICLE } from '../../components/owner/VehicleFi
 import { vehicleIcon, vehicleLabel } from '../../dash/vehicles'
 import { categoryLabel } from '../../utils/carCategories'
 import { rejectReasonError, REJECT_MAX } from '../../utils/rejectReason'
-import useOwnerMe from '../../hooks/useOwnerMe'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { useCelebrate } from '../../components/celebrate/Celebration'
@@ -525,7 +524,6 @@ function UploadTile({ label, icon, file, onChange }) {
 
 export default function OwnerDrivers() {
   const celebrate = useCelebrate()
-  const me = useOwnerMe()
   const [tab, setTab] = useState('list')
   const [form, setForm] = useState(BLANK_DRIVER)
   const [files, setFiles] = useState({ photo: null, licensePhoto: null, aadhaarPhoto: null })
@@ -535,12 +533,6 @@ export default function OwnerDrivers() {
   const [success, setSuccess] = useState(null)
 
   useEffect(() => { getOwnerVehicles().then((r) => setVehicles(r.data || [])).catch(() => {}) }, [])
-  // How many independent drivers work with the platform owner, for the tab label.
-  const [independentCount, setIndependentCount] = useState(null)
-  useEffect(() => {
-    if (!me?.platform) return
-    getIndependentDrivers().then((r) => setIndependentCount((r.data || []).length)).catch(() => {})
-  }, [me?.platform])
   const activeCars = vehicles.filter((v) => v.active)
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
@@ -573,26 +565,12 @@ export default function OwnerDrivers() {
 
   return (
     <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
-      <PageHead title="Driver Management" sub={me?.platform ? 'Your own Trip drivers, and independent drivers who work with you' : 'Your own Trip drivers: add, check and approve'}>
+      <PageHead title="Drivers" sub="The drivers you add for your cars and buses">
         <button type="button" onClick={() => setTab(tab === 'create' ? 'list' : 'create')} className={tab === 'create' ? 'pc-btn pc-btn-ghost' : 'pc-btn'}>
           <Icon name={tab === 'create' ? 'back' : 'plus'} />{tab === 'create' ? 'Driver List' : 'Add Driver'}
         </button>
       </PageHead>
 
-      {/* Adding a driver is the Add Driver button above; the tabs only switch between lists. */}
-      <div className="pc-chips" role="tablist" aria-label="Driver views" style={{ marginBottom: 18, flexWrap: 'nowrap', overflowX: 'auto' }}>
-        {[['list', 'users', 'My drivers'], ...(me?.platform ? [['independent', 'id', `Independent drivers${independentCount != null ? ` (${independentCount})` : ''}`]] : [])].map(([key, icon, label]) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className="pc-chip"
-            style={{ border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, ...(tab === key ? { background: 'var(--pc-ink)', color: 'var(--pc-panel)' } : {}) }}
-          ><Icon name={icon} size={14} />{label}</button>
-        ))}
-      </div>
 
       <div className="pc-grid">
         {tab === 'list' ? (
@@ -604,10 +582,8 @@ export default function OwnerDrivers() {
                 <button type="button" onClick={() => setSuccess(null)} aria-label="Dismiss" style={{ color: 'inherit', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 4 }}><Icon name="x" size={16} /></button>
               </div>
             )}
-            <DriverList key={success?.id} vehicles={vehicles} hasIndependentTab={!!me?.platform} />
+            <DriverList key={success?.id} vehicles={vehicles} />
           </>
-        ) : tab === 'independent' && me?.platform ? (
-          <DriverList independent />
         ) : (
           <div className="pc-span-8">
             {error && <div className="pc-error" role="alert" style={{ marginBottom: 16 }}><Icon name="alert" size={16} /><span>{error}</span></div>}

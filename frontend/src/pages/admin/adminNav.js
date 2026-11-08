@@ -1,7 +1,7 @@
-// The admin's rail: reviewing travels owner applications and the buses they list.
+// The admin's rail: the admin reviews travels owners only; an approved owner's buses go live
+// without a second review.
 export const adminNavItems = [
   { path: '/admin/owners', icon: '', label: 'Owner applications' },
-  { path: '/admin/bus-approvals', icon: '', label: 'Bus approvals' },
   { path: '/admin/bus-payouts', icon: '', label: 'Bus payouts' },
 ]
 

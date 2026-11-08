@@ -136,12 +136,14 @@ app:
   drivers:
     # Self-signed-up drivers who never confirm their email are removed after this many hours.
     unverified-ttl-hours: ${DRIVER_UNVERIFIED_TTL_HOURS:48}
+    # City-ride drivers who sign up themselves are approved automatically (within a minute of
+    # confirming their email): owners never review them. Older note kept for the settings below:
     # Self-signed-up drivers are approved automatically this long after confirming their email,
     # if the automatic checks pass (DriverApplicationChecks) and the owner has not pressed Reject
     # or Hold in the Telegram group. false = the owner approves every one by hand.
     # Owner-added drivers are never queued: they are approved when the owner creates them.
     auto-approve: ${DRIVER_AUTO_APPROVE:true}
-    auto-approve-after: ${DRIVER_AUTO_APPROVE_AFTER:15m}
+    auto-approve-after: ${DRIVER_AUTO_APPROVE_AFTER:0s}
 
   aadhaar:
     # UIDAI's Secure QR signing certificate(s), comma-separated file paths. Download from

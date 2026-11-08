@@ -114,15 +114,15 @@ class DriverAutoApprovalTest {
     }
 
     @Test
-    @DisplayName("A failed check holds it for the owner instead of approving")
-    void heldWhenACheckFails() {
+    @DisplayName("A failed check is only logged: City-ride drivers are approved without an owner's review")
+    void approvedEvenWhenACheckNotesSomething() {
         driver.setAadhaarNumber("234123412340".equals(validAadhaar()) ? "234123412341" : "234123412340");
 
         service.autoApproveOne(12L);
 
-        verify(verification, never()).approve(anyLong(), any());
-        verify(drivers).holdAutoApproval(12L, Driver.Verification.UNDER_REVIEW);
-        verify(alerts).send(any(), any(), any());
+        verify(verification).approve(12L, null);
+        verify(drivers, never()).holdAutoApproval(anyLong(), any());
+        verify(alerts, never()).send(any(), any(), any());
     }
 
     @Test
