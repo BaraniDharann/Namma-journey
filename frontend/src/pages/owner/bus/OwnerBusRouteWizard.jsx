@@ -196,7 +196,7 @@ export default function OwnerBusRouteWizard() {
     <DashboardLayout navItems={ownerNavItems} role="ROLE_OWNER">
       <p style={{ marginBottom: 8 }}><Link to="/owner/bus-routes">← All routes</Link></p>
       <PageHead title={isNew && !routeId ? 'New bus route' : (route.name || 'Bus route')}
-        sub={bus ? `${bus.name} · ${bus.registrationNumber}` : 'Choose an approved bus to start'}>
+        sub={bus ? `${bus.name} · ${bus.registrationNumber}` : 'Choose a bus to start'}>
         {routeId && <BusPill table={ROUTE_STATUS} status={route.status} />}
         <button type="button" className="pc-btn pc-btn-ghost" disabled={busy || !route.busId} onClick={() => save(false)}>
           <Icon name="check" />{route.status === 'DRAFT' ? 'Save draft' : 'Save changes'}
@@ -229,7 +229,7 @@ export default function OwnerBusRouteWizard() {
                 <label htmlFor="rt-bus" style={labelStyle}>Bus *</label>
                 <select id="rt-bus" className="input-field" value={route.busId} disabled={published}
                   onChange={(e) => set('busId', e.target.value)}>
-                  <option value="">Choose an approved bus</option>
+                  <option value="">Choose a bus</option>
                   {approved.map((b) => <option key={b.id} value={b.id}>{b.name} · {b.registrationNumber}{b.typeLabel ? ` · ${b.typeLabel}` : ''}</option>)}
                 </select>
                 {!approved.length && <p style={{ ...mutedStyle, marginTop: 6 }}>No bus in service yet. <Link to="/owner/buses">Add one</Link> and put it in service first.</p>}
