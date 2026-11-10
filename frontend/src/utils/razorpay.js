@@ -4,6 +4,26 @@ const CHECKOUT_SRC = 'https://checkout.razorpay.com/v1/checkout.js'
 
 let loading = null
 
+// Puts UPI at the top of Checkout with the common apps named, then the default blocks (cards,
+// netbanking, wallets). Razorpay shows each app button only where it can actually open the app
+// (a phone with that app installed, live keys); elsewhere the block falls back to the QR code and
+// the "enter UPI ID" field, so this never hides a way to pay.
+export const UPI_FIRST = {
+  display: {
+    blocks: {
+      upi: {
+        name: 'Pay with any UPI app',
+        instruments: [
+          { method: 'upi', flows: ['intent'], apps: ['google_pay', 'phonepe', 'paytm'] },
+          { method: 'upi', flows: ['qr', 'collect'] },
+        ],
+      },
+    },
+    sequence: ['block.upi'],
+    preferences: { show_default_blocks: true },
+  },
+}
+
 export function loadRazorpayCheckout() {
   if (typeof window !== 'undefined' && window.Razorpay) return Promise.resolve(window.Razorpay)
   if (loading) return loading
@@ -34,6 +54,10 @@ export async function openRazorpayCheckout(order, prefill = {}) {
       name: order.merchantName,
       description: order.description,
       prefill,
+      config: UPI_FIRST,
+      // Lets the UPI-app buttons open GPay / PhonePe / Paytm when the site runs inside an
+      // in-app browser (Instagram, WhatsApp, etc.) instead of a full browser.
+      webview_intent: true,
       theme: { color: '#0f766e' },
       handler: (response) => resolve(response),
       modal: { ondismiss: () => resolve(null) },
