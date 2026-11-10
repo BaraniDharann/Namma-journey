@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { OWNER_NAV } from '../../components/owner/ownerNav'
-import { getOwnerVehicles, createVehicle, updateVehicle, deactivateVehicle, activateVehicle } from '../../utils/api'
+import { getOwnerVehicles, createVehicle, updateVehicle, deactivateVehicle, activateVehicle, setVehicleMode, getOwnerDrivers } from '../../utils/api'
 import { CAR_CATEGORIES, categoryLabel } from '../../utils/carCategories'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, Empty, Skeleton, ErrorNote } from '../../components/dash/ui'
@@ -98,7 +98,71 @@ function VehicleForm({ vehicle, onSaved, onCancel }) {
   )
 }
 
-/** The owner's cars: every Trip goes out in one of these. */
+const MODES = [
+  { value: 'CITY', label: 'City rides', hint: 'Nearby rides are offered to its driver when they go Online' },
+  { value: 'TRAVEL', label: 'Travel', hint: 'Picked for Travel (outstation) bookings' },
+  { value: 'OFF', label: 'Off', hint: 'Neither; you can still put it on a booking by hand' },
+]
+const modeOf = (v) => (v.active ? (v.mode || 'TRAVEL') : 'OFF')
+
+/**
+ * City / Travel / Off for one car. Choosing City opens a driver picker; the car's driver goes
+ * Online in the driver app to get rides. Drivers already on another City car are not offered.
+ */
+function ModeSwitch({ vehicle, drivers, takenBy, busy, onChange }) {
+  const current = modeOf(vehicle)
+  const [picking, setPicking] = useState(false)
+  const [driverId, setDriverId] = useState(vehicle.cityDriverId ? String(vehicle.cityDriverId) : '')
+  const tempo = vehicle.category === 'TEMPO_TRAVELLER'
+  const free = drivers.filter((d) => d.verificationStatus !== 'REJECTED'
+    && (!takenBy[d.driverId] || takenBy[d.driverId] === vehicle.id))
+
+  const seg = (on) => ({
+    padding: '6px 10px', fontSize: 12, fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', border: 0,
+    background: on ? 'var(--pc-brand)' : 'transparent', color: on ? '#fff' : 'var(--pc-ink-2)', borderRadius: 8,
+  })
+
+  const choose = (mode) => {
+    if (mode === 'CITY') { setPicking(true); return }
+    setPicking(false)
+    if (mode !== current) onChange(mode, null)
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <div role="radiogroup" aria-label={`What ${vehicle.registrationNumber} is used for`}
+        style={{ display: 'inline-flex', gap: 2, padding: 3, borderRadius: 10, border: '1px solid var(--pc-line)', background: 'var(--pc-panel)', width: 'fit-content' }}>
+        {MODES.map((m) => {
+          const disabled = busy || !vehicle.active || (m.value === 'CITY' && tempo)
+          return (
+            <button key={m.value} type="button" role="radio" aria-checked={current === m.value} disabled={disabled}
+              title={m.value === 'CITY' && tempo ? 'A Tempo Traveller does Travel trips only' : m.hint}
+              style={{ ...seg(current === m.value || (m.value === 'CITY' && picking)), opacity: disabled && current !== m.value ? 0.45 : 1 }}
+              onClick={() => choose(m.value)}>{m.label}</button>
+          )
+        })}
+      </div>
+      {picking && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <label htmlFor={`city-driver-${vehicle.id}`} style={{ fontSize: 12, fontWeight: 700, color: 'var(--pc-ink-2)' }}>Driver</label>
+          <select id={`city-driver-${vehicle.id}`} className="input-field" style={{ width: 'auto', minWidth: 180, padding: '6px 10px' }}
+            value={driverId} onChange={(e) => setDriverId(e.target.value)}>
+            <option value="">Choose a driver</option>
+            {free.map((d) => <option key={d.driverId} value={d.driverId}>{d.name}</option>)}
+          </select>
+          <button type="button" className="pc-btn pc-btn-sm" disabled={busy || !driverId}
+            onClick={() => { onChange('CITY', Number(driverId)); setPicking(false) }}>
+            <Icon name="check" size={14} />{busy ? 'Saving…' : 'Use for City rides'}
+          </button>
+          <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => setPicking(false)}>Cancel</button>
+          {free.length === 0 && <span style={{ fontSize: 12, color: 'var(--pc-muted)' }}>Every driver already has a City car. Add a driver first.</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The owner's cars: each does City rides, Travel trips, or neither, as the owner decides. */
 export default function OwnerVehicles() {
   const [vehicles, setVehicles] = useState(null)
   const [loadError, setLoadError] = useState(false)
@@ -106,11 +170,29 @@ export default function OwnerVehicles() {
   const [busyId, setBusyId] = useState(null)
   const [rowError, setRowError] = useState(null)
 
+  const [drivers, setDrivers] = useState([])
+
+  const loadDrivers = () => getOwnerDrivers().then((r) => setDrivers(r.data || [])).catch(() => {})
   const load = () => {
     setLoadError(false)
     getOwnerVehicles().then((r) => setVehicles(r.data || [])).catch(() => setLoadError(true))
+    loadDrivers()
   }
   useEffect(load, [])
+
+  const changeMode = async (v, mode, driverId) => {
+    setBusyId(v.id); setRowError(null)
+    try {
+      const res = await setVehicleMode(v.id, mode, driverId)
+      saved(res.data)
+      loadDrivers() // the paired driver's City switch changed
+    } catch (err) {
+      setRowError({ id: v.id, text: errorText(err, 'Could not change what this car is used for') })
+    } finally { setBusyId(null) }
+  }
+
+  const driverById = Object.fromEntries(drivers.map((d) => [d.driverId, d]))
+  const takenBy = Object.fromEntries((vehicles || []).filter((v) => v.cityDriverId).map((v) => [v.cityDriverId, v.id]))
 
   const saved = (v) => {
     setVehicles((list) => (list.some((x) => x.id === v.id) ? list.map((x) => (x.id === v.id ? v : x)) : [...list, v]))
@@ -131,7 +213,7 @@ export default function OwnerVehicles() {
 
   return (
     <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
-      <PageHead title="Vehicles" sub={vehicles ? `${((n) => `${n} ${n === 1 ? 'car' : 'cars'}`)(vehicles.filter((v) => v.active).length)} in use${missing ? ` · ${missing} need a registration number` : ''}` : 'Your cars for Trips'}>
+      <PageHead title="Vehicles" sub={vehicles ? `${((n) => `${n} ${n === 1 ? 'car' : 'cars'}`)(vehicles.filter((v) => v.active).length)} in use${missing ? ` · ${missing} need a registration number` : ''}` : 'City rides, Travel trips, or off: you choose per car'}>
         {editing !== 'new' && <button type="button" className="pc-btn" onClick={() => setEditing('new')}><Icon name="plus" />Add car</button>}
       </PageHead>
 
@@ -142,16 +224,30 @@ export default function OwnerVehicles() {
           </Panel>
         )}
 
-        <Panel span={12} title="Your cars" meta={vehicles ? `${vehicles.length} total` : null}>
-          {loadError ? <ErrorNote onRetry={load} />
-            : !vehicles ? <Skeleton rows={4} height={18} />
-            : vehicles.length === 0 ? (
+        {loadError ? <Panel span={12} title="Your cars"><ErrorNote onRetry={load} /></Panel>
+          : !vehicles ? <Panel span={12} title="Your cars"><Skeleton rows={4} height={18} /></Panel>
+          : vehicles.length === 0 ? (
+            <Panel span={12} title="Your cars">
               <Empty icon="car" title="No cars yet" action={<button type="button" className="pc-btn pc-btn-sm" onClick={() => setEditing('new')}><Icon name="plus" size={14} />Add car</button>}>
-                Add the cars your drivers take on Trips. Travellers book by car type, so add at least one of each type you price.
+                Add your cars, then choose for each one: City rides near you, Travel trips, or neither.
               </Empty>
-            ) : (
+            </Panel>
+          ) : MODES.map((group) => {
+            const list = vehicles.filter((v) => modeOf(v) === group.value)
+            return (
+              <Panel key={group.value} span={12} title={group.value === 'CITY' ? 'City ride cars' : group.value === 'TRAVEL' ? 'Travel cars' : 'Off'}
+                meta={`${list.length} ${list.length === 1 ? 'car' : 'cars'}`}>
+                {list.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--pc-muted)', padding: '4px 0' }}>
+                    {group.value === 'CITY' ? 'No car on City rides. Switch a car to "City rides" and choose its driver: nearby rides then go to that driver when they are Online.'
+                      : group.value === 'TRAVEL' ? 'No car takes Travel bookings automatically. Switch a car to "Travel".'
+                      : 'No cars switched off.'}
+                  </div>
+                ) : (
               <div className="pc-rows">
-                {vehicles.map((v, i) => (
+                {list.map((v, i) => {
+                  const cityDriver = v.cityDriverId ? driverById[v.cityDriverId] : null
+                  return (
                   <div key={v.id} style={{ padding: '12px 0', borderTop: i ? '1px solid var(--pc-line)' : 0, opacity: v.active ? 1 : 0.7 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 0 }}>
@@ -178,12 +274,27 @@ export default function OwnerVehicles() {
                         </button>
                       </div>
                     </div>
+                    <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <ModeSwitch vehicle={v} drivers={drivers} takenBy={takenBy} busy={busyId === v.id}
+                        onChange={(mode, driverId) => changeMode(v, mode, driverId)} />
+                      {v.mode === 'CITY' && (
+                        <span style={{ fontSize: 12, color: 'var(--pc-ink-2)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <Icon name="user" size={14} />
+                          {cityDriver ? cityDriver.name : 'Driver'}
+                          {cityDriver && cityDriver.status !== 'ACTIVE' && <span className="pc-pill">Offline</span>}
+                          {cityDriver && cityDriver.status === 'ACTIVE' && <span className="pc-pill pc-pill-ok">Online</span>}
+                        </span>
+                      )}
+                    </div>
                     {rowError?.id === v.id && <div className="pc-error" role="alert" style={{ marginTop: 8, fontSize: 12 }}><Icon name="alert" size={16} /><span>{rowError.text}</span></div>}
                   </div>
-                ))}
+                  )
+                })}
               </div>
-            )}
-        </Panel>
+                )}
+              </Panel>
+            )
+          })}
       </div>
     </DashboardLayout>
   )

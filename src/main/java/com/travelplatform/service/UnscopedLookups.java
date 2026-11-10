@@ -39,6 +39,17 @@ public class UnscopedLookups {
         this.fresh.setReadOnly(true);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.TravelBookingRepository bookings;
+
+    /**
+     * Unfinished City rides in this driver's name. City rides are the platform owner's bookings,
+     * so a travels owner's connection cannot see the ones their own City car's driver is on.
+     */
+    public long openCityRides(Long driverId) {
+        return bookings == null ? 0 : unscoped(() -> bookings.countOpenCityRidesByDriverId(driverId));
+    }
+
     public boolean vehiclePlateTaken(String key) {
         return vehiclePlateHolder(key).isPresent();
     }

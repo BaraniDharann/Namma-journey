@@ -57,6 +57,8 @@ public class DriverCardLoader {
         for (int from = 0; from < all.size(); from += CHUNK) {
             List<Long> chunk = all.subList(from, Math.min(all.size(), from + CHUNK));
             Set<Long> busy = new HashSet<>(bookings.findBusyDriverIds(chunk, today));
+            // A City car out on a Travel trip today (perhaps with another driver): its City driver waits.
+            busy.addAll(bookings.findCityDriversWhoseCarIsAway(chunk, today));
             Set<Long> offered = new HashSet<>(bookings.findOfferedDriverIds(chunk));
             for (Driver d : drivers.findAllById(chunk)) {
                 DriverState state = busy.contains(d.getId()) ? DriverState.BUSY

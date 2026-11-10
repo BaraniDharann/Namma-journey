@@ -85,6 +85,10 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
             + " AND d.serves_trip = true AND d.verification_status = 'APPROVED'"
             + " AND v.active = true AND v.category = :category AND v.seats >= :seats"
             + " AND (:needAc = false OR v.ac = true)"
+            // Automatic picks stay on Travel cars, and leave a City car's driver on City rides (V35);
+            // the owner can still give a Travel booking to either by hand.
+            + " AND v.mode = 'TRAVEL'"
+            + " AND NOT EXISTS (SELECT 1 FROM vehicles cv WHERE cv.city_driver_id = d.id)"
             + " AND d.id NOT IN (:excluded)"
             + " AND NOT EXISTS (SELECT 1 FROM travel_bookings tb WHERE tb.driver_id = d.id"
             + " AND tb.from_date <= :toDate AND tb.to_date >= :fromDate"

@@ -67,7 +67,13 @@ final class DriverVehicles {
             driver.setVehicleSeats(type.maxPassengers());
         }
         // On the owner's form a bike, auto or independent driver simply takes no trips, rather than being an error.
-        setModes(driver, r.getServesCity(), type == VehicleType.CAR && !independent(driver) ? r.getServesTrip() : Boolean.FALSE);
+        // An owner's driver's City switch belongs to their City car, so the driver form leaves it
+        // alone; a driver being created has no City car yet.
+        if (!independent(driver) && driver.getId() == null) {
+            driver.setServesCity(false);
+        }
+        setModes(driver, independent(driver) ? r.getServesCity() : null,
+                type == VehicleType.CAR && !independent(driver) ? r.getServesTrip() : Boolean.FALSE);
     }
 
     private static boolean independent(Driver driver) {
@@ -76,11 +82,14 @@ final class DriverVehicles {
 
     /** Turns City rides and Trips on or off. Null leaves a switch as it is. */
     static void setModes(Driver driver, Boolean servesCity, Boolean servesTrip) {
-        if (servesCity != null) {
-            if (servesCity && !independent(driver)) {
-                throw new IllegalArgumentException("City rides are for independent drivers only; travels owners' drivers take Trips.");
-            }
+        // A travels owner's driver takes City rides exactly while the owner has them on a City car
+        // (CityCarService, V35); the switch is the car's, so here it keeps whatever it is.
+        if (servesCity != null && independent(driver)) {
             driver.setServesCity(servesCity);
+        } else if (servesCity != null && servesCity != driver.isServesCity()) {
+            throw new IllegalArgumentException(servesCity
+                    ? "Your owner puts you on City rides by choosing you as the driver of a City car."
+                    : "You drive a City car. Ask your owner to switch the car to Travel or Off.");
         }
         if (servesTrip != null) {
             if (servesTrip && driver.getVehicleType() != VehicleType.CAR) {
@@ -95,10 +104,6 @@ final class DriverVehicles {
         // Switching to a bike or auto ends trips; not a choice the owner has to remember to make.
         if (driver.getVehicleType() != VehicleType.CAR || independent(driver)) {
             driver.setServesTrip(false);
-        }
-        // A travels owner's driver never takes City rides (drivers_fleet_no_city, V27).
-        if (!independent(driver)) {
-            driver.setServesCity(false);
         }
     }
 }

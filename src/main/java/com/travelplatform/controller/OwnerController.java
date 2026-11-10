@@ -40,6 +40,7 @@ public class OwnerController {
     private final com.travelplatform.service.CityService cityService;
     private final com.travelplatform.service.DriverVerificationService driverVerificationService;
     private final com.travelplatform.service.DriverLedgerService ledgerService;
+    private final com.travelplatform.service.OwnerLedgerService ownerLedgerService;
     private final com.travelplatform.service.DriverDuesService duesService;
     private final com.travelplatform.service.TripRateService tripRateService;
     private final com.travelplatform.config.OwnerScope ownerScope;
@@ -343,6 +344,39 @@ public class OwnerController {
             throw new IllegalArgumentException("Give a type (PAYOUT or COLLECTION) and an amount");
         }
         return ResponseEntity.ok(ledgerService.recordTransfer(driverId, type, amount,
+                body.get("reference"), body.get("note"), "owner:" + principal.getName()));
+    }
+
+    /** My City-ride money with the platform (V35): balance and latest entries. */
+    @GetMapping("/city-earnings")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.service.OwnerLedgerService.EarningsView> getCityEarnings() {
+        return ResponseEntity.ok(ownerLedgerService.earnings(ownerScope.ownerId()));
+    }
+
+    /** Travels owners' City-ride balances, for the platform to settle. */
+    @GetMapping("/owner-payouts")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<List<com.travelplatform.service.OwnerLedgerService.PayoutRow>> getOwnerPayouts() {
+        ownerScope.requirePlatform();
+        return ResponseEntity.ok(ownerLedgerService.payoutSummary());
+    }
+
+    /** Records a UPI transfer with a travels owner: {type: PAYOUT|COLLECTION, amount, reference, note}. */
+    @PostMapping("/owner-payouts/{ownerId}")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<com.travelplatform.entity.OwnerLedgerEntry> recordOwnerPayout(
+            @PathVariable Long ownerId, @RequestBody Map<String, String> body, java.security.Principal principal) {
+        ownerScope.requirePlatform();
+        com.travelplatform.entity.DriverLedgerEntry.Type type;
+        java.math.BigDecimal amount;
+        try {
+            type = com.travelplatform.entity.DriverLedgerEntry.Type.valueOf(String.valueOf(body.get("type")).trim().toUpperCase(java.util.Locale.ROOT));
+            amount = new java.math.BigDecimal(String.valueOf(body.get("amount")).trim());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Give a type (PAYOUT or COLLECTION) and an amount");
+        }
+        return ResponseEntity.ok(ownerLedgerService.recordTransfer(ownerId, type, amount,
                 body.get("reference"), body.get("note"), "owner:" + principal.getName()));
     }
 

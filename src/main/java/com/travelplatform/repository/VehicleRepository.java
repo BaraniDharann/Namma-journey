@@ -27,7 +27,8 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
             + "AND NOT EXISTS (SELECT 1 FROM TravelBooking tb WHERE tb.vehicleId = v.id "
             + "AND tb.fromDate <= :toDate AND tb.toDate >= :fromDate AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') "
             + "AND tb.tripEndedAt IS NULL AND (:excludeBookingId IS NULL OR tb.id <> :excludeBookingId)) "
-            + "ORDER BY v.registrationNumber, v.id")
+            // Travel cars first; a free City or Off car is still the owner's to choose (V35).
+            + "ORDER BY CASE WHEN v.mode = com.travelplatform.entity.Vehicle.Mode.TRAVEL THEN 0 ELSE 1 END, v.registrationNumber, v.id")
     List<Vehicle> findFreeVehicles(@Param("ownerId") Long ownerId,
                                    @Param("category") CarCategory category,
                                    @Param("seats") int seats,
@@ -50,4 +51,13 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
     @Query("SELECT COUNT(tb) FROM TravelBooking tb WHERE tb.vehicleId = :vehicleId "
             + "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL")
     long countActiveBookings(@Param("vehicleId") Long vehicleId);
+
+    /** Unfinished Travel trips this car is on (a car joins City mode only without one). */
+    @Query("SELECT COUNT(tb) FROM TravelBooking tb WHERE tb.vehicleId = :vehicleId "
+            + "AND tb.serviceMode = com.travelplatform.entity.TravelBooking.ServiceMode.TRIP "
+            + "AND tb.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND tb.tripEndedAt IS NULL")
+    long countOpenTravelBookings(@Param("vehicleId") Long vehicleId);
+
+    /** The City car this driver is paired with, if any. */
+    Optional<Vehicle> findByCityDriverId(Long cityDriverId);
 }

@@ -319,6 +319,14 @@ export const createVehicle = (formData) => api.post('/owner/vehicles', formData,
 export const updateVehicle = (id, data) => api.put(`/owner/vehicles/${id}`, data, { _silent: true })
 export const deactivateVehicle = (id) => api.post(`/owner/vehicles/${id}/deactivate`, null, { _silent: true })
 export const activateVehicle = (id) => api.post(`/owner/vehicles/${id}/activate`, null, { _silent: true })
+// City / Travel / Off for one car; a City car names its driver. Pairing changes the driver too.
+export const setVehicleMode = (id, mode, driverId) =>
+  api.put(`/owner/vehicles/${id}/mode`, { mode, driverId: driverId ?? null }, { _silent: true }).then(res => { invalidateCache('drivers'); return res })
+// City rides done in my City cars: what the platform owes me, or I owe it.
+export const getCityEarnings = () => api.get('/owner/city-earnings')
+// Platform owner: travels owners' City-ride balances, and recording a UPI transfer with one.
+export const getOwnerPayouts = () => api.get('/owner/owner-payouts')
+export const recordOwnerPayout = (ownerId, data) => api.post(`/owner/owner-payouts/${ownerId}`, data)
 // Driver creation does multipart upload + DB writes + dispatches a welcome email — give it a
 // longer timeout than the default 15s and let axios pick the multipart boundary itself.
 export const createDriver = (formData) => api.post('/owner/drivers', formData, { timeout: 60000 })

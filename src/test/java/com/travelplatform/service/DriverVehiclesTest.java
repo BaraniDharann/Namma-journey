@@ -60,6 +60,7 @@ class DriverVehiclesTest {
     @DisplayName("an owner-fleet car driver takes Trips")
     void carModes() {
         Driver car = new Driver();
+        car.setServesCity(false);
         DriverVehicles.setModes(car, false, true);
         assertFalse(car.isServesCity());
         assertTrue(car.isServesTrip());
@@ -97,17 +98,31 @@ class DriverVehiclesTest {
     }
 
     @Test
-    @DisplayName("a travels owner's driver cannot switch City rides on")
-    void ownerFleetCannotTurnOnCity() {
-        Driver d = new Driver();
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> DriverVehicles.setModes(d, true, null));
-        assertTrue(e.getMessage().contains("independent"));
+    @DisplayName("a travels owner's driver cannot switch City rides on or off themselves: their City car decides")
+    void ownerFleetCityFollowsTheCar() {
+        Driver off = new Driver();
+        off.setServesCity(false);
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> DriverVehicles.setModes(off, true, null));
+        assertTrue(e.getMessage().contains("City car"));
+
+        Driver paired = new Driver();
+        paired.setServesCity(true);
+        assertThrows(IllegalArgumentException.class, () -> DriverVehicles.setModes(paired, false, null));
+        DriverVehicles.setModes(paired, true, null); // saying what already is, is fine
+        assertTrue(paired.isServesCity());
     }
 
     @Test
-    @DisplayName("the owner's form refuses City rides for an owner-fleet driver")
-    void applyRefusesCityForOwnerFleet() {
-        Driver d = new Driver();
-        assertThrows(IllegalArgumentException.class, () -> DriverVehicles.apply(d, vehicle("CAR", true, true)));
+    @DisplayName("the owner's driver form leaves an owner-fleet driver's City switch to their City car")
+    void applyLeavesOwnerFleetCityAlone() {
+        Driver fresh = new Driver();
+        DriverVehicles.apply(fresh, vehicle("CAR", true, true));
+        assertFalse(fresh.isServesCity()); // no City car yet
+
+        Driver paired = new Driver();
+        paired.setId(5L);
+        paired.setServesCity(true);
+        DriverVehicles.apply(paired, vehicle("CAR", false, true));
+        assertTrue(paired.isServesCity());
     }
 }
