@@ -50,11 +50,39 @@ public class Vehicle {
     @Column(nullable = false)
     private boolean active = true;
 
+    /** What the owner uses this car for (V35). A new car does Travel trips. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private Mode mode = Mode.TRAVEL;
+
+    /** The owner's driver who drives this car on City rides; set exactly when {@link #mode} is CITY. */
+    @Column(name = "city_driver_id")
+    private Long cityDriverId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     public boolean isRegistrationMissing() {
         return registrationNumber != null && registrationNumber.startsWith(PLACEHOLDER_PREFIX);
+    }
+
+    /**
+     * CITY: offered nearby City rides through its paired driver. TRAVEL: picked for Travel
+     * (outstation) trips. OFF: neither. The owner can still put any free car on a Travel booking by hand.
+     */
+    public enum Mode {
+        CITY, TRAVEL, OFF;
+
+        public static Mode parse(String raw) {
+            if (raw == null || raw.isBlank()) {
+                return null;
+            }
+            try {
+                return Mode.valueOf(raw.trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
     }
 }

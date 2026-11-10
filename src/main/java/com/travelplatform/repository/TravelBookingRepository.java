@@ -118,6 +118,23 @@ public interface TravelBookingRepository extends JpaRepository<TravelBooking, UU
     List<Long> findBusyDriverIds(@Param("driverIds") java.util.Collection<Long> driverIds,
                                  @Param("day") java.time.LocalDate day);
 
+    /** Unfinished City rides in this driver's name, offers included (a City car leaves City mode only without one). */
+    @Query("SELECT COUNT(b) FROM TravelBooking b WHERE b.driverId = :driverId " +
+           "AND b.serviceMode = com.travelplatform.entity.TravelBooking.ServiceMode.CITY " +
+           "AND b.status IN ('PENDING', 'CONFIRMED', 'STARTED') AND b.tripEndedAt IS NULL")
+    long countOpenCityRidesByDriverId(@Param("driverId") Long driverId);
+
+    /**
+     * Of these drivers, the ones whose City car is on a Travel trip on {@code day} (someone else
+     * may be driving it): the car is away, so its City driver gets no offers until it is back.
+     */
+    @Query("SELECT DISTINCT v.cityDriverId FROM Vehicle v, TravelBooking b WHERE v.cityDriverId IN :driverIds " +
+           "AND b.vehicleId = v.id AND b.serviceMode = com.travelplatform.entity.TravelBooking.ServiceMode.TRIP " +
+           "AND b.tripEndedAt IS NULL AND b.fromDate <= :day AND b.toDate >= :day " +
+           "AND b.status IN ('PENDING', 'CONFIRMED', 'STARTED')")
+    List<Long> findCityDriversWhoseCarIsAway(@Param("driverIds") java.util.Collection<Long> driverIds,
+                                             @Param("day") java.time.LocalDate day);
+
     /** Of these drivers, the ones holding an open Ride Now offer. */
     @Query("SELECT b.driverId FROM TravelBooking b WHERE b.driverId IN :driverIds AND b.status = 'PENDING' " +
            "AND b.dispatchState = com.travelplatform.entity.TravelBooking.DispatchState.OFFERED")

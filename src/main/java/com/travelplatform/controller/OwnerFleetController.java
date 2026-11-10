@@ -26,6 +26,7 @@ import java.util.List;
 public class OwnerFleetController {
 
     private final VehicleService vehicleService;
+    private final com.travelplatform.service.CityCarService cityCarService;
 
     @GetMapping
     @PreAuthorize("hasRole('OWNER')")
@@ -71,5 +72,19 @@ public class OwnerFleetController {
     @PreAuthorize("hasRole('OWNER')")
     public ResponseEntity<Vehicle> activate(@PathVariable Long id) {
         return ResponseEntity.ok(vehicleService.activate(id));
+    }
+
+    /** What the car is used for: City rides, Travel trips or neither. */
+    public record ModeForm(String mode, Long driverId) {
+    }
+
+    /** JSON {mode: CITY|TRAVEL|OFF, driverId (for CITY)}. */
+    @PutMapping("/{id}/mode")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<Vehicle> setMode(@PathVariable Long id, @RequestBody ModeForm form) {
+        if (form == null) {
+            throw new IllegalArgumentException("Choose City, Travel or Off");
+        }
+        return ResponseEntity.ok(cityCarService.setMode(id, form.mode(), form.driverId()));
     }
 }

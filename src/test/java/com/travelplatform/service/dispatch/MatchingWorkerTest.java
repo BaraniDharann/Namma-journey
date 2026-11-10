@@ -368,11 +368,26 @@ class MatchingWorkerTest {
     }
 
     @Test
-    @DisplayName("a travels owner's driver is never offered a City ride, even the nearest one")
-    void ownerFleetDriverIsNeverACityCandidate() {
+    @DisplayName("a travels owner's driver on a City car is offered the nearest City ride (V35)")
+    void ownerFleetDriverOnACityCarIsACandidate() {
         Driver fleet = car(1L, 0.1);
         fleet.setFleet(Driver.Fleet.OWNER_FLEET);
         fleet.setOwnerId(9L);
+        car(2L, 0.5);
+        TravelBooking b = ride(0, 0, VehicleType.CAR, 2);
+
+        round();
+
+        assertEquals(1L, row(b).getDriverId());
+    }
+
+    @Test
+    @DisplayName("a travels owner's driver with no City car (City rides off) is never offered one")
+    void ownerFleetDriverWithoutACityCarIsNotACandidate() {
+        Driver fleet = car(1L, 0.1);
+        fleet.setFleet(Driver.Fleet.OWNER_FLEET);
+        fleet.setOwnerId(9L);
+        fleet.setServesCity(false);
         car(2L, 0.5);
         TravelBooking b = ride(0, 0, VehicleType.CAR, 2);
 

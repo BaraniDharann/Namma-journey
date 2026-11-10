@@ -187,7 +187,7 @@ public class AdminDriverService {
         driver.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
         driver.setSubmittedAt(java.time.LocalDateTime.now());
         DriverVehicles.apply(driver, vehicle);
-        // Owner-fleet drivers take Trips only, whatever the vehicle form said (drivers_fleet_no_city).
+        // A new owner-fleet driver takes Trips; City rides start only when the owner pairs them with a City car (V35).
         driver.setServesCity(false);
         driver.setServesTrip(true);
         return driverRepository.save(driver);

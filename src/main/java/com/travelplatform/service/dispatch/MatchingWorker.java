@@ -444,8 +444,9 @@ public class MatchingWorker {
     }
 
     private static boolean eligible(DriverCard card, RideTicket t) {
+        // servesCity is on for independent drivers who chose City rides and for an owner's driver
+        // while the owner has them on a City car (V35); either way the card's vehicle is what they drive.
         return card != null && card.state() == DriverState.IDLE && card.active() && card.servesCity()
-                && card.fleet() == com.travelplatform.entity.Driver.Fleet.INDEPENDENT
                 && card.vehicle() == t.vehicle() && card.seats() >= t.passengers();
     }
 

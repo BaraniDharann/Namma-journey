@@ -3,6 +3,7 @@ import DashboardLayout from '../../components/DashboardLayout'
 import { OWNER_NAV } from '../../components/owner/ownerNav'
 import { getDailyRevenue, getMonthlyRevenue, getMonthlyRevenueSeries, getYearlyRevenue, getOwnerBookings, getOwnerDrivers, getOwnerVehicles } from '../../utils/api'
 import ExpensesPanel from '../../components/expenses/ExpensesPanel'
+import CityEarningsPanel from '../../components/owner/CityEarningsPanel'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { AreaChart, BarChart, Donut } from '../../components/dash/charts'
@@ -120,7 +121,7 @@ export default function OwnerRevenue() {
   const [cars, setCars] = useState([])
   useEffect(() => {
     getOwnerVehicles()
-      .then((r) => setCars((r.data || []).map((v) => ({ id: v.id, label: v.model ? `${v.registrationNumber} · ${v.model}` : v.registrationNumber }))))
+      .then((r) => setCars((r.data || []).map((v) => ({ id: v.id, mode: v.mode, label: v.model ? `${v.registrationNumber} · ${v.model}` : v.registrationNumber }))))
       .catch(() => setCars([]))
   }, [])
   const [tab, setTab] = useState('monthly')
@@ -313,6 +314,8 @@ export default function OwnerRevenue() {
             { icon: 'wallet', label: `${params.year} Revenue`, value: inr(totalYearRevenue), sub: 'all months this year' },
           ]}
         />
+
+        <CityEarningsPanel hasCityCars={cars.some((c) => c.mode === 'CITY')} />
 
         {/* Revenue Trend */}
         <Panel

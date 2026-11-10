@@ -150,10 +150,18 @@ export default function DriverDashboard() {
             {profile.vehicleNumber && <span>{profile.vehicleNumber}</span>}
             {profile.vehicleType === 'CAR' && <span>{profile.vehicleSeats} seats · {profile.vehicleAc ? 'AC' : 'Non-AC'}</span>}
           </span>
-          <button type="button" className="pc-switch" role="switch" aria-checked={!!profile.servesCity}
-            disabled={!!savingMode} onClick={() => toggleMode('servesCity')}>
-            <span className="pc-switch-track" />City rides
-          </button>
+          {profile.fleet === 'OWNER_FLEET' ? (
+            // A travels owner's driver takes City rides while the owner has them on a City car.
+            <span className={`pc-pill ${profile.servesCity ? 'pc-pill-ok' : ''}`}
+              title={profile.servesCity ? 'Go Online to get nearby City ride requests' : "Your owner hasn't put you on a City car"}>
+              {profile.servesCity ? 'City car · go Online for nearby rides' : "City rides off · your owner hasn't put you on a City car"}
+            </span>
+          ) : (
+            <button type="button" className="pc-switch" role="switch" aria-checked={!!profile.servesCity}
+              disabled={!!savingMode} onClick={() => toggleMode('servesCity')}>
+              <span className="pc-switch-track" />City rides
+            </button>
+          )}
           {profile.vehicleType === 'CAR' && (
             <button type="button" className="pc-switch" role="switch" aria-checked={!!profile.servesTrip}
               disabled={!!savingMode} onClick={() => toggleMode('servesTrip')}>

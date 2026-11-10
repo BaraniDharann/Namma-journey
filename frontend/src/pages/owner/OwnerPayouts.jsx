@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { OWNER_NAV } from '../../components/owner/ownerNav'
-import { getPayouts, recordPayout, getPendingDues, confirmDues, rejectDues } from '../../utils/api'
+import { getPayouts, recordPayout, getPendingDues, confirmDues, rejectDues, getOwnerPayouts, recordOwnerPayout } from '../../utils/api'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, Empty, Skeleton } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
@@ -14,7 +14,7 @@ const upiLink = (row, amount) =>
   `upi://pay?pa=${encodeURIComponent(row.upiId)}&pn=${encodeURIComponent(row.name || 'Driver')}` +
   `&am=${Number(amount).toFixed(2)}&cu=INR&tn=${encodeURIComponent('Namma Journey payout')}`
 
-function TransferModal({ row, onClose, onSaved }) {
+function TransferModal({ row, onClose, onSaved, record = (r, data) => recordPayout(r.driverId, data) }) {
   const owed = Number(row.balance)
   const type = owed >= 0 ? 'PAYOUT' : 'COLLECTION'
   const [amount, setAmount] = useState(Math.abs(owed).toFixed(2))
@@ -27,7 +27,7 @@ function TransferModal({ row, onClose, onSaved }) {
   const save = async () => {
     setSaving(true)
     try {
-      await recordPayout(row.driverId, { type, amount: value.toFixed(2), reference: reference.trim(), note })
+      await record(row, { type, amount: value.toFixed(2), reference: reference.trim(), note })
       onSaved(type, value)
     } catch { /* the API layer toasted the reason */ }
     setSaving(false)
@@ -74,11 +74,16 @@ export default function OwnerPayouts() {
   const [pending, setPending] = useState([])
   const [deciding, setDeciding] = useState(null)
 
+  // Travels owners whose City cars did City rides (V35): same money, owner in the driver's place.
+  const [owners, setOwners] = useState([])
+
   const load = async () => {
     try {
-      const [res, due] = await Promise.all([getPayouts(), getPendingDues().catch(() => ({ data: [] }))])
+      const [res, due, own] = await Promise.all([getPayouts(), getPendingDues().catch(() => ({ data: [] })),
+        getOwnerPayouts().catch(() => ({ data: [] }))])
       setRows(res.data || [])
       setPending(due.data || [])
+      setOwners((own.data || []).map((o) => ({ ...o, name: o.travelsName || o.ownerCode || `Owner ${o.ownerId}`, mobile: o.phone, isOwner: true })))
     } catch { /* ignore */ }
     setLoading(false)
   }
@@ -112,7 +117,8 @@ export default function OwnerPayouts() {
 
   return (
     <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
-      {active && <TransferModal row={active} onClose={() => setActive(null)} onSaved={saved} />}
+      {active && <TransferModal row={active} onClose={() => setActive(null)} onSaved={saved}
+        {...(active.isOwner ? { record: (r, data) => recordOwnerPayout(r.ownerId, data) } : {})} />}
       <PageHead title="Driver payouts" sub="What you owe independent drivers for rides paid to you, and the commission they owe on cash rides." />
 
       <div className="pc-grid">
@@ -191,6 +197,45 @@ export default function OwnerPayouts() {
                 </div>
               )}
         </Panel>
+
+        {owners.length > 0 && (
+          <Panel span={12} pad={false} title="Travels owners' City cars" meta={`${owners.length} owners`}>
+            <p style={{ margin: '0 20px 12px', fontSize: 13, color: 'var(--pc-muted)' }}>
+              City rides done in owners&rsquo; City cars. Online rides: you owe the owner the fare less commission.
+              Cash rides: the owner owes you the commission. Owners pay their own drivers.
+            </p>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="data-table">
+                <thead><tr><th>Owner</th><th style={{ textAlign: 'right' }}>Balance</th><th>Action</th></tr></thead>
+                <tbody>
+                  {owners.map(r => {
+                    const b = Number(r.balance)
+                    return (
+                      <tr key={r.ownerId}>
+                        <td style={{ overflowWrap: 'anywhere' }}>
+                          <strong>{r.name}</strong>
+                          <div style={{ fontSize: 12, color: 'var(--pc-muted)' }}>{[r.ownerCode, r.mobile, `${r.rides} rides`].filter(Boolean).join(' · ')}</div>
+                          <div style={{ fontSize: 12, marginTop: 2 }}>
+                            UPI: {r.upiId ? <span style={{ fontFamily: 'monospace' }}>{r.upiId}</span> : <span style={{ color: 'var(--pc-muted)' }}>Not in their profile</span>}
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 800, color: b > 0 ? 'var(--pc-ink)' : b < 0 ? 'var(--pc-bad)' : 'var(--pc-muted)' }}>
+                          {b < 0 ? `owes ${inr(-b)}` : inr(b)}
+                        </td>
+                        <td>
+                          {b > 0 && (r.upiId
+                            ? <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => setActive(r)}><Icon name="wallet" size={14} />Pay</button>
+                            : <span style={{ fontSize: 12, color: 'var(--pc-muted)' }}>Ask the owner to add a UPI ID</span>)}
+                          {b < 0 && <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => setActive(r)}><Icon name="check" size={14} />Record collection</button>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        )}
       </div>
     </DashboardLayout>
   )

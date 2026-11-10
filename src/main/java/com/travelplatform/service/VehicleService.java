@@ -35,6 +35,13 @@ public class VehicleService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private UnscopedLookups lookups;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CityCarService cityCars;
+
+    void setCityCars(CityCarService cityCars) {
+        this.cityCars = cityCars;
+    }
+
     public VehicleService(VehicleRepository vehicles, FileStorageService files) {
         this.vehicles = vehicles;
         this.files = files;
@@ -60,23 +67,39 @@ public class VehicleService {
     public Vehicle update(Long id, VehicleForm form) {
         Vehicle v = mine(id);
         apply(v, form, false);
-        return vehicles.save(v);
+        if (v.getMode() == Vehicle.Mode.CITY && v.getCategory() == CarCategory.TEMPO_TRAVELLER) {
+            throw new IllegalArgumentException("A Tempo Traveller does Travel trips only. Take the car off City rides first.");
+        }
+        Vehicle saved = vehicles.save(v);
+        if (cityCars != null) {
+            cityCars.carEdited(saved); // its City driver's seats and AC follow the car
+        }
+        return saved;
     }
 
-    /** Takes a car out of use; refused while it is on an unfinished trip. */
+    /** Takes a car out of use; refused while it is on an unfinished trip or City ride. */
     @Transactional
     public Vehicle deactivate(Long id) {
         Vehicle v = mine(id);
         if (vehicles.countActiveBookings(id) > 0) {
             throw new ConflictException(v.getRegistrationNumber() + " is on a trip that has not finished yet.");
         }
+        if (cityCars != null) {
+            cityCars.release(v); // a City car stops taking City rides first
+        }
+        v.setCityDriverId(null);
+        v.setMode(Vehicle.Mode.OFF);
         v.setActive(false);
         return vehicles.save(v);
     }
 
+    /** Back in use, doing Travel trips; the owner can move it to City rides from there. */
     @Transactional
     public Vehicle activate(Long id) {
         Vehicle v = mine(id);
+        if (!v.isActive()) {
+            v.setMode(Vehicle.Mode.TRAVEL);
+        }
         v.setActive(true);
         return vehicles.save(v);
     }

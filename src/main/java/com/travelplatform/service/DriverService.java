@@ -38,6 +38,13 @@ public class DriverService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.repository.OwnerRepository ownerRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.VehicleRepository vehicleRepository;
+
+    void setVehicleRepository(com.travelplatform.repository.VehicleRepository vehicleRepository) {
+        this.vehicleRepository = vehicleRepository;
+    }
+
     /** Trip dates are Indian calendar days. Not final so tests can fix "today". */
     private java.time.Clock clock = java.time.Clock.system(java.time.ZoneId.of("Asia/Kolkata"));
 
@@ -250,6 +257,7 @@ public class DriverService {
             throw new RuntimeException("This ride offer has expired");
         }
 
+        attachCityCar(booking, driverId);
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         if (dispatchService != null) {
             dispatchService.markMatched(booking); // out of the queue, driver busy, once this commits
@@ -266,6 +274,27 @@ public class DriverService {
         notificationService.notifyTripAccepted(updated, driver);
 
         return mapToResponse(updated);
+    }
+
+    /**
+     * A travels owner's driver taking a City ride takes it in their City car (V35): the booking
+     * names that car, so the car's fare, plate and no_vehicle_overlap all follow it. Refused when
+     * the car is away on a Travel trip today, which the matching normally sees first.
+     */
+    private void attachCityCar(TravelBooking booking, Long driverId) {
+        if (booking.getServiceMode() != TravelBooking.ServiceMode.CITY || vehicleRepository == null
+                || booking.getVehicleId() != null) {
+            return;
+        }
+        vehicleRepository.findByCityDriverId(driverId)
+                .filter(car -> car.getMode() == com.travelplatform.entity.Vehicle.Mode.CITY && car.isActive())
+                .ifPresent(car -> {
+                    if (vehicleRepository.countOverlappingActiveBookings(car.getId(), booking.getFromDate(),
+                            booking.getToDate(), booking.getId()) > 0) {
+                        throw new RuntimeException("Your City car is on a Travel trip today, so you cannot take City rides until it is back");
+                    }
+                    booking.setVehicleId(car.getId());
+                });
     }
 
     /**

@@ -45,6 +45,13 @@ public class DriverLedgerService {
     private final DriverRepository driverRepository;
     private final CityService cityService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private OwnerLedgerService ownerLedger;
+
+    void setOwnerLedger(OwnerLedgerService ownerLedger) {
+        this.ownerLedger = ownerLedger;
+    }
+
     public DriverLedgerService(DriverLedgerRepository ledger, DriverRepository driverRepository, CityService cityService) {
         this.ledger = ledger;
         this.driverRepository = driverRepository;
@@ -68,6 +75,10 @@ public class DriverLedgerService {
             return;
         }
         Driver driver = driverRepository.findById(booking.getDriverId()).orElse(null);
+        if (driver != null && driver.getFleet() == Driver.Fleet.OWNER_FLEET && ownerLedger != null) {
+            ownerLedger.recordCompletedRide(booking, fare, driver); // an owner's City car: the owner's money (V35)
+            return;
+        }
         if (driver == null || driver.getFleet() != Driver.Fleet.INDEPENDENT) {
             return;
         }
