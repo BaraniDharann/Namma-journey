@@ -164,6 +164,19 @@ export default function AdminOwnerDetail() {
                   )}
                 </>
               )}
+              {o.autoChecks && (
+                <div style={{ marginTop: 12 }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, margin: '0 0 6px' }}>Automatic checks (advisory)</p>
+                  {o.autoChecks.split(' | ').map((line) => {
+                    const ok = /^(Aadhaar|PAN) (PASS|REVIEW)/.test(line)
+                    return (
+                      <p key={line} style={{ fontSize: 12, margin: '0 0 4px', color: ok ? '#15803d' : '#b91c1c' }}>
+                        {ok ? '✅' : '❌'} {line}
+                      </p>
+                    )
+                  })}
+                </div>
+              )}
             </Panel>
 
             <Panel span={12} title="Documents">

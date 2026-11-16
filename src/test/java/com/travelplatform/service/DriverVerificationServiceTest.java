@@ -53,6 +53,7 @@ class DriverVerificationServiceTest {
         service = new DriverVerificationService();
         ReflectionTestUtils.setField(service, "driverRepository", drivers);
         ReflectionTestUtils.setField(service, "fileStorageService", files);
+        ReflectionTestUtils.setField(service, "documentChecker", TestDocs.passing());
         ReflectionTestUtils.setField(service, "notificationService", notifications);
         ReflectionTestUtils.setField(service, "ownerService", ownerService);
         ReflectionTestUtils.setField(service, "dispatcher", dispatcher);

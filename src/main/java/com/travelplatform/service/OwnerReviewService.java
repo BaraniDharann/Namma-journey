@@ -99,7 +99,7 @@ public class OwnerReviewService {
                 new AdminOwnerDetail.Documents(sign(o.getRegistrationDocPath()), sign(o.getPanDocPath()),
                         sign(o.getAadhaarDocPath())),
                 qr, checks, allVerified(checks) && o.getStatus() == OwnerStatus.PENDING_REVIEW,
-                o.getBusCommissionPercent());
+                o.getBusCommissionPercent(), o.getDocCheckNotes());
     }
 
     @Transactional

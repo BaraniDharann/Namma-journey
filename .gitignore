@@ -80,3 +80,6 @@ osrm-data/
 # Server SSH keys (AWS key pairs). Anyone holding one controls the server: never commit them.
 *.pem
 *.ppk
+
+# Real identity documents used as local test fixtures - never commit
+sample document/

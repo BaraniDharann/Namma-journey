@@ -57,7 +57,7 @@ class AadhaarQrVerifierTest {
         assertEquals(AadhaarSecureQr.Status.UNREADABLE,
                 verifier.verifyImage("%PDF-1.7".getBytes(StandardCharsets.US_ASCII)).status());
         assertEquals(AadhaarSecureQr.Status.UNREADABLE, verifier.verifyImage(new byte[0]).status());
-        assertEquals(AadhaarSecureQr.Status.UNREADABLE, verifier.verifyImage(null).status());
+        assertEquals(AadhaarSecureQr.Status.UNREADABLE, verifier.verifyImage((byte[]) null).status());
     }
 
     @Test

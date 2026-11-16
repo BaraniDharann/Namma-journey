@@ -81,15 +81,21 @@ public class DriverAutoApprovalService {
             return;
         }
 
-        // City-ride drivers are approved automatically and never wait for an owner: owners only see
-        // the drivers they add themselves. What the checks notice is kept in the log for the record.
-        List<String> problems = DriverApplicationChecks.problems(d);
-        verificationService.approve(driverId, null);
-        if (problems.isEmpty()) {
-            log.info("Driver {} approved automatically", driverId);
-        } else {
-            log.warn("Driver {} approved automatically; checks noted: {}", driverId, String.join("; ", problems));
+        // City-ride drivers never wait for an owner: owners only see the drivers they add themselves.
+        // But only an Aadhaar proven genuine (UIDAI signature, number and name matching) and a form
+        // with no problems is approved without a person; anything else is left for the admin.
+        List<String> problems = new java.util.ArrayList<>(DriverApplicationChecks.problems(d));
+        if (!IdentityDocumentChecker.Outcome.PASS.name().equals(d.getDocCheck())) {
+            problems.add("Aadhaar not verified (" + (d.getDocCheck() == null ? "never checked" : d.getDocCheck()) + ")");
         }
+        if (!problems.isEmpty()) {
+            d.setAutoApproveAt(null);
+            driverRepository.save(d);
+            log.warn("Driver {} held for the admin, not approved automatically: {}", driverId, String.join("; ", problems));
+            return;
+        }
+        verificationService.approve(driverId, null);
+        log.info("Driver {} approved automatically", driverId);
     }
 
     /**

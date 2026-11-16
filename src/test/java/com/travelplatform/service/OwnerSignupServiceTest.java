@@ -69,14 +69,23 @@ class OwnerSignupServiceTest {
         });
         when(files.storeImage(any(), eq("owners"), anyString()))
                 .thenAnswer(i -> "/uploads/owners/" + i.getArgument(2) + "_x.jpg");
-        when(verifier.verifyImage(any())).thenReturn(VALID_QR);
+        when(verifier.verifyImage(any(byte[].class))).thenReturn(VALID_QR);
 
         service = new OwnerSignupService();
         ReflectionTestUtils.setField(service, "ownerRepository", owners);
         ReflectionTestUtils.setField(service, "cityRepository", cities);
         ReflectionTestUtils.setField(service, "aadhaarQrRepository", qrs);
         ReflectionTestUtils.setField(service, "fileStorageService", files);
-        ReflectionTestUtils.setField(service, "aadhaarQrVerifier", verifier);
+        IdentityDocumentChecker checker = mock(IdentityDocumentChecker.class);
+        // The checker reads the QR through the verifier, so the tests below keep stubbing the verifier.
+        when(checker.aadhaar(any(), any(), any())).thenAnswer(i -> {
+            AadhaarSecureQr.Result q = verifier.verifyImage((byte[]) i.getArgument(0));
+            return new IdentityDocumentChecker.Result(IdentityDocumentChecker.Outcome.REVIEW, null,
+                    java.util.List.of("QR: " + q.status()), q);
+        });
+        when(checker.pan(any(), any())).thenReturn(new IdentityDocumentChecker.Result(
+                IdentityDocumentChecker.Outcome.REVIEW, null, java.util.List.of("PAN colours: yes"), null));
+        ReflectionTestUtils.setField(service, "documentChecker", checker);
         ReflectionTestUtils.setField(service, "emailService", emails);
     }
 
@@ -210,7 +219,7 @@ class OwnerSignupServiceTest {
         assertRefused(f -> f.setAadhaarDoc(img("aadhaarDoc", new byte[5 * 1024 * 1024 + 1])), "5 MB");
 
         verify(files, never()).storeImage(any(), anyString(), anyString());
-        verify(verifier, never()).verifyImage(any());
+        verify(verifier, never()).verifyImage(any(byte[].class));
         verify(owners, never()).save(any());
     }
 
@@ -314,7 +323,7 @@ class OwnerSignupServiceTest {
         assertEquals("/uploads/owners/pan_x.jpg", o.getPanDocPath());
         assertEquals("/uploads/owners/registration_old.jpg", o.getRegistrationDocPath());
         assertEquals("/uploads/owners/aadhaar_old.jpg", o.getAadhaarDocPath());
-        verify(verifier, never()).verifyImage(any());
+        verify(verifier, never()).verifyImage(any(byte[].class));
         verify(qrs, never()).save(any());
     }
 
@@ -371,7 +380,7 @@ class OwnerSignupServiceTest {
     @Test
     @DisplayName("an Aadhaar photo whose QR cannot be read still signs up - the admin falls back to the app")
     void signupSucceedsWhenAadhaarQrUnreadable() {
-        when(verifier.verifyImage(any())).thenReturn(AadhaarSecureQr.Result.of(AadhaarSecureQr.Status.UNREADABLE));
+        when(verifier.verifyImage(any(byte[].class))).thenReturn(AadhaarSecureQr.Result.of(AadhaarSecureQr.Status.UNREADABLE));
 
         service.signup(form());
 

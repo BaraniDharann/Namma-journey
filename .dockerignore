@@ -25,3 +25,6 @@ playwright-tests
 loadtest
 monitoring
 docs
+
+# Real identity documents (encrypted test fixtures) never go into an image
+sample document

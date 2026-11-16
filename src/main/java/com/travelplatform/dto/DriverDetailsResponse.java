@@ -41,6 +41,9 @@ public class DriverDetailsResponse {
     private String fleet;
     private String verificationStatus;
     private String rejectionReason;
+    /** The automatic Aadhaar check (V36): PASS, REVIEW or null (never checked), and what it found. */
+    private String docCheck;
+    private String docCheckNotes;
     private String rcPhoto;
     private java.time.LocalDateTime submittedAt;
     /** Minutes until automatic approval (V24); null when the owner decides this one. */
@@ -79,6 +82,8 @@ public class DriverDetailsResponse {
         this.fleet = driver.getFleet() == null ? null : driver.getFleet().name();
         this.verificationStatus = driver.getVerificationStatus() == null ? null : driver.getVerificationStatus().name();
         this.rejectionReason = driver.getRejectionReason();
+        this.docCheck = driver.getDocCheck();
+        this.docCheckNotes = driver.getDocCheckNotes();
         this.rcPhoto = sign.apply(driver.getRcPhoto());
         this.submittedAt = driver.getSubmittedAt();
         this.defaultVehicleId = driver.getDefaultVehicleId();

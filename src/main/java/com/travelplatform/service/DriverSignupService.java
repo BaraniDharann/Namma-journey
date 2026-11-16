@@ -60,6 +60,12 @@ public class DriverSignupService {
     private AfterCommitDispatcher dispatcher;
     @Autowired
     private NotificationService notificationService;
+    @Autowired
+    private IdentityDocumentChecker documentChecker;
+    // Lazy: approving goes through the same service the owner and admin use.
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private DriverVerificationService verificationService;
 
     /**
      * One transaction: an unverified conflicting signup is deleted and the new row saved together, so a
@@ -90,8 +96,8 @@ public class DriverSignupService {
             throw new IllegalArgumentException("Invalid Indian mobile number");
         }
         String aadhaarNumber = f.getAadhaarNumber().replaceAll("\\s+", "");
-        if (!AADHAAR.matcher(aadhaarNumber).matches()) {
-            throw new IllegalArgumentException("Invalid Aadhaar number");
+        if (!AADHAAR.matcher(aadhaarNumber).matches() || !DriverApplicationChecks.validAadhaar(aadhaarNumber)) {
+            throw new IllegalArgumentException("Aadhaar number is not valid - check the 12 digits");
         }
         String email = f.getEmail().trim().toLowerCase(Locale.ROOT);
         String licence = f.getLicenseNumber().trim().toUpperCase(Locale.ROOT);
@@ -112,6 +118,14 @@ public class DriverSignupService {
         conflict(driverRepository.findByVehicleKey(plateKey(driver.getVehicleNumber())),
                 "Vehicle number already registered", replaced);
 
+        // The Aadhaar is checked before anything is stored: a fake, unreadable or mismatched card
+        // gets no account at all, and the person is told what to fix.
+        IdentityDocumentChecker.Result doc = documentChecker.aadhaar(bytes(aadhaar), aadhaarNumber, f.getName());
+        if (doc.rejected()) {
+            log.info("Driver signup refused at the Aadhaar check: {}", doc.summary());
+            throw new IllegalArgumentException(doc.reason());
+        }
+
         // Files before the DB write, as in AdminDriverService: a disk failure must not leave a half-made driver.
         // These are identity documents on a public endpoint, so whatever was stored is removed again
         // if a later file is refused or the save fails (e.g. a race on a unique index).
@@ -120,7 +134,7 @@ public class DriverSignupService {
         try {
             driver.setPhoto(store(photo, "photo", stored));
             driver.setLicensePhoto(store(license, "license", stored));
-            driver.setAadhaarPhoto(store(aadhaar, "aadhaar", stored));
+            driver.setAadhaarPhoto(store(DocumentImages.storable(aadhaar, doc.pdfPassword()), "aadhaar", stored));
             driver.setRcPhoto(store(rc, "rc", stored));
 
             driver.setName(f.getName().trim());
@@ -136,6 +150,8 @@ public class DriverSignupService {
             driver.setServesTrip(false);
             driver.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
             driver.setSubmittedAt(LocalDateTime.now());
+            driver.setDocCheck(doc.outcome().name());
+            driver.setDocCheckNotes(doc.summary());
             // Old rows out and flushed first, or the new one would hit the unique indexes they still hold.
             for (Driver old : replaced) {
                 driverRepository.delete(old);
@@ -182,12 +198,19 @@ public class DriverSignupService {
             throw new BadCredentialsException("Invalid or expired OTP");
         }
         driver.setEmailVerified(true);
-        // City-ride drivers are approved automatically once their email is confirmed (the approval
-        // round picks this up within a minute). No owner reviews them, so no owner is notified.
-        if (autoApprove) {
+        // City-ride drivers whose Aadhaar passed the check are approved automatically once their email
+        // is confirmed - straight away, or by the approval round after any configured delay. A card
+        // that was not proven (REVIEW) waits for the admin. No owner reviews them.
+        boolean proven = IdentityDocumentChecker.Outcome.PASS.name().equals(driver.getDocCheck());
+        if (autoApprove && proven) {
             driver.setAutoApproveAt(LocalDateTime.now().plus(autoApproveAfter));
         }
         driverRepository.save(driver);
+        if (autoApprove && proven && autoApproveAfter.isZero()) {
+            verificationService.approve(driver.getId(), null);
+            driver.setVerificationStatus(Driver.Verification.APPROVED);
+            log.info("Driver {} approved on confirming their email: Aadhaar verified", driver.getId());
+        }
 
         String token = jwtUtil.generateToken(driver.getId().toString(), driver.getRole(), driver.getTokenVersion());
         Map<String, Object> response = new HashMap<>();
@@ -271,6 +294,14 @@ public class DriverSignupService {
 
     private static boolean blank(String s) {
         return s == null || s.isBlank();
+    }
+
+    static byte[] bytes(MultipartFile f) {
+        try {
+            return f.getBytes();
+        } catch (java.io.IOException e) {
+            throw new IllegalArgumentException("Could not read the uploaded file. Please try again.");
+        }
     }
 
     private static boolean missing(MultipartFile f) {

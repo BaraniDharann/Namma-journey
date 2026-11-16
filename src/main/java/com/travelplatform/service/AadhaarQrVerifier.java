@@ -87,6 +87,14 @@ public class AadhaarQrVerifier {
                 : AadhaarSecureQr.verify(qrText, uidaiKeys);
     }
 
+    /** Same, for an image already decoded with {@link #decode}. */
+    public AadhaarSecureQr.Result verifyDecoded(BufferedImage img) {
+        String qrText = img == null ? null : readQr(img);
+        return qrText == null
+                ? AadhaarSecureQr.Result.of(AadhaarSecureQr.Status.UNREADABLE)
+                : AadhaarSecureQr.verify(qrText, uidaiKeys);
+    }
+
     private static String readQr(byte[] image) {
         if (image == null || image.length == 0) {
             return null;
@@ -95,6 +103,10 @@ public class AadhaarQrVerifier {
         if (img == null) {
             return null; // not an image ImageIO can read (a PDF, HEIC, ...), or absurdly large
         }
+        return readQr(img);
+    }
+
+    private static String readQr(BufferedImage img) {
         LuminanceSource source = new BufferedImageLuminanceSource(img);
         // Hybrid copes with uneven lighting in phone photos; global with flat scans.
         for (BinaryBitmap bitmap : List.of(new BinaryBitmap(new HybridBinarizer(source)),
@@ -113,7 +125,7 @@ public class AadhaarQrVerifier {
      * few-KB PNG can declare a raster of gigabytes. Big photos are subsampled to about
      * {@link #MAX_DECODE_SIDE} px on the long side - still far more than a card's QR needs.
      */
-    private static BufferedImage decode(byte[] image) {
+    static BufferedImage decode(byte[] image) {
         try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(image))) {
             Iterator<ImageReader> readers = in == null ? null : ImageIO.getImageReaders(in);
             if (readers == null || !readers.hasNext()) {

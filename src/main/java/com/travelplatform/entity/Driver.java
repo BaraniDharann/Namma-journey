@@ -141,6 +141,16 @@ public class Driver {
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
 
+    /**
+     * What {@link com.travelplatform.service.IdentityDocumentChecker} found on the Aadhaar (V36):
+     * PASS or REVIEW. Null for drivers from before the check. Only PASS is approved automatically.
+     */
+    @Column(name = "doc_check", length = 10)
+    private String docCheck;
+
+    @Column(name = "doc_check_notes", length = 500)
+    private String docCheckNotes;
+
     /** Registration certificate scan; sensitive, so served by signed link only. */
     @Column(name = "rc_photo", length = 1000)
     private String rcPhoto;
