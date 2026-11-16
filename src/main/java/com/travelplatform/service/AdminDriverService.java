@@ -34,6 +34,9 @@ public class AdminDriverService {
     @Autowired
     private FileStorageService fileStorageService;
 
+    @Autowired
+    private IdentityDocumentChecker documentChecker;
+
     // The matching engine's copy of driver state; absent in tests that build this service by hand.
     @Autowired(required = false)
     private com.travelplatform.service.dispatch.DriverStateUpdates driverStates;
@@ -102,6 +105,19 @@ public class AdminDriverService {
         }
         requirePlateFree(plateCheck.getVehicleNumber(), null);
 
+        // An owner cannot add a driver on a fake, edited or someone else's Aadhaar: the card is
+        // checked (UIDAI signature, number, name) before any file is written or row saved.
+        if (!DriverApplicationChecks.validAadhaar(aadhaarNumber)) {
+            throw new IllegalArgumentException("Aadhaar number is not valid - check the 12 digits");
+        }
+        IdentityDocumentChecker.Result doc = documentChecker.aadhaar(
+                aadhaarPhoto == null || aadhaarPhoto.isEmpty() ? null : DriverSignupService.bytes(aadhaarPhoto),
+                aadhaarNumber, name);
+        if (doc.rejected()) {
+            log.info("Owner {} could not add a driver: Aadhaar check failed ({})", ownerId, doc.summary());
+            throw new IllegalArgumentException(doc.reason());
+        }
+
         // File IO happens BEFORE the @Transactional block — disk hiccups must not roll back
         // a successful DB insert, and a DB rollback must not orphan written files.
         java.util.List<String> stored = new java.util.ArrayList<>();
@@ -110,10 +126,10 @@ public class AdminDriverService {
         try {
             String photoUrl = store(photo, "photo", stored);
             String licensePhotoUrl = store(licensePhoto, "license", stored);
-            String aadhaarPhotoUrl = store(aadhaarPhoto, "aadhaar", stored);
+            String aadhaarPhotoUrl = store(DocumentImages.storable(aadhaarPhoto, doc.pdfPassword()), "aadhaar", stored);
             driver = persistDriver(
                     name, mobile, email, licenseNumber, aadhaarNumber,
-                    photoUrl, licensePhotoUrl, aadhaarPhotoUrl, generatedPassword, vehicle, ownerId, defaultVehicleId);
+                    photoUrl, licensePhotoUrl, aadhaarPhotoUrl, generatedPassword, vehicle, ownerId, defaultVehicleId, doc);
         } catch (RuntimeException e) {
             // Identity scans must not outlive a driver that was never saved.
             for (String path : stored) {
@@ -166,7 +182,8 @@ public class AdminDriverService {
     private Driver persistDriver(String name, String mobile, String email, String licenseNumber,
                                    String aadhaarNumber, String photoUrl, String licensePhotoUrl,
                                    String aadhaarPhotoUrl, String generatedPassword,
-                                   com.travelplatform.dto.VehicleRequest vehicle, Long ownerId, Long defaultVehicleId) {
+                                   com.travelplatform.dto.VehicleRequest vehicle, Long ownerId, Long defaultVehicleId,
+                                   IdentityDocumentChecker.Result doc) {
         Driver driver = new Driver();
         driver.setName(name);
         driver.setMobile(mobile);
@@ -186,6 +203,8 @@ public class AdminDriverService {
         driver.setDefaultVehicleId(defaultVehicleId);
         driver.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
         driver.setSubmittedAt(java.time.LocalDateTime.now());
+        driver.setDocCheck(doc.outcome().name());
+        driver.setDocCheckNotes(doc.summary());
         DriverVehicles.apply(driver, vehicle);
         // A new owner-fleet driver takes Trips; City rides start only when the owner pairs them with a City car (V35).
         driver.setServesCity(false);

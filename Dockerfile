@@ -16,6 +16,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 
+# UIDAI's public Secure QR signing certificates: Aadhaar uploads are checked against these offline.
+# DS-06 (2026-2029) signs current e-Aadhaars; the older two cover earlier cards. A server .env may
+# still override the list.
+COPY certs/ /app/certs/
+ENV AADHAAR_QR_CERTIFICATES=/app/certs/uidai_ds06_2026.cer,/app/certs/uidai_prod_cdup.cer,/app/certs/uidai_12_06_18_cer.cer
+
 # Run unprivileged. A container process running as root shares uid 0 with the host, so any
 # container escape or writable bind mount starts from full privilege.
 RUN useradd --system --uid 10001 --no-create-home appuser \

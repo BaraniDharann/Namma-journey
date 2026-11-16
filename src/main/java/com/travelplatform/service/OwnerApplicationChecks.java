@@ -40,6 +40,11 @@ public final class OwnerApplicationChecks {
         return com.travelplatform.security.FieldEncryption.keyedHash("pan", normalisePan(raw));
     }
 
+    /** Same idea as {@link #panHash}: finds a second account on one Aadhaar without storing the number. */
+    public static String aadhaarHash(String raw) {
+        return com.travelplatform.security.FieldEncryption.keyedHash("aadhaar", raw.replaceAll("\\D", ""));
+    }
+
     public static String maskPan(String pan) {
         return pan == null || pan.length() < 5 ? null : "XXXXX" + pan.substring(pan.length() - 5);
     }

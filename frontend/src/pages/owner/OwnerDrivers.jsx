@@ -509,14 +509,14 @@ function DriverList({ independent = false, vehicles = [], hasIndependentTab = fa
   )
 }
 
-function UploadTile({ label, icon, file, onChange }) {
+function UploadTile({ label, icon, file, onChange, accept = 'image/*' }) {
   return (
     <div>
       <span style={labelStyle}>{label}</span>
       <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, height: 100, borderRadius: 14, cursor: 'pointer', border: `2px dashed ${file ? 'var(--pc-brand)' : 'var(--pc-line)'}`, background: file ? 'var(--pc-brand-soft)' : 'var(--pc-wash)', color: file ? 'var(--pc-brand-deep)' : 'var(--pc-muted)', transition: 'all 0.15s' }}>
         <Icon name={file ? 'check' : icon} size={22} />
         <span style={{ fontSize: 11, fontWeight: file ? 700 : 500, color: file ? 'var(--pc-brand-deep)' : 'var(--pc-ink-2)' }}>{file ? file.name.slice(0, 14) + '...' : 'Click to upload'}</span>
-        <input type="file" accept="image/*" aria-label={label} style={{ display: 'none' }} onChange={onChange} />
+        <input type="file" accept={accept} aria-label={label} style={{ display: 'none' }} onChange={onChange} />
       </label>
     </div>
   )
@@ -616,10 +616,16 @@ export default function OwnerDrivers() {
                   </div>
                 )}
               </Panel>
-              <Panel span={12} title="Photo Uploads" meta="optional">
+              <Panel span={12} title="Photo Uploads" meta="Aadhaar required">
+                <p style={{ fontSize: 13, margin: '0 0 12px', color: 'var(--text-muted, #6b7280)' }}>
+                  The driver's Aadhaar is checked with UIDAI's digital signature: upload their e-Aadhaar PDF (the
+                  password is not needed) or a photo of the side with the big QR code, and type the name and number
+                  exactly as on the card. Fake or edited cards are refused.
+                </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12 }}>
                   {[['photo', 'user', 'Driver Photo'], ['licensePhoto', 'card', 'License Photo'], ['aadhaarPhoto', 'shield', 'Aadhaar Photo']].map(([key, icon, label]) => (
-                    <UploadTile key={key} label={label} icon={icon} file={files[key]} onChange={e => setFiles(p => ({ ...p, [key]: e.target.files[0] }))} />
+                    <UploadTile key={key} label={label} icon={icon} file={files[key]}
+                      accept={key === 'aadhaarPhoto' ? 'image/*,application/pdf' : 'image/*'} onChange={e => setFiles(p => ({ ...p, [key]: e.target.files[0] }))} />
                   ))}
                 </div>
               </Panel>

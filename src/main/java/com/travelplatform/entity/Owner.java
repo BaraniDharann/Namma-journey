@@ -110,8 +110,18 @@ public class Owner {
     @JsonIgnore
     private String panHash;
 
+    /** Keyed hash of the full Aadhaar number (V36), so one Aadhaar holds one owner account. */
+    @Column(name = "aadhaar_hash", length = 64)
+    @JsonIgnore
+    private String aadhaarHash;
+
     @Column(name = "aadhaar_last4", length = 4)
     private String aadhaarLast4;
+
+    /** What the automatic Aadhaar and PAN checks found (V36), for the admin. Advisory only. */
+    @Column(name = "doc_check_notes", length = 1000)
+    @JsonIgnore
+    private String docCheckNotes;
 
     @Column(name = "aadhaar_consent_at")
     private LocalDateTime aadhaarConsentAt;

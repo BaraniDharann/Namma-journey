@@ -23,6 +23,8 @@ public interface OwnerRepository extends JpaRepository<Owner, Long> {
 
     Optional<Owner> findByPanHash(String panHash);
 
+    Optional<Owner> findByAadhaarHash(String aadhaarHash);
+
     List<Owner> findByStatusOrderBySubmittedAtAsc(OwnerStatus status);
 
     /** Pending applications past the reminder cutoff that have not been reminded about yet. */

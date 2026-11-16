@@ -16,6 +16,7 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -69,6 +70,7 @@ class DriverAutoApprovalTest {
         driver.setVehicleNumber("TN01AB1234");
         driver.setLicenseNumber("TN01 20190001234");
         driver.setAadhaarNumber(validAadhaar());
+        driver.setDocCheck("PASS");
         when(drivers.findById(12L)).thenReturn(Optional.of(driver));
     }
 
@@ -114,15 +116,29 @@ class DriverAutoApprovalTest {
     }
 
     @Test
-    @DisplayName("A failed check is only logged: City-ride drivers are approved without an owner's review")
-    void approvedEvenWhenACheckNotesSomething() {
+    @DisplayName("A failed form check is no longer waved through: held for the admin, not approved")
+    void heldWhenACheckFails() {
         driver.setAadhaarNumber("234123412340".equals(validAadhaar()) ? "234123412341" : "234123412340");
 
         service.autoApproveOne(12L);
 
-        verify(verification).approve(12L, null);
-        verify(drivers, never()).holdAutoApproval(anyLong(), any());
-        verify(alerts, never()).send(any(), any(), any());
+        verify(verification, never()).approve(anyLong(), any());
+        assertNull(driver.getAutoApproveAt());
+        verify(drivers).save(driver);
+    }
+
+    @Test
+    @DisplayName("Aadhaar only REVIEW (signature not checked) or never checked: held, not approved")
+    void heldWhenAadhaarNotProven() {
+        for (String check : new String[] {"REVIEW", null}) {
+            driver.setDocCheck(check);
+            driver.setAutoApproveAt(LocalDateTime.now().minusMinutes(1));
+
+            service.autoApproveOne(12L);
+
+            verify(verification, never()).approve(anyLong(), any());
+            assertNull(driver.getAutoApproveAt());
+        }
     }
 
     @Test

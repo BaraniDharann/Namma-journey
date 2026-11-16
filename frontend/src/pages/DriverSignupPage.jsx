@@ -136,9 +136,15 @@ export default function DriverSignupPage() {
                 onChange={(e) => setIds({ ...ids, aadhaarNumber: e.target.value.replace(/\D/g, '') })} required />
             </Field>
             <div className="pc" style={{ background: 'none', marginBottom: 16 }}>
+              <p style={{ fontSize: 13, margin: '0 0 12px', color: 'var(--text-muted, #6b7280)' }}>
+                Your Aadhaar is checked with UIDAI's digital signature. Best: the e-Aadhaar PDF from
+                myaadhaar.uidai.gov.in (no need to remove its password). Or a clear photo of the side with the big
+                QR code. Type your name exactly as printed on it.
+              </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12 }}>
                 {DOCUMENTS.map((d) => (
                   <DocTile key={d.key} label={d.label} icon={d.icon} file={files[d.key]} missing={!!error && !files[d.key]}
+                    accept={d.key === 'aadhaarPhoto' ? 'image/*,application/pdf' : 'image/*'}
                     onChange={(f) => setFiles((p) => ({ ...p, [d.key]: f }))} />
                 ))}
               </div>

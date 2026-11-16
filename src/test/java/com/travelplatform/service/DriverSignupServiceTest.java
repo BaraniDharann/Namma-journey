@@ -64,6 +64,8 @@ class DriverSignupServiceTest {
         ReflectionTestUtils.setField(service, "driverRepository", drivers);
         ReflectionTestUtils.setField(service, "passwordEncoder", encoder);
         ReflectionTestUtils.setField(service, "fileStorageService", files);
+        ReflectionTestUtils.setField(service, "documentChecker", TestDocs.passing());
+        ReflectionTestUtils.setField(service, "verificationService", mock(DriverVerificationService.class));
         ReflectionTestUtils.setField(service, "otpService", otp);
         ReflectionTestUtils.setField(service, "jwtUtil", jwt);
         ReflectionTestUtils.setField(service, "dispatcher", dispatcher);
@@ -77,7 +79,7 @@ class DriverSignupServiceTest {
         f.setEmail("ravi@x.com");
         f.setPassword("longenough");
         f.setLicenseNumber("DL-1");
-        f.setAadhaarNumber("123412341234");
+        f.setAadhaarNumber(TestDocs.VALID_AADHAAR);
         f.setVehicleType("AUTO");
         f.setVehicleNumber("ka 01 ab 1234");
         f.setVehicleModel("Bajaj");
@@ -130,7 +132,7 @@ class DriverSignupServiceTest {
         assertEquals("License number already registered", refusal());
         when(drivers.findByLicenseNumber(anyString())).thenReturn(Optional.empty());
 
-        when(drivers.findByAadhaarNumber("123412341234")).thenReturn(Optional.of(verified));
+        when(drivers.findByAadhaarNumber(TestDocs.VALID_AADHAAR)).thenReturn(Optional.of(verified));
         assertEquals("Aadhaar number already registered", refusal());
         when(drivers.findByAadhaarNumber(anyString())).thenReturn(Optional.empty());
 
@@ -208,15 +210,15 @@ class DriverSignupServiceTest {
     void aadhaarMustBeTwelveDigitsAndSpacesAreStripped() {
         DriverSelfSignupForm bad = form();
         bad.setAadhaarNumber("1234 5678");
-        assertEquals("Invalid Aadhaar number",
+        assertEquals("Aadhaar number is not valid - check the 12 digits",
                 assertThrows(IllegalArgumentException.class, () -> signup(bad)).getMessage());
 
         DriverSelfSignupForm ok = form();
-        ok.setAadhaarNumber("1234 5678 9012");
+        ok.setAadhaarNumber(TestDocs.VALID_AADHAAR.substring(0, 4) + " " + TestDocs.VALID_AADHAAR.substring(4, 8) + " " + TestDocs.VALID_AADHAAR.substring(8));
         signup(ok);
         ArgumentCaptor<Driver> saved = ArgumentCaptor.forClass(Driver.class);
         verify(drivers).save(saved.capture());
-        assertEquals("123456789012", saved.getValue().getAadhaarNumber());
+        assertEquals(TestDocs.VALID_AADHAAR, saved.getValue().getAadhaarNumber());
     }
 
     @Test
@@ -294,12 +296,57 @@ class DriverSignupServiceTest {
         d.setEmail("ravi@x.com");
         d.setFleet(Driver.Fleet.INDEPENDENT);
         d.setEmailVerified(false);
+        d.setDocCheck("PASS");
         when(drivers.findByEmail("ravi@x.com")).thenReturn(Optional.of(d));
         return d;
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Aadhaar proven at signup: approved the moment the email is confirmed")
+    void verifyEmailApprovesAProvenDriverAtOnce() {
+        DriverVerificationService verification = mock(DriverVerificationService.class);
+        ReflectionTestUtils.setField(service, "verificationService", verification);
+        pending();
+        when(otp.verifyOtp("ravi@x.com", "123456")).thenReturn(true);
+
+        service.verifyEmail("ravi@x.com", "123456");
+
+        verify(verification).approve(7L, null);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("Aadhaar not proven (REVIEW): email confirmed, but no automatic approval - the admin decides")
+    void verifyEmailHoldsAnUnprovenDriver() {
+        DriverVerificationService verification = mock(DriverVerificationService.class);
+        ReflectionTestUtils.setField(service, "verificationService", verification);
+        Driver d = pending();
+        d.setDocCheck("REVIEW");
+        when(otp.verifyOtp("ravi@x.com", "123456")).thenReturn(true);
+
+        service.verifyEmail("ravi@x.com", "123456");
+
+        assertTrue(d.isEmailVerified());
+        assertNull(d.getAutoApproveAt());
+        verify(verification, never()).approve(anyLong(), any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("Fake or mismatched Aadhaar: refused with the checker's reason; nothing stored, nothing saved, no code sent")
+    void signupRefusedWhenAadhaarCheckFails() {
+        ReflectionTestUtils.setField(service, "documentChecker",
+                TestDocs.rejecting("This Aadhaar failed UIDAI's digital signature check"));
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> signup(form()));
+
+        assertEquals("This Aadhaar failed UIDAI's digital signature check", e.getMessage());
+        verify(files, never()).storeFile(any(), anyString());
+        verify(drivers, never()).save(any());
+        verify(otp, never()).sendOtp(anyString());
+    }
+
+    @Test
     void verifyEmailIssuesToken() {
+        ReflectionTestUtils.setField(service, "verificationService", mock(DriverVerificationService.class));
         Driver d = pending();
         when(otp.verifyOtp("ravi@x.com", "123456")).thenReturn(true);
         when(jwt.generateToken(eq("7"), anyString(), anyLong())).thenReturn("tok");

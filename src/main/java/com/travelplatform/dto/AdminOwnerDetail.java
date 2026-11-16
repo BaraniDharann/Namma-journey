@@ -19,7 +19,9 @@ public record AdminOwnerDetail(Long id, String ownerCode, OwnerStatus status, St
                                LocalDateTime reviewBy, boolean overdue, String rejectionReason,
                                boolean mustChangePassword, Documents documents, AadhaarQr aadhaarQr,
                                Map<OwnerVerificationCheck.Type, Check> checks, boolean canApprove,
-                               java.math.BigDecimal busCommissionPercent) {
+                               java.math.BigDecimal busCommissionPercent,
+                               /* What the automatic Aadhaar / PAN checks found; advisory. */
+                               String autoChecks) {
 
     public record Documents(String registration, String pan, String aadhaar) {
     }

@@ -159,6 +159,14 @@ function ApplicationCard({ app, tab, busy, onApprove, onReject, onView }) {
         ))}
       </div>
 
+      <p style={{ marginTop: 12, fontSize: 13, color: app.docCheck === 'PASS' ? '#15803d' : '#b45309' }}>
+        <strong>Aadhaar check:</strong>{' '}
+        {app.docCheck === 'PASS' ? '✅ UIDAI signature verified, number and name match'
+          : app.docCheck === 'REVIEW' ? '⚠️ Not proven (signature not checked) - verify the card yourself'
+            : '⚠️ Never checked - verify the card yourself'}
+        {app.docCheckNotes && <span style={{ display: 'block', fontSize: 12, color: 'var(--pc-ink-2)' }}>{app.docCheckNotes}</span>}
+      </p>
+
       {tab === 'REJECTED' && app.rejectionReason && (
         <p style={{ marginTop: 12, fontSize: 13, color: 'var(--pc-ink-2)' }}><strong>Reason given:</strong> {app.rejectionReason}</p>
       )}

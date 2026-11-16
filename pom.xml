@@ -255,6 +255,12 @@
             <artifactId>javase</artifactId>
             <version>3.5.3</version>
         </dependency>
+        <!-- Renders an uploaded e-Aadhaar / e-PAN PDF to an image for the document checks. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
 
         <!-- Reads the JPEG 2000 photo inside an Aadhaar Secure QR, so the admin's browser can show
              it as a JPEG (AadhaarPhotoConverter). An ImageIO plugin; nothing calls it directly. -->

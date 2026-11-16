@@ -41,6 +41,8 @@ public class DriverVerificationService {
     // Optional so hand-built tests need not supply it; drops the 60 s approval memo on a decision.
     @Autowired(required = false)
     private DriverService driverService;
+    @Autowired
+    private IdentityDocumentChecker documentChecker;
 
     /** Only INDEPENDENT drivers ever go through review, and only once they have confirmed their email. */
     @Transactional(readOnly = true)
@@ -126,6 +128,14 @@ public class DriverVerificationService {
         if (missing(photo) && missing(license) && missing(aadhaar) && missing(rc)) {
             throw new IllegalArgumentException("Upload at least one document");
         }
+        // A new Aadhaar goes through the same check as at signup, before anything is stored.
+        IdentityDocumentChecker.Result doc = null;
+        if (!missing(aadhaar)) {
+            doc = documentChecker.aadhaar(DriverSignupService.bytes(aadhaar), d.getAadhaarNumber(), d.getName());
+            if (doc.rejected()) {
+                throw new IllegalArgumentException(doc.reason());
+            }
+        }
 
         // Same order as sign-up: files first, then the row. New files are removed if anything fails
         // or the transaction rolls back; the replaced ones are removed only after the commit.
@@ -145,7 +155,7 @@ public class DriverVerificationService {
             }
             if (!missing(aadhaar)) {
                 replaced.add(newAadhaar);
-                newAadhaar = store(aadhaar, "aadhaar", stored);
+                newAadhaar = store(DocumentImages.storable(aadhaar, doc == null ? null : doc.pdfPassword()), "aadhaar", stored);
             }
             if (!missing(rc)) {
                 replaced.add(newRc);
@@ -166,6 +176,15 @@ public class DriverVerificationService {
         d.setVerificationStatus(Driver.Verification.UNDER_REVIEW);
         d.setRejectionReason(null);
         d.setSubmittedAt(now);
+        if (doc != null) {
+            d.setDocCheck(doc.outcome().name());
+            d.setDocCheckNotes(doc.summary());
+            // A City-ride driver whose new card is proven goes back to automatic approval.
+            if (doc.outcome() == IdentityDocumentChecker.Outcome.PASS && d.getFleet() == Driver.Fleet.INDEPENDENT) {
+                d.setAutoApproveAt(now);
+            }
+            driverRepository.save(d);
+        }
         dispatcher.dispatch("cleanup", () -> deleteAll(replaced));
         notificationService.notifyDriverApplication(d, true);
         return ownerService.mapToDriverDetails(d);

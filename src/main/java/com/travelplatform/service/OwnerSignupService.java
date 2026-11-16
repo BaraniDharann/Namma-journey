@@ -55,7 +55,7 @@ public class OwnerSignupService {
     private FileStorageService fileStorageService;
 
     @Autowired
-    private AadhaarQrVerifier aadhaarQrVerifier;
+    private IdentityDocumentChecker documentChecker;
 
     @Autowired
     private EmailService emailService;
@@ -199,10 +199,39 @@ public class OwnerSignupService {
                     ownerRepository.saveAndFlush(other);
                 });
 
-        // Read before storing: storeImage re-compresses, which can blur a QR past reading.
-        AadhaarSecureQr.Result qr = present(form.getAadhaarDoc())
-                ? aadhaarQrVerifier.verifyImage(bytes(form.getAadhaarDoc()))
-                : null;
+        // One Aadhaar, one owner account - released by a rejected application in the same way as PAN.
+        String aadhaarHash = OwnerApplicationChecks.aadhaarHash(form.getAadhaarNumber());
+        ownerRepository.findByAadhaarHash(aadhaarHash)
+                .filter(other -> !other.getId().equals(owner.getId()))
+                .ifPresent(other -> {
+                    if (other.getStatus() != OwnerStatus.REJECTED) {
+                        throw new IllegalArgumentException("This Aadhaar is already registered to another owner");
+                    }
+                    other.setAadhaarHash(null);
+                    ownerRepository.saveAndFlush(other);
+                });
+
+        // Read before storing: storeImage re-compresses, which can blur a QR past reading. The
+        // results only inform the admin, who approves every owner; they do not refuse the form.
+        AadhaarSecureQr.Result qr = null;
+        String aadhaarPdfPassword = null;
+        List<String> autoChecks = new java.util.ArrayList<>();
+        if (present(form.getAadhaarDoc())) {
+            IdentityDocumentChecker.Result a = documentChecker.aadhaar(bytes(form.getAadhaarDoc()),
+                    form.getAadhaarNumber(), contactName);
+            qr = a.qr() != null ? a.qr() : AadhaarSecureQr.Result.of(AadhaarSecureQr.Status.UNREADABLE);
+            aadhaarPdfPassword = a.pdfPassword();
+            autoChecks.add("Aadhaar " + a.outcome() + ": " + a.summary());
+        }
+        if (present(form.getPanDoc())) {
+            IdentityDocumentChecker.Result p = documentChecker.pan(bytes(form.getPanDoc()), pan);
+            autoChecks.add("PAN " + p.outcome() + ": " + p.summary());
+        }
+        if (!autoChecks.isEmpty()) {
+            String notes = String.join(" | ", autoChecks);
+            owner.setDocCheckNotes(notes.length() <= 1000 ? notes : notes.substring(0, 997) + "...");
+        }
+        owner.setAadhaarHash(aadhaarHash);
 
         owner.setEmail(email);
         owner.setTravelsName(travelsName);
@@ -224,10 +253,10 @@ public class OwnerSignupService {
             owner.setRegistrationDocPath(fileStorageService.storeImage(form.getRegistrationDoc(), "owners", "registration"));
         }
         if (present(form.getPanDoc())) {
-            owner.setPanDocPath(fileStorageService.storeImage(form.getPanDoc(), "owners", "pan"));
+            owner.setPanDocPath(fileStorageService.storeImage(DocumentImages.storable(form.getPanDoc()), "owners", "pan"));
         }
         if (present(form.getAadhaarDoc())) {
-            owner.setAadhaarDocPath(fileStorageService.storeImage(form.getAadhaarDoc(), "owners", "aadhaar"));
+            owner.setAadhaarDocPath(fileStorageService.storeImage(DocumentImages.storable(form.getAadhaarDoc(), aadhaarPdfPassword), "owners", "aadhaar"));
         }
         return qr;
     }
