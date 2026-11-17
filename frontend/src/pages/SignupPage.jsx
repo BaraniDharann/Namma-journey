@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { sendOtp, userSignup } from '../utils/api'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
+import { takeReturn, USER_HOME } from '../utils/returnTo'
 
 export default function SignupPage() {
   const [step, setStep] = useState(1)
@@ -42,7 +43,7 @@ export default function SignupPage() {
       for (const [key, value] of searchParams.entries()) {
         if (key !== 'redirect') redirectParams.set(key, value)
       }
-      const redirectUrl = redirect ? `${redirect}${redirectParams.toString() ? '?' + redirectParams.toString() : ''}` : '/user/dashboard'
+      const redirectUrl = redirect ? `${redirect}${redirectParams.toString() ? '?' + redirectParams.toString() : ''}` : (takeReturn() || USER_HOME)
       navigate(redirectUrl)
     } catch (err) {
       setError(err.response?.data?.error || 'Signup failed. Please try again.')

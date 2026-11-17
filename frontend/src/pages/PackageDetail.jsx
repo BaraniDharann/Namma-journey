@@ -165,7 +165,7 @@ export default function PackageDetail() {
               <div style={{ background: '#fff', borderRadius: 14, padding: 24, marginBottom: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <h3 style={{ fontSize: 17, fontWeight: 800, color: '#0F172A', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>🗓️ Day-wise Itinerary</h3>
                 {pkg.itinerary.map((day, i) => (
-                  <div key={i} style={{ marginBottom: 20, padding: '16px 18px', background: '#f8fafc', borderRadius: 12, borderLeft: `3px solid ${color}` }}>
+                  <div key={i} style={{ marginBottom: 20, padding: '16px 18px', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
                     <span style={{ fontWeight: 700, color, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Day {day.day}</span>
                     <div style={{ fontWeight: 700, color: '#0F172A', fontSize: 16, marginTop: 4, marginBottom: 4 }}>{day.title}</div>
                     {day.description && <p style={{ color: '#64748b', fontSize: 14, marginBottom: 8, lineHeight: 1.6 }}>{day.description}</p>}

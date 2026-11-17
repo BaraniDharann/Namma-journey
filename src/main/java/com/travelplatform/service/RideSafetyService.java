@@ -148,7 +148,7 @@ public class RideSafetyService {
         text.append("📍 ").append(escapeHtml(booking.getFromPlace()))
                 .append(" → ").append(escapeHtml(booking.getToPlace())).append("\n\n");
         text.append("Check the vehicle number before you get in. Track the car in the app: ")
-                .append(props.getPublicBaseUrl()).append("/user/bookings");
+                .append(props.getPublicBaseUrl()).append("/user/bookings?track=").append(booking.getId());
         dispatcher.dispatch("telegram", () -> telegram.sendMessage(chatId, text.toString(), List.of()));
     }
 

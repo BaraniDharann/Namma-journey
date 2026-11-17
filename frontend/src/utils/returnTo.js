@@ -3,6 +3,9 @@
 
 const KEY = 'nj_return_to'
 
+/** Where a traveller lands after signing in or signing up: straight onto booking a ride. */
+export const USER_HOME = '/user/bookings/new'
+
 export const safePath = (p) => (typeof p === 'string' && p.startsWith('/') && !p.startsWith('//') && !p.startsWith('/\\') ? p : null)
 
 export function rememberReturn(path) {

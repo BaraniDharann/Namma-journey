@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./styles/journey.css";
 @import "./styles/postcard.css";
+@import "./styles/ride.css";
 @import "./styles/celebrate.css";
 @import "./styles/dispatch.css";
 @import "./styles/windshield.css";
@@ -10,7 +11,7 @@
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Nunito Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: #ffffff;
   color: #1e293b;
   overflow-x: hidden;
@@ -20,14 +21,6 @@ body {
 
 /* ── Typography ── */
 .font-display { font-family: 'Poppins', sans-serif; }
-
-/* ── Brand gradient ── */
-.gradient-text {
-  background: linear-gradient(135deg, #f97316, #ea580c);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
 
 /* ── Buttons ── */
 .btn-primary {
@@ -102,7 +95,7 @@ body {
   width: 100%;
   transition: all 0.2s ease;
   outline: none;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Nunito Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   min-height: 44px;
 }
 .input-field:focus { border-color: #f97316; background: #fff; box-shadow: 0 0 0 3px rgba(249,115,22,0.1); }
@@ -210,7 +203,6 @@ body {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
-@keyframes bounceIn { 0% { opacity: 0; transform: scale(0.3); } 50% { opacity: 1; transform: scale(1.05); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }
 @keyframes ripple { 0% { transform: scale(1); opacity: 0.4; } 100% { transform: scale(2.5); opacity: 0; } }
 @keyframes countUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes glowPulse { 0%, 100% { box-shadow: 0 0 5px rgba(249,115,22,0.2); } 50% { box-shadow: 0 0 20px rgba(249,115,22,0.4); } }
@@ -227,7 +219,6 @@ body {
 .animate-fadeInScale { animation: fadeInScale 0.4s ease forwards; }
 .animate-slideUp { animation: slideUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
 .animate-float { animation: float 3s ease-in-out infinite; }
-.animate-bounceIn { animation: bounceIn 0.6s cubic-bezier(0.68,-0.55,0.27,1.55) forwards; }
 .animate-countUp { animation: countUp 0.5s ease forwards; }
 
 /* ── Staggered children animation ── */
@@ -238,38 +229,6 @@ body {
 .stagger-children > *:nth-child(4) { animation-delay: 0.24s; }
 .stagger-children > *:nth-child(5) { animation-delay: 0.32s; }
 .stagger-children > *:nth-child(6) { animation-delay: 0.4s; }
-
-/* ── Enhanced stat card ── */
-.stat-card-enhanced {
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(226,232,240,0.6);
-  border-radius: 20px;
-  padding: 24px;
-  transition: all 0.35s cubic-bezier(0.16,1,0.3,1);
-  position: relative;
-  overflow: hidden;
-  /* Same reasoning as .stat-card: a long currency figure has no space to wrap at, so on a
-     narrow card (2-up mobile grid) it gets clipped by overflow:hidden above instead of
-     wrapping onto a second line. This lets it wrap. */
-  overflow-wrap: anywhere;
-}
-.stat-card-enhanced::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: var(--accent-color, #f97316);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.4s ease;
-}
-.stat-card-enhanced:hover::before { transform: scaleX(1); }
-.stat-card-enhanced:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.08);
-  border-color: var(--accent-color, #f97316);
-}
 
 /* ── Dashboard hero banner ── */
 .dashboard-hero {
@@ -356,37 +315,6 @@ body {
   padding: 14px;
 }
 
-/* ── Quick action card enhanced ── */
-.quick-action-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  text-decoration: none;
-  transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
-  position: relative;
-  overflow: hidden;
-  min-height: 44px;
-}
-.quick-action-item::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 3px;
-  background: var(--action-color, #f97316);
-  transform: scaleY(0);
-  transition: transform 0.3s ease;
-}
-.quick-action-item:hover {
-  transform: translateX(4px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-  border-color: var(--action-color, #f97316);
-}
-.quick-action-item:hover::before { transform: scaleY(1); }
-
 /* ── Animated gradient background ── */
 .gradient-bg-animated {
   background: linear-gradient(-45deg, #fff7ed, #eff6ff, #f5f3ff, #f0fdf4);
@@ -398,12 +326,6 @@ body {
 .glow-online {
   animation: glowPulse 2s ease-in-out infinite;
   border-radius: 20px;
-}
-
-/* ── Number counter effect ── */
-.number-pop {
-  display: inline-block;
-  animation: bounceIn 0.5s cubic-bezier(0.68,-0.55,0.27,1.55) forwards;
 }
 
 /* ── Floating particles decoration ── */
@@ -626,34 +548,6 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-.notification-item {
-  padding: 0.875rem 1rem;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  cursor: pointer;
-  transition: background 0.15s;
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-}
-
-.notification-item:hover {
-  background: rgba(255,255,255,0.05);
-}
-
-.notification-item.unread {
-  background: rgba(249,115,22,0.05);
-  border-left: 3px solid #f97316;
-}
-
-.notification-unread-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  min-width: 0.5rem;
-  border-radius: 999px;
-  background: #f97316;
-  margin-top: 0.4rem;
-}
-
 .notification-content {
   flex: 1;
   min-width: 0;
@@ -719,7 +613,6 @@ body {
   .driver-image-row { grid-template-columns: repeat(2, 1fr) !important; }
   .review-stats-grid { grid-template-columns: 1fr !important; }
   .lg-panel { display: flex !important; }
-  .stat-card-enhanced:hover { transform: translateY(-3px); }
   .glass-card:hover { transform: translateY(-1px); }
 }
 
@@ -757,11 +650,8 @@ body {
   .empty-state { padding: 40px 16px; }
   .empty-state .empty-icon { font-size: 2.5rem; }
   .card-responsive { padding: 16px !important; }
-  .stat-card-enhanced { padding: 16px; border-radius: 14px; }
-  .stat-card-enhanced:hover { transform: none; }
   .glass-card:hover { transform: none; }
   .card:hover { transform: none; box-shadow: none; }
-  .quick-action-item:hover { transform: none; }
   .review-stats-grid { grid-template-columns: 1fr !important; }
 }
 
@@ -784,10 +674,6 @@ body {
     grid-template-columns: 1fr 1fr !important;
     gap: 8px !important;
   }
-  .stat-card-enhanced {
-    padding: 14px !important;
-    border-radius: 12px !important;
-  }
   .stat-card { padding: 14px; }
   .dashboard-hero {
     min-height: 110px !important;
@@ -804,7 +690,6 @@ body {
   }
   .owner-image-row { grid-template-columns: 1fr 1fr !important; }
   .glass-card { border-radius: 14px; }
-  .quick-action-item { padding: 10px 12px; }
   .image-grid img { height: 70px; }
   .promo-shimmer img { height: 120px !important; }
   .card { border-radius: 12px; }
@@ -829,11 +714,8 @@ body {
    ═══════════════════════════════════════════════════ */
 
 @media (hover: none) and (pointer: coarse) {
-  .stat-card-enhanced:hover { transform: none; box-shadow: none; }
-  .stat-card-enhanced:hover::before { transform: scaleX(0); }
   .glass-card:hover { transform: none; box-shadow: 0 8px 32px rgba(0,0,0,0.06); }
   .card:hover { box-shadow: none; border-color: #e2e8f0; }
-  .quick-action-item:hover { transform: none; box-shadow: none; }
   .image-showcase:hover img { transform: none; }
   .image-grid img:hover { transform: none; filter: none; }
   .btn-primary:hover { transform: none; box-shadow: none; }
@@ -841,7 +723,6 @@ body {
   .btn-primary:active { opacity: 0.85; }
   .btn-secondary:active { opacity: 0.85; }
   .btn-ghost:active { background: #f1f5f9; }
-  .quick-action-item:active { background: #f1f5f9; }
   .sidebar-link:active { background: #fff7ed; }
   .card:active { border-color: #cbd5e1; }
 }

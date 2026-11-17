@@ -83,3 +83,4 @@ osrm-data/
 
 # Real identity documents used as local test fixtures - never commit
 sample document/
+*.aadhaar.enc

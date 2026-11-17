@@ -1,0 +1,254 @@
+/* Live ride card (ActiveRideCard) and the live map sheet (RideTrackerSheet).
+   Phone: a bar across the bottom, map sheet full screen. Wider: a card bottom-right, map centred. */
+
+.ar-card {
+  position: fixed;
+  z-index: 60;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--pc-rail, #0f3d3e);
+  color: #fff;
+  border-radius: 20px;
+  padding: 12px 12px 10px;
+  box-shadow: 0 24px 48px -20px rgba(15, 42, 43, .7), 0 2px 6px rgba(15, 42, 43, .25);
+  font-family: inherit;
+}
+@media (min-width: 720px) {
+  .ar-card { left: auto; right: 24px; bottom: 24px; width: 420px; }
+}
+
+.ar-main {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding-right: 64px; /* room for the call + hide buttons */
+  cursor: pointer;
+  border-radius: 14px;
+}
+.ar-main:focus-visible { outline: 2px solid var(--pc-brand, #f97316); outline-offset: 3px; }
+
+.ar-badge {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: var(--pc-brand, #f97316);
+  color: #fff;
+  position: relative;
+}
+.ar-card.is-search .ar-badge,
+.ar-badge.is-search { background: #2b5f5e; }
+.ar-card.is-live .ar-badge::after,
+.ar-card.is-search .ar-badge::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 17px;
+  border: 2px solid var(--pc-brand, #f97316);
+  opacity: 0;
+  animation: ar-ping 1.8s ease-out infinite;
+}
+.ar-card.is-search .ar-badge::after { border-color: #7fc4bf; }
+@keyframes ar-ping {
+  0% { transform: scale(.9); opacity: .9; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+
+.ar-copy { min-width: 0; display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; }
+.ar-copy b {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ar-copy small {
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--pc-rail-ink-2, #a7c4c2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ar-go {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pc-brand-soft, #ffedd5);
+}
+@media (min-width: 380px) { .ar-go { display: inline-flex; } }
+
+.ar-call, .ar-hide {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  text-decoration: none;
+  border: 0;
+  cursor: pointer;
+}
+.ar-call { top: 16px; right: 44px; width: 36px; height: 36px; background: var(--pc-good, #15803d); }
+.ar-hide { top: 8px; right: 8px; width: 30px; height: 30px; background: rgba(255, 255, 255, .1); }
+.ar-hide:hover { background: rgba(255, 255, 255, .2); }
+.ar-call:focus-visible, .ar-hide:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* the ETA chip is hidden when a call button is there on the narrowest phones */
+.ar-card:has(.ar-call) .ar-main { padding-right: 84px; }
+.ar-card:has(.ar-call) .ar-go { display: none; }
+
+.ar-steps {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 10px 2px 0;
+  border-top: 1px solid rgba(255, 255, 255, .12);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+.ar-steps li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  color: rgba(255, 255, 255, .45);
+  position: relative;
+}
+.ar-steps li + li::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: calc(50% + 13px);
+  width: calc(100% - 22px);
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .15);
+}
+.ar-steps li.is-done::before, .ar-steps li.is-now::before { background: var(--pc-brand, #f97316); }
+.ar-step-ic {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .1);
+}
+.ar-steps li.is-done { color: var(--pc-rail-ink-2, #a7c4c2); }
+.ar-steps li.is-done .ar-step-ic { background: var(--pc-brand, #f97316); color: #fff; }
+.ar-steps li.is-now { color: #fff; }
+.ar-steps li.is-now .ar-step-ic { background: #fff; color: var(--pc-brand-deep, #c2410c); box-shadow: 0 0 0 3px rgba(249, 115, 22, .45); }
+.ar-step-lb { font-size: 10.5px; font-weight: 600; line-height: 1.15; }
+@media (max-width: 359px) { .ar-step-lb { display: none; } .ar-steps li.is-now .ar-step-lb { display: block; } }
+
+/* Tucked away: a small pill above the bottom edge */
+.ar-pill {
+  position: fixed;
+  z-index: 60;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px 0 14px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--pc-rail, #0f3d3e);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  box-shadow: 0 16px 32px -14px rgba(15, 42, 43, .8);
+}
+.ar-pill:focus-visible { outline: 2px solid var(--pc-brand, #f97316); outline-offset: 3px; }
+.ar-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34, 197, 94, .6); animation: ar-dot 1.6s infinite; }
+.ar-pill.is-search .ar-dot { background: #fbbf24; }
+@keyframes ar-dot { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .6); } 100% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); } }
+
+/* Leave room under the last panel so the card never covers it */
+.pc-app[data-role="ROLE_USER"] .pc-main { padding-bottom: 150px; }
+@media (min-width: 720px) { .pc-app[data-role="ROLE_USER"] .pc-main { padding-bottom: 170px; } }
+
+/* ---- the live map sheet ---- */
+.ar-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(15, 42, 43, .55);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.ar-sheet {
+  background: var(--pc-panel, #fff);
+  color: var(--pc-ink, #0f2a2b);
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+@media (min-width: 720px) {
+  .ar-scrim { align-items: center; padding: 24px; }
+  .ar-sheet { width: min(680px, 100%); height: auto; max-height: calc(100dvh - 48px); border-radius: 24px; box-shadow: 0 40px 80px -30px rgba(15, 42, 43, .6); }
+}
+.ar-sheet-hd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px;
+  background: var(--pc-rail, #0f3d3e);
+  color: #fff;
+}
+.ar-x {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.ar-x:focus-visible { outline: 2px solid var(--pc-brand, #f97316); outline-offset: 2px; }
+.ar-sheet-map { flex: 1 1 auto; overflow-y: auto; padding: 14px; -webkit-overflow-scrolling: touch; }
+.ar-driver {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--pc-line, #f1e6d8);
+}
+.ar-driver .ar-copy small { color: var(--pc-muted, #56706f); }
+.ar-driver-av {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  background: var(--pc-brand-soft, #ffedd5);
+  color: var(--pc-brand-deep, #c2410c);
+}
+.ar-driver-av img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ar-card .ar-badge::after, .ar-dot { animation: none; }
+}

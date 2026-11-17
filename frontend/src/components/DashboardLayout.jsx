@@ -13,6 +13,7 @@ import DriverDispatch from './driver/DriverDispatch'
 import useOwnerFleet from '../hooks/useOwnerFleet'
 import { ownerMenu, isBusPath } from '../utils/ownerFleet'
 import { userMenu } from '../utils/userMenu'
+import ActiveRideCard from './ride/ActiveRideCard'
 
 function timeAgo(dateStr) {
   const now = new Date()
@@ -265,6 +266,7 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
             : children}
         </main>
       </div>
+      {role === 'ROLE_USER' && user?.userId && <ActiveRideCard userId={user.userId} />}
       <TipLayer />
     </div>
   )

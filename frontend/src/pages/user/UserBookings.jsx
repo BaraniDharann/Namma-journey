@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import Pagination, { usePagination } from '../../components/Pagination'
-import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
 import { getUserBookings, getUserPayments, deleteBooking, initiatePayment, submitReview, getTripSummary } from '../../utils/api'
 import { usePayOnline } from '../../hooks/usePayOnline'
@@ -267,7 +266,7 @@ export default function UserBookings() {
   const [reviewBooking, setReviewBooking] = useState(null)
   const [payBooking, setPayBooking] = useState(null)
   const [summaryBooking, setSummaryBooking] = useState(null)
-  const [trackingBooking, setTrackingBooking] = useState(null)
+  const navigate = useNavigate()
 
   // bookingId -> payment, so a card knows whether it is paid (hide Pay) and how a cancel is refunded.
   const [paymentsByBooking, setPaymentsByBooking] = useState({})
@@ -370,29 +369,6 @@ export default function UserBookings() {
       {reviewBooking && <ReviewModal booking={reviewBooking} onClose={() => setReviewBooking(null)} onSubmit={handleReview} />}
       {payBooking && <PaymentModal booking={payBooking} onClose={() => setPayBooking(null)} onPay={handlePayment} onPaid={handlePaid} onPayOnline={handleOnlinePayment} />}
       {summaryBooking && <TripSummaryModal booking={summaryBooking} userId={user.userId} onClose={() => setSummaryBooking(null)} />}
-      {trackingBooking && (
-        <div className="modal-overlay" style={overlayStyle}>
-          <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="track-title" style={boxStyle(600)}>
-            <div style={headStyle}>
-              <h3 id="track-title" style={headTitle}>Track Your Driver</h3>
-              <button type="button" onClick={() => setTrackingBooking(null)} aria-label="Close" style={closeBtn}><Icon name="x" size={16} /></button>
-            </div>
-            <div style={{ padding: 20 }}>
-              <LiveTrackingMap
-                bookingId={trackingBooking.bookingId}
-                fromLat={trackingBooking.fromLat}
-                fromLon={trackingBooking.fromLon}
-                toLat={trackingBooking.toLat}
-                toLon={trackingBooking.toLon}
-                fromPlace={trackingBooking.fromPlace}
-                toPlace={trackingBooking.toPlace}
-                travelMembers={trackingBooking.travelMembers}
-                isDriver={false}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       <PageHead title="My Bookings" sub={`${bookings.length} total trips`}>
         <Link to="/user/bookings/new" className="pc-btn"><Icon name="plus" />New Booking</Link>
@@ -445,7 +421,7 @@ export default function UserBookings() {
                 )}
                 {['CONFIRMED', 'STARTED', 'COMPLETED', 'PENDING'].includes(b.status) && (
                   <div className="pc-chips" style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--pc-line)' }}>
-                    {(b.status === 'CONFIRMED' || b.status === 'STARTED') && <button type="button" onClick={() => setTrackingBooking(b)} className="pc-btn pc-btn-teal pc-btn-sm"><Icon name="pin" size={15} />Track</button>}
+                    {(b.status === 'CONFIRMED' || b.status === 'STARTED') && <button type="button" onClick={() => navigate(`/user/bookings?track=${b.bookingId}`)} className="pc-btn pc-btn-teal pc-btn-sm"><Icon name="pin" size={15} />Track</button>}
                     {b.status === 'CONFIRMED' && paymentsByBooking[b.bookingId]?.status !== 'VERIFIED' && <button type="button" onClick={() => setPayBooking(b)} className="pc-btn pc-btn-sm"><Icon name="card" size={15} />Pay</button>}
                     {b.status === 'CONFIRMED' && paymentsByBooking[b.bookingId]?.status === 'VERIFIED' && <StatusPill status="PAID" />}
                     {b.status === 'COMPLETED' && <button type="button" onClick={() => setSummaryBooking(b)} className="pc-btn pc-btn-ghost pc-btn-sm"><Icon name="eye" size={15} />Details</button>}
