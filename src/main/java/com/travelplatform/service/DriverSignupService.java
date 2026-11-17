@@ -113,7 +113,7 @@ public class DriverSignupService {
         conflict(driverRepository.findByMobile(mobile), "Mobile number already registered", replaced);
         conflict(driverRepository.findByEmail(email), "Email already registered", replaced);
         conflict(driverRepository.findByLicenseNumber(licence), "License number already registered", replaced);
-        conflict(driverRepository.findByAadhaarNumber(aadhaarNumber), "Aadhaar number already registered", replaced);
+        conflict(driverRepository.findByAadhaarHash(OwnerApplicationChecks.aadhaarHash(aadhaarNumber)), "Aadhaar number already registered", replaced);
         // Checked on the spaceless plate; the unique index (V16) is the backstop for races.
         conflict(driverRepository.findByVehicleKey(plateKey(driver.getVehicleNumber())),
                 "Vehicle number already registered", replaced);
@@ -142,7 +142,7 @@ public class DriverSignupService {
             driver.setEmail(email);
             driver.setPassword(passwordEncoder.encode(f.getPassword()));
             driver.setLicenseNumber(licence);
-            driver.setAadhaarNumber(aadhaarNumber);
+            driver.setAadhaar(aadhaarNumber);
             driver.setRole("ROLE_DRIVER");
             driver.setStatus(Driver.Status.INACTIVE);
             driver.setFirstLogin(false);

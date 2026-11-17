@@ -42,8 +42,14 @@ class DriverAutoApprovalTest {
     private DriverAutoApprovalService service;
     private Driver driver;
 
+    @org.junit.jupiter.api.AfterEach
+    void forgetKey() {
+        com.travelplatform.security.FieldEncryption.configure(null);
+    }
+
     @BeforeEach
     void setUp() {
+        com.travelplatform.security.FieldEncryption.configure(com.travelplatform.security.FieldEncryptionTest.KEY);
         drivers = mock(DriverRepository.class);
         verification = mock(DriverVerificationService.class);
         alerts = mock(OwnerTelegramAlerts.class);
@@ -69,7 +75,7 @@ class DriverAutoApprovalTest {
         driver.setRcPhoto("r");
         driver.setVehicleNumber("TN01AB1234");
         driver.setLicenseNumber("TN01 20190001234");
-        driver.setAadhaarNumber(validAadhaar());
+        driver.setAadhaar(validAadhaar());
         driver.setDocCheck("PASS");
         when(drivers.findById(12L)).thenReturn(Optional.of(driver));
     }
@@ -118,7 +124,7 @@ class DriverAutoApprovalTest {
     @Test
     @DisplayName("A failed form check is no longer waved through: held for the admin, not approved")
     void heldWhenACheckFails() {
-        driver.setAadhaarNumber("234123412340".equals(validAadhaar()) ? "234123412341" : "234123412340");
+        driver.setLicenseNumber("not a licence");
 
         service.autoApproveOne(12L);
 

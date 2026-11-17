@@ -36,7 +36,7 @@ public final class DriverApplicationChecks {
         if (blank(d.getRcPhoto())) problems.add("vehicle RC photo missing");
         if (blank(d.getVehicleNumber())) problems.add("vehicle number missing");
         if (!validLicence(d.getLicenseNumber())) problems.add("licence number is not in the standard format");
-        if (!validAadhaar(d.getAadhaarNumber())) problems.add("Aadhaar number fails its check digit");
+        if (d.getAadhaarHash() == null) problems.add("Aadhaar number missing");
         if (!d.isEmailVerified()) problems.add("email not confirmed");
         return problems;
     }

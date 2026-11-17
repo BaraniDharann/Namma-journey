@@ -126,7 +126,8 @@ class OwnerSignupServiceTest {
         assertNull(o.getPassword());
         assertNull(o.getOwnerCode());
         assertEquals("ravi@example.com", o.getEmail());
-        assertEquals("ABCDE1234F", o.getPanNumber());
+        assertTrue(com.travelplatform.security.IdNumberHash.matches("ABCDE1234F", o.getPanBcrypt()));
+        assertEquals("XXXXX1234F", o.getPanMasked());
         assertEquals(OwnerApplicationChecks.panHash("ABCDE1234F"), o.getPanHash());
         assertEquals("0124", o.getAadhaarLast4());
         assertEquals("SBIN0001234", o.getBankIfsc());
@@ -248,7 +249,7 @@ class OwnerSignupServiceTest {
         City c = new City();
         c.setId(1L);
         o.setCities(new java.util.HashSet<>(List.of(c)));
-        o.setPanNumber("ABCDE1234F");
+        o.setPanMasked("XXXXX1234F");
         o.setPanHash(OwnerApplicationChecks.panHash("ABCDE1234F"));
         o.setBankAccountHolder("Ravi Kumar");
         o.setBankAccountNumber("12345678906789");

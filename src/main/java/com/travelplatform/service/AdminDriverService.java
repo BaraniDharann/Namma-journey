@@ -100,7 +100,7 @@ public class AdminDriverService {
         if (driverRepository.existsByLicenseNumber(licenseNumber)) {
             throw new IllegalArgumentException("License number already registered");
         }
-        if (driverRepository.existsByAadhaarNumber(aadhaarNumber)) {
+        if (driverRepository.existsByAadhaarHash(OwnerApplicationChecks.aadhaarHash(aadhaarNumber))) {
             throw new IllegalArgumentException("Aadhaar number already registered");
         }
         requirePlateFree(plateCheck.getVehicleNumber(), null);
@@ -190,7 +190,7 @@ public class AdminDriverService {
         driver.setEmail(email);
         driver.setPassword(passwordEncoder.encode(generatedPassword));
         driver.setLicenseNumber(licenseNumber);
-        driver.setAadhaarNumber(aadhaarNumber);
+        driver.setAadhaar(aadhaarNumber);
         driver.setPhoto(photoUrl);
         driver.setLicensePhoto(licensePhotoUrl);
         driver.setAadhaarPhoto(aadhaarPhotoUrl);

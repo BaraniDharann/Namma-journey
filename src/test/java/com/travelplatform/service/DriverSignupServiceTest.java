@@ -40,8 +40,14 @@ class DriverSignupServiceTest {
 
     private final MultipartFile img = new MockMultipartFile("f", "a.jpg", "image/jpeg", new byte[]{1, 2, 3});
 
+    @org.junit.jupiter.api.AfterEach
+    void forgetKey() {
+        com.travelplatform.security.FieldEncryption.configure(null);
+    }
+
     @BeforeEach
     void setUp() {
+        com.travelplatform.security.FieldEncryption.configure(com.travelplatform.security.FieldEncryptionTest.KEY);
         drivers = mock(DriverRepository.class);
         files = mock(FileStorageService.class);
         otp = mock(OtpService.class);
@@ -132,9 +138,9 @@ class DriverSignupServiceTest {
         assertEquals("License number already registered", refusal());
         when(drivers.findByLicenseNumber(anyString())).thenReturn(Optional.empty());
 
-        when(drivers.findByAadhaarNumber(TestDocs.VALID_AADHAAR)).thenReturn(Optional.of(verified));
+        when(drivers.findByAadhaarHash(OwnerApplicationChecks.aadhaarHash(TestDocs.VALID_AADHAAR))).thenReturn(Optional.of(verified));
         assertEquals("Aadhaar number already registered", refusal());
-        when(drivers.findByAadhaarNumber(anyString())).thenReturn(Optional.empty());
+        when(drivers.findByAadhaarHash(anyString())).thenReturn(Optional.empty());
 
         when(drivers.findByVehicleKey("KA01AB1234")).thenReturn(Optional.of(verified));
         assertEquals("Vehicle number already registered", refusal());
@@ -218,7 +224,11 @@ class DriverSignupServiceTest {
         signup(ok);
         ArgumentCaptor<Driver> saved = ArgumentCaptor.forClass(Driver.class);
         verify(drivers).save(saved.capture());
-        assertEquals(TestDocs.VALID_AADHAAR, saved.getValue().getAadhaarNumber());
+        Driver d = saved.getValue();
+        assertEquals(OwnerApplicationChecks.aadhaarHash(TestDocs.VALID_AADHAAR), d.getAadhaarHash());
+        assertEquals(TestDocs.VALID_AADHAAR.substring(8), d.getAadhaarLast4());
+        assertTrue(com.travelplatform.security.IdNumberHash.matches(TestDocs.VALID_AADHAAR, d.getAadhaarBcrypt()));
+        assertNotEquals(TestDocs.VALID_AADHAAR, d.getAadhaarBcrypt());
     }
 
     @Test

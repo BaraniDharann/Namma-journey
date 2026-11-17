@@ -81,7 +81,7 @@ public class UnscopedLookups {
             if (drivers.existsByLicenseNumber(licenseNumber)) {
                 return "License number already registered";
             }
-            if (drivers.existsByAadhaarNumber(aadhaarNumber)) {
+            if (aadhaarNumber != null && drivers.existsByAadhaarHash(OwnerApplicationChecks.aadhaarHash(aadhaarNumber))) {
                 return "Aadhaar number already registered";
             }
             return null;
