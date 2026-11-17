@@ -229,6 +229,7 @@ export const createRazorpayOrder = (userId, bookingId) => api.post(`/user/${user
 export const verifyRazorpayPayment = (userId, bookingId, data) => api.post(`/user/${userId}/bookings/${bookingId}/payment/razorpay/verify`, data).then(res => { invalidateCache('payments'); invalidateCache('bookings'); return res })
 export const getUserPayments = (userId) => cachedGet(`/user/${userId}/payments`)
 /** Uncached and silent: for the background check that celebrates a verified payment. */
+export const pollUserBookings = (userId) => api.get(`/user/${userId}/bookings`, { _silent: true })
 export const pollUserPayments = (userId) => api.get(`/user/${userId}/payments`, { _silent: true })
 export const getTripSummary = (userId, bookingId) => api.get(`/user/${userId}/bookings/${bookingId}/summary`)
 

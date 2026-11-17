@@ -556,7 +556,7 @@ function Shelter() {
       {[22, 300].map((px) => <rect key={px} x={px} y="568" width="9" height="296" fill="#475569" />)}
       <rect x="10" y="556" width="302" height="18" rx="4" fill="#0f766e" />
       <rect x="10" y="574" width="302" height="12" fill="#0b5e58" />
-      <text x="161" y="570" textAnchor="middle" fontFamily="Nunito Sans, Inter, sans-serif" fontWeight="900" fontSize="13" letterSpacing="2" fill="#fff">BUS STOP · SILK BOARD</text>
+      <text x="161" y="570" textAnchor="middle" fontFamily="Nunito Sans, sans-serif" fontWeight="900" fontSize="13" letterSpacing="2" fill="#fff">BUS STOP · SILK BOARD</text>
       <rect x="26" y="586" width="270" height="6" fill="#e0f2fe" opacity=".5" />
       {/* the bench */}
       <rect x="104" y="768" width="168" height="10" rx="3" fill="#92400e" />
@@ -658,8 +658,8 @@ function Bus({ uid, snap }) {
         {/* side advert */}
         <rect x="300" y="196" width="300" height="58" rx="8" fill="#fff" />
         <rect x="300" y="196" width="10" height="58" rx="4" fill="#f97316" />
-        <text x="458" y="222" textAnchor="middle" fontFamily="Nunito Sans, Inter, sans-serif" fontWeight="900" fontSize="18" fill="#ea580c">Namma Journey</text>
-        <text x="458" y="243" textAnchor="middle" fontFamily="Nunito Sans, Inter, sans-serif" fontWeight="700" fontSize="13" fill="#475569">Skip the queue. Ride in minutes.</text>
+        <text x="458" y="222" textAnchor="middle" fontFamily="Nunito Sans, sans-serif" fontWeight="900" fontSize="18" fill="#ea580c">Namma Journey</text>
+        <text x="458" y="243" textAnchor="middle" fontFamily="Nunito Sans, sans-serif" fontWeight="700" fontSize="13" fill="#475569">Skip the queue. Ride in minutes.</text>
 
         <rect x="0" y="210" width="10" height="20" rx="3" fill="#fef9c3" />
         <rect x="812" y="200" width="10" height="34" rx="3" fill="#ef4444" />
@@ -757,7 +757,7 @@ function Car() {
 
 /* ══════════════════  the phone close-up  ══════════════════ */
 
-const PHONE_FONT = 'Nunito Sans, Inter, sans-serif'
+const PHONE_FONT = 'Nunito Sans, sans-serif'
 
 /**
  * Where the close-up sits. Wide screens: on the open road between the bus (gone to
@@ -878,7 +878,7 @@ function SpeechBubble({ text, show, x, y, scale }) {
         <g className="crs-bubble">
           <rect x={-w / 2} y="-34" width={w} height="32" rx="16" fill="#fff" />
           <path d="M-8 -4 L0 9 L8 -4 Z" fill="#fff" />
-          <text y="-13" textAnchor="middle" fontFamily="Nunito Sans, Inter, sans-serif" fontWeight="800" fontSize="14" fill="#0f172a">{text}</text>
+          <text y="-13" textAnchor="middle" fontFamily="Nunito Sans, sans-serif" fontWeight="800" fontSize="14" fill="#0f172a">{text}</text>
         </g>
       </motion.g>
     </g>

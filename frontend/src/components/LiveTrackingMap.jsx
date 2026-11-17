@@ -47,7 +47,7 @@ function MapInstance({ setMap, onUserDrag }) {
 
 export default function LiveTrackingMap({
   bookingId, fromLat, fromLon, toLat, toLon, fromPlace, toPlace,
-  isDriver, driverId, travelMembers,
+  isDriver, driverId, travelMembers, mapHeight = 'min(400px, 55vh)',
 }) {
   const [routeCoords, setRouteCoords] = useState(null)
   const [driverPos, setDriverPos] = useState(null)
@@ -248,10 +248,12 @@ export default function LiveTrackingMap({
           position: 'relative', overflow: 'visible',
         }}>
           <div style={{
-            position: 'absolute', left: 0, top: 0, height: '100%', borderRadius: 2,
-            width: `${progress}%`,
+            position: 'absolute', left: 0, top: 0, height: '100%', width: '100%', borderRadius: 2,
+            // Scaled, not resized: a transform animates on the GPU without re-laying out the row.
+            transform: `scaleX(${Math.max(0, Math.min(100, progress)) / 100})`,
+            transformOrigin: 'left center',
             background: `linear-gradient(90deg, #22c55e, ${vehicle.body})`,
-            transition: 'width 2s linear',
+            transition: 'transform 2s linear',
           }} />
           {driverPos && (
             <div
@@ -290,7 +292,7 @@ export default function LiveTrackingMap({
       )}
 
       {/* Map */}
-      <div style={{ borderRadius: 14, overflow: 'hidden', border: '2px solid #e2e8f0', height: 400, position: 'relative' }}>
+      <div style={{ borderRadius: 14, overflow: 'hidden', border: '2px solid #e2e8f0', height: mapHeight, position: 'relative' }}>
         <MapContainer center={center} zoom={7} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true} zoomControl={false}>
           <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
           <FitBounds bounds={bounds} />

@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { motion } from 'framer-motion'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { CelebrationProvider } from './components/celebrate/Celebration'
+import { rememberReturn, USER_HOME } from './utils/returnTo'
 
 // Lazy load all pages for faster initial load
 const LandingPage     = lazy(() => import('./pages/LandingPage'))
@@ -101,8 +102,14 @@ function PageFade({ children }) {
 
 function ProtectedRoute({ children, role }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return <PageLoader />
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    // A traveller opening a link from Telegram (".../user/bookings?track=...") while signed out
+    // comes back to that exact page after logging in, not to the default landing page.
+    if (role === 'ROLE_USER') rememberReturn(location.pathname + location.search)
+    return <Navigate to="/login" replace />
+  }
   if (role && user.role !== role) return <Navigate to="/" replace />
   return children
 }
@@ -134,7 +141,7 @@ function PreloadRolePages() {
 }
 
 function getDashboard(role) {
-  if (role === 'ROLE_USER')   return '/user/dashboard'
+  if (role === 'ROLE_USER')   return USER_HOME
   if (role === 'ROLE_DRIVER') return '/driver/dashboard'
   if (role === 'ROLE_OWNER')  return '/owner/dashboard'
   if (role === 'ROLE_OWNER_SETUP') return '/owner/change-password'
@@ -150,7 +157,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login"        element={user ? <Navigate to={getDashboard(user.role)} /> : <LoginPage />} />
-        <Route path="/signup"       element={user ? <Navigate to="/user/dashboard" /> : <SignupPage />} />
+        <Route path="/signup"       element={user ? <Navigate to={getDashboard(user.role)} /> : <SignupPage />} />
         <Route path="/driver/login" element={user ? <Navigate to="/driver/dashboard" /> : <DriverLoginPage />} />
         <Route path="/driver/signup" element={user ? <Navigate to="/driver/dashboard" /> : <DriverSignupPage />} />
         <Route path="/owner/login"  element={user ? <Navigate to={getDashboard(user.role)} /> : <OwnerLoginPage />} />

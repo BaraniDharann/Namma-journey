@@ -437,7 +437,7 @@ function NearLayer({ uid, reveal, dest }) {
           <text y="164" textAnchor="middle" fontFamily="Poppins, sans-serif" fontWeight="800" fontSize="34" fill="#ea580c" letterSpacing="-0.5">
             Namma Journey
           </text>
-          <text y="191" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="600" fontSize="13" fill="#475569">
+          <text y="191" textAnchor="middle" fontFamily="Nunito Sans, sans-serif" fontWeight="600" fontSize="13" fill="#475569">
             Book the ride. Keep the memories.
           </text>
         </g>
@@ -447,8 +447,8 @@ function NearLayer({ uid, reveal, dest }) {
       <g transform="translate(3060 304)">
         <path d="M-20 0 V-38 Q-20 -52 0 -52 Q20 -52 20 -38 V0 Z" fill="#fff" stroke="#cbd5e1" />
         <path d="M-20 -34 V-38 Q-20 -52 0 -52 Q20 -52 20 -38 V-34 Z" fill="#f97316" />
-        <text y="-20" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="7" fill="#0f172a">{dest.short.toUpperCase()}</text>
-        <text y="-9" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="800" fontSize="9" fill="#ea580c">2 km</text>
+        <text y="-20" textAnchor="middle" fontFamily="Nunito Sans, sans-serif" fontWeight="700" fontSize="7" fill="#0f172a">{dest.short.toUpperCase()}</text>
+        <text y="-9" textAnchor="middle" fontFamily="Nunito Sans, sans-serif" fontWeight="800" fontSize="9" fill="#ea580c">2 km</text>
       </g>
     </g>
   )
@@ -623,7 +623,7 @@ function Bubble({ text, show, anchor, view }) {
         <g className="rts-bubble">
           <rect x={-w / 2} y="-32" width={w} height="30" rx="15" fill="#fff" />
           <path d={`M${tail - 7} -4 L${tail} 8 L${tail + 7} -4 Z`} fill="#fff" />
-          <text y="-12" textAnchor="middle" fontFamily="Inter, sans-serif" fontWeight="700" fontSize="13" fill="#0f172a">
+          <text y="-12" textAnchor="middle" fontFamily="Nunito Sans, sans-serif" fontWeight="700" fontSize="13" fill="#0f172a">
             {text}
           </text>
         </g>
