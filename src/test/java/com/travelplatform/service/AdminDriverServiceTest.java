@@ -24,8 +24,14 @@ class AdminDriverServiceTest {
     private AdminDriverService service;
     private final MultipartFile img = new MockMultipartFile("f", "a.jpg", "image/jpeg", new byte[]{1});
 
+    @org.junit.jupiter.api.AfterEach
+    void forgetKey() {
+        com.travelplatform.security.FieldEncryption.configure(null);
+    }
+
     @BeforeEach
     void setUp() {
+        com.travelplatform.security.FieldEncryption.configure(com.travelplatform.security.FieldEncryptionTest.KEY);
         drivers = mock(DriverRepository.class);
         files = mock(FileStorageService.class);
         when(files.storeFile(any(), anyString())).thenAnswer(i -> "uploads/drivers/" + i.getArgument(1) + "_x.jpg");

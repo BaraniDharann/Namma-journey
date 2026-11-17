@@ -101,10 +101,19 @@ public class Owner {
     @ToString.Exclude
     private Set<String> serviceAreas = new HashSet<>();
 
-    @Convert(converter = EncryptedStringConverter.class)
-    @Column(name = "pan_number")
+    /* The PAN itself is no longer stored (V37): a bcrypt hash, the keyed pan_hash below for
+       duplicate checks, and the masked form "XXXXX1234F" for screens. */
+    @Column(name = "pan_bcrypt", length = 60)
     @JsonIgnore
-    private String panNumber;
+    private String panBcrypt;
+
+    @Column(name = "pan_masked", length = 10)
+    private String panMasked;
+
+    /** bcrypt of the full Aadhaar number (V37), beside the keyed aadhaar_hash and the last 4. */
+    @Column(name = "aadhaar_bcrypt", length = 60)
+    @JsonIgnore
+    private String aadhaarBcrypt;
 
     @Column(name = "pan_hash", length = 64)
     @JsonIgnore

@@ -92,7 +92,7 @@ public class OwnerSignupService {
         return new com.travelplatform.dto.OwnerResubmitPrefill(o.getTravelsName(), o.getContactName(), o.getEmail(),
                 o.getPhone(), o.getCities().stream().map(City::getId).sorted().toList(),
                 ServiceAreas.normalize(o.getServiceAreas()), o.getBankAccountHolder(),
-                o.getBankIfsc(), o.getBankName(), OwnerApplicationChecks.maskPan(o.getPanNumber()),
+                o.getBankIfsc(), o.getBankName(), o.getPanMasked(),
                 o.getRejectionReason());
     }
 
@@ -232,6 +232,8 @@ public class OwnerSignupService {
             owner.setDocCheckNotes(notes.length() <= 1000 ? notes : notes.substring(0, 997) + "...");
         }
         owner.setAadhaarHash(aadhaarHash);
+        owner.setAadhaarBcrypt(com.travelplatform.security.IdNumberHash.bcrypt(
+                com.travelplatform.security.IdNumberHash.aadhaarDigits(form.getAadhaarNumber())));
 
         owner.setEmail(email);
         owner.setTravelsName(travelsName);
@@ -240,7 +242,8 @@ public class OwnerSignupService {
         owner.setCities(new HashSet<>(cities));
         owner.getServiceAreas().clear();
         owner.getServiceAreas().addAll(areas);
-        owner.setPanNumber(pan);
+        owner.setPanBcrypt(com.travelplatform.security.IdNumberHash.bcrypt(pan));
+        owner.setPanMasked(OwnerApplicationChecks.maskPan(pan));
         owner.setPanHash(panHash);
         owner.setAadhaarLast4(OwnerApplicationChecks.aadhaarLast4(form.getAadhaarNumber()));
         owner.setAadhaarConsentAt(LocalDateTime.now());

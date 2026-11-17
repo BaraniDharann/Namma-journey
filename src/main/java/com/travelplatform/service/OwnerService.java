@@ -269,7 +269,7 @@ public class OwnerService {
         d.setPhoto(driver.getPhoto());
         d.setLicenseNumber(driver.getLicenseNumber());
         d.setLicensePhoto(signedUploadUrls == null ? driver.getLicensePhoto() : signedUploadUrls.signIfSensitive(driver.getLicensePhoto()));
-        d.setAadhaarNumber(driver.getAadhaarNumber());
+        d.setAadhaarNumber(driver.maskedAadhaar());
         d.setAadhaarPhoto(signedUploadUrls == null ? driver.getAadhaarPhoto() : signedUploadUrls.signIfSensitive(driver.getAadhaarPhoto()));
         d.setStatus(driver.getStatus().name());
         d.setRole(driver.getRole());

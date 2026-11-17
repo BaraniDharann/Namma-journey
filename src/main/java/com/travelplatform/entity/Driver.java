@@ -44,8 +44,20 @@ public class Driver {
     @Column(nullable = false, unique = true)
     private String licenseNumber;
     
-    @Column(nullable = false, unique = true)
-    private String aadhaarNumber;
+    /*
+     * The Aadhaar number itself is never stored (V37): only a keyed hash to find a second account
+     * on the same number, a bcrypt hash, and the last 4 digits. Set them together with setAadhaar.
+     */
+    @Column(name = "aadhaar_hash", length = 64, unique = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String aadhaarHash;
+
+    @Column(name = "aadhaar_bcrypt", length = 60)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String aadhaarBcrypt;
+
+    @Column(name = "aadhaar_last4", length = 4)
+    private String aadhaarLast4;
     
     @Column(length = 1000)
     private String photo;
@@ -241,12 +253,23 @@ public class Driver {
         this.licenseNumber = licenseNumber;
     }
 
-    public String getAadhaarNumber() {
-        return aadhaarNumber;
+    /**
+     * Records an Aadhaar number without keeping it: keyed hash, bcrypt hash and last 4 digits.
+     * Needs APP_ENCRYPTION_KEY for the keyed hash.
+     */
+    public void setAadhaar(String rawNumber) {
+        String digits = com.travelplatform.security.IdNumberHash.aadhaarDigits(rawNumber);
+        if (digits == null || digits.length() < 4) {
+            throw new IllegalArgumentException("Aadhaar number is not valid - check the 12 digits");
+        }
+        this.aadhaarHash = com.travelplatform.service.OwnerApplicationChecks.aadhaarHash(digits);
+        this.aadhaarBcrypt = com.travelplatform.security.IdNumberHash.bcrypt(digits);
+        this.aadhaarLast4 = digits.substring(digits.length() - 4);
     }
 
-    public void setAadhaarNumber(String aadhaarNumber) {
-        this.aadhaarNumber = aadhaarNumber;
+    /** "XXXX XXXX 1234", for screens; the full number is not on file. */
+    public String maskedAadhaar() {
+        return com.travelplatform.security.IdNumberHash.maskAadhaar(aadhaarLast4);
     }
 
     public String getPhoto() {

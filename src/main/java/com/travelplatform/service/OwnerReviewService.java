@@ -92,7 +92,7 @@ public class OwnerReviewService {
 
         return new AdminOwnerDetail(o.getId(), o.getOwnerCode(), o.getStatus(), o.getTravelsName(),
                 o.getContactName(), o.getEmail(), o.getPhone(), cityNames(o),
-                OwnerApplicationChecks.maskPan(o.getPanNumber()), o.getAadhaarLast4(), o.getAadhaarConsentAt(),
+                o.getPanMasked(), o.getAadhaarLast4(), o.getAadhaarConsentAt(),
                 o.getBankAccountHolder(), OwnerApplicationChecks.maskAccount(o.getBankAccountNumber()),
                 o.getBankIfsc(), o.getBankName(), o.getUpiId(), o.getSubmittedAt(), reviewBy, overdue,
                 o.getRejectionReason(), o.isMustChangePassword(),

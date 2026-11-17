@@ -61,7 +61,7 @@ class DriverLedgerRepositoryTest {
         d.setMobile("9" + (100000000 + (int) (Math.random() * 899999999)));
         d.setPassword("x");
         d.setLicenseNumber("L-" + UUID.randomUUID());
-        d.setAadhaarNumber(String.valueOf(100000000000L + (long) (Math.random() * 899999999999L)));
+        d.setAadhaar(String.valueOf(100000000000L + (long) (Math.random() * 899999999999L)));
         d.setFleet(Driver.Fleet.INDEPENDENT);
         d.setServesTrip(false);
         d.setVehicleType(com.travelplatform.entity.VehicleType.AUTO);

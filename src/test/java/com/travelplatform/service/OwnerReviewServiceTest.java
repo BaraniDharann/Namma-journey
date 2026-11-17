@@ -75,7 +75,7 @@ class OwnerReviewServiceTest {
         c.setId(1L);
         c.setName("Bengaluru");
         o.setCities(Set.of(c));
-        o.setPanNumber("ABCDE1234F");
+        o.setPanMasked("XXXXX1234F");
         o.setBankAccountNumber("12345678906789");
         o.setAadhaarLast4("0124");
         o.setUpiId("ravi@okaxis");

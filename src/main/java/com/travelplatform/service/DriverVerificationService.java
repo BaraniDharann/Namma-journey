@@ -131,7 +131,7 @@ public class DriverVerificationService {
         // A new Aadhaar goes through the same check as at signup, before anything is stored.
         IdentityDocumentChecker.Result doc = null;
         if (!missing(aadhaar)) {
-            doc = documentChecker.aadhaar(DriverSignupService.bytes(aadhaar), d.getAadhaarNumber(), d.getName());
+            doc = documentChecker.aadhaar(DriverSignupService.bytes(aadhaar), d.getAadhaarLast4(), d.getName());
             if (doc.rejected()) {
                 throw new IllegalArgumentException(doc.reason());
             }

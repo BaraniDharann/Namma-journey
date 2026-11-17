@@ -20,9 +20,9 @@ public interface DriverRepository extends JpaRepository<Driver, Long> {
     boolean existsByMobile(String mobile);
     boolean existsByEmail(String email);
     boolean existsByLicenseNumber(String licenseNumber);
-    boolean existsByAadhaarNumber(String aadhaarNumber);
+    boolean existsByAadhaarHash(String aadhaarHash);
     Optional<Driver> findByLicenseNumber(String licenseNumber);
-    Optional<Driver> findByAadhaarNumber(String aadhaarNumber);
+    Optional<Driver> findByAadhaarHash(String aadhaarHash);
 
     /** The driver holding this plate, compared on its spaceless upper-case key (same key as the V16 unique index). */
     @Query("SELECT d FROM Driver d WHERE UPPER(REPLACE(d.vehicleNumber, ' ', '')) = :key")
