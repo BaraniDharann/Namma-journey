@@ -172,6 +172,36 @@ public class DriverPresenceService {
         return searchLocal(cityId, lat, lon, radiusKm, limit);
     }
 
+    /**
+     * Like {@link #findWithin} for the pickup's own city, plus every other active city whose edge
+     * is within the radius (Phase 3). Each driver is in exactly one city's set, so a driver 1 km
+     * away across a zone border was invisible to a single-city search; this merges the sets,
+     * nearest first, without duplicates.
+     */
+    public List<Nearby> findNear(long cityId, double lat, double lon, double radiusKm, int limit, boolean neighbours) {
+        List<Nearby> own = findWithin(cityId, lat, lon, radiusKm, limit);
+        if (!neighbours || cityService == null) {
+            return own;
+        }
+        List<City> near = cityService.citiesNear(lat, lon, radiusKm);
+        if (near.size() <= 1) {
+            return own;
+        }
+        Map<Long, Nearby> merged = new java.util.LinkedHashMap<>();
+        own.forEach(n -> merged.put(n.driverId(), n));
+        for (City c : near) {
+            if (c.getId() == null || c.getId() == cityId) {
+                continue;
+            }
+            for (Nearby n : findWithin(c.getId(), lat, lon, radiusKm, limit)) {
+                merged.putIfAbsent(n.driverId(), n);
+            }
+        }
+        List<Nearby> all = new ArrayList<>(merged.values());
+        all.sort(Comparator.comparingDouble(Nearby::distanceKm));
+        return all.size() > limit ? List.copyOf(all.subList(0, limit)) : all;
+    }
+
     private Optional<Long> reportRedis(long driverId, double lat, double lon) {
         // SET NX PX: one accepted report per driver per gap, across every instance.
         Boolean accepted = redisTemplate.opsForValue()

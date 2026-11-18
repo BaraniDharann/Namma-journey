@@ -122,6 +122,79 @@ public class DispatchProperties {
         return radiiKm;
     }
 
+    /**
+     * Search radii for a TOWN zone (V38). Drivers are thinner on the ground in a town than a
+     * metro, so the search starts and ends wider; the steps use radius-after-seconds as well.
+     */
+    private List<Double> townRadiiKm = List.of(2.0, 5.0, 8.0);
+
+    /** Also search the zones whose edge is within the current radius, so a border never hides the nearest driver. */
+    private boolean searchNeighbourZones = true;
+
+    /**
+     * Driver quality in the matching cost (Phase 5), in seconds of ETA: a driver who declines half
+     * their offers is scored as if half of accept-penalty-seconds further away; each star below
+     * rating-pivot costs rating-penalty-seconds. Drivers with fewer than quality-min-offers recent
+     * offers are scored on ETA alone, so a new driver is not punished for having no history.
+     */
+    private int acceptPenaltySeconds = 120;
+    private int ratingPenaltySeconds = 60;
+    private double ratingPivot = 4.5;
+    private int qualityMinOffers = 5;
+
+    /** The radii for this kind of zone. */
+    public List<Double> radiiFor(boolean town) {
+        return town ? townRadiiKm : radiiKm;
+    }
+
+    public List<Double> getTownRadiiKm() {
+        return townRadiiKm;
+    }
+
+    public void setTownRadiiKm(List<Double> townRadiiKm) {
+        this.townRadiiKm = townRadiiKm;
+    }
+
+    public boolean isSearchNeighbourZones() {
+        return searchNeighbourZones;
+    }
+
+    public void setSearchNeighbourZones(boolean searchNeighbourZones) {
+        this.searchNeighbourZones = searchNeighbourZones;
+    }
+
+    public int getAcceptPenaltySeconds() {
+        return acceptPenaltySeconds;
+    }
+
+    public void setAcceptPenaltySeconds(int acceptPenaltySeconds) {
+        this.acceptPenaltySeconds = acceptPenaltySeconds;
+    }
+
+    public int getRatingPenaltySeconds() {
+        return ratingPenaltySeconds;
+    }
+
+    public void setRatingPenaltySeconds(int ratingPenaltySeconds) {
+        this.ratingPenaltySeconds = ratingPenaltySeconds;
+    }
+
+    public double getRatingPivot() {
+        return ratingPivot;
+    }
+
+    public void setRatingPivot(double ratingPivot) {
+        this.ratingPivot = ratingPivot;
+    }
+
+    public int getQualityMinOffers() {
+        return qualityMinOffers;
+    }
+
+    public void setQualityMinOffers(int qualityMinOffers) {
+        this.qualityMinOffers = qualityMinOffers;
+    }
+
     public void setRadiiKm(List<Double> radiiKm) {
         this.radiiKm = radiiKm;
     }

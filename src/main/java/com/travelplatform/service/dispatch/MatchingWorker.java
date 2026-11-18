@@ -93,6 +93,14 @@ public class MatchingWorker {
     private final TransactionTemplate tx;
     private final DispatchProperties properties;
 
+    /** Optional so hand-built tests need not supply it; without it a round scores on ETA alone. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DriverQualityService quality;
+
+    void setQuality(DriverQualityService quality) {
+        this.quality = quality;
+    }
+
     private final Set<Long> held = ConcurrentHashMap.newKeySet();
     private final Map<Long, AtomicInteger> waitingGauge = new ConcurrentHashMap<>();
     private final Map<Long, AtomicInteger> candidateGauge = new ConcurrentHashMap<>();
@@ -264,22 +272,27 @@ public class MatchingWorker {
             return;
         }
 
-        // 3. Candidates: nearest drivers in the ride's current radius, then one batched card read.
+        // 3. Candidates: nearest drivers in the ride's current radius - a town's radii are wider -
+        //    in this zone and any zone whose edge is that close, then one batched card read.
+        boolean town = cityService.isTown(cityId);
         Map<UUID, List<DriverPresenceService.Nearby>> nearby = new HashMap<>();
         Set<Long> seen = new LinkedHashSet<>();
         for (RideTicket t : live) {
-            double radius = radiusFor(waitedSeconds(t, nowMs));
+            double radius = radiusFor(waitedSeconds(t, nowMs), town);
             if (radius <= 0) {
                 continue;
             }
             Set<Long> declined = queue.declined(t.bookingId());
             List<DriverPresenceService.Nearby> found = presence
-                    .findWithin(cityId, t.pickup().lat(), t.pickup().lon(), radius, properties.getSearchCount())
+                    .findNear(cityId, t.pickup().lat(), t.pickup().lon(), radius, properties.getSearchCount(),
+                            properties.isSearchNeighbourZones())
                     .stream().filter(n -> !declined.contains(n.driverId())).toList();
             nearby.put(t.bookingId(), found);
             found.forEach(n -> seen.add(n.driverId()));
         }
         Map<Long, DriverCard> cards = seen.isEmpty() ? Map.of() : states.cards(seen);
+        // Reliability on top of ETA (Phase 5): seconds added for drivers who let offers lapse or rate low.
+        Map<Long, Integer> penalty = quality == null || seen.isEmpty() ? Map.of() : quality.penaltySeconds(seen);
 
         List<Edge> edges = new ArrayList<>();
         Map<String, Double> distance = new HashMap<>();
@@ -301,7 +314,8 @@ public class MatchingWorker {
                 if (seconds == null || seconds > properties.getMaxEtaSeconds()) {
                     continue; // no route, or too far by road
                 }
-                edges.add(new Edge(t.bookingId(), n.driverId(), seconds - bonus));
+                edges.add(new Edge(t.bookingId(), n.driverId(),
+                        seconds + penalty.getOrDefault(n.driverId(), 0) - bonus));
                 distance.put(t.bookingId() + "/" + n.driverId(), n.distanceKm());
                 candidates.add(n.driverId());
             }
@@ -436,6 +450,7 @@ public class MatchingWorker {
                 bookings.save(b);
                 notifications.notifyNoDriverNearby(b);
                 Metrics.counter("namma.dispatch.searches", "outcome", "no_driver").increment();
+                DispatchService.zoneSearch(cityId, "no_driver");
                 log.info("City ride {}: no driver matched within {} s, handed to the owner",
                         b.getId(), properties.getSearchTimeoutSeconds());
             }
@@ -454,9 +469,14 @@ public class MatchingWorker {
         return Math.max(0, (nowMs - t.searchStartedEpochMs()) / 1000);
     }
 
-    /** The largest radius whose waiting threshold has passed; 0 when none has. */
+    /** The largest metro radius whose waiting threshold has passed; 0 when none has. */
     double radiusFor(long waitedSeconds) {
-        List<Double> radii = properties.getRadiiKm();
+        return radiusFor(waitedSeconds, false);
+    }
+
+    /** The largest radius for this kind of zone whose waiting threshold has passed; 0 when none has. */
+    double radiusFor(long waitedSeconds, boolean town) {
+        List<Double> radii = properties.radiiFor(town);
         List<Integer> after = properties.getRadiusAfterSeconds();
         double radius = 0;
         for (int i = 0; i < Math.min(radii.size(), after.size()); i++) {

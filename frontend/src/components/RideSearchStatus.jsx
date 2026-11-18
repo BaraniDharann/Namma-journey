@@ -53,6 +53,19 @@ export default function RideSearchStatus({ userId, booking: initial }) {
           <small>{state.text}</small>
         </div>
       </div>
+      {booking.dispatchState === 'NO_DRIVER' && !booking.driver && (
+        // Not a dead end: the same route as a planned Trip, with the places already filled in.
+        <div className="pc-chips" style={{ marginTop: 14 }}>
+          <Link className="pc-btn pc-btn-sm" to={`/user/bookings/new?${new URLSearchParams({
+            from: booking.fromPlace || '', to: booking.toPlace || '',
+            ...(booking.fromLat != null ? { fromLat: booking.fromLat, fromLon: booking.fromLon } : {}),
+            ...(booking.toLat != null ? { toLat: booking.toLat, toLon: booking.toLon } : {}),
+          })}`}>
+            <Icon name="car" size={15} />Book this route as a Trip
+          </Link>
+          <Link className="pc-btn pc-btn-ghost pc-btn-sm" to="/user/bookings"><Icon name="calendar" size={15} />My Bookings</Link>
+        </div>
+      )}
       {booking.driver && booking.driver.mobile && (
         <div className="pc-chips" style={{ marginTop: 14 }}>
           <a className="pc-btn pc-btn-sm" href={`tel:${booking.driver.mobile}`}><Icon name="phone" size={15} />Call {booking.driver.name?.split(' ')[0] || 'driver'}</a>

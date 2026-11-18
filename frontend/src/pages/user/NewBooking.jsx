@@ -4,7 +4,7 @@ import DashboardLayout from '../../components/DashboardLayout'
 import PlaceAutocomplete from '../../components/PlaceAutocomplete'
 import RouteMap from '../../components/RouteMap'
 import { useAuth } from '../../context/AuthContext'
-import { createBooking, getPublicTripRates, getCityFareEstimate, getRoutePreview } from '../../utils/api'
+import { createBooking, getPublicTripRates, getCityFareEstimate, getRoutePreview, getCityAvailability } from '../../utils/api'
 import { CAR_CATEGORIES, categoryLabel, estimateTripPrice } from '../../utils/carCategories'
 import { actionKey } from '../../utils/idempotency'
 import { MobileRequiredPanel, needsMobileNumber } from '../../components/MobileNumberGate'
@@ -106,6 +106,27 @@ export default function NewBooking() {
     return () => { stale = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new route needs new fares
   }, [city, form.fromLat, form.fromLon, form.toLat, form.toLon])
+
+  // Is the pickup in a City-ride area, and who is near it? Asked as soon as the pickup is chosen,
+  // so the rider learns before tapping Book, not from a refused booking.
+  // Kept with the pickup it was asked for, so an answer for an old pickup is never shown.
+  const availKey = city && form.fromLat && form.fromLon ? `${form.fromLat},${form.fromLon}` : null
+  const [availFor, setAvailFor] = useState({ key: null, data: null })
+  useEffect(() => {
+    if (!availKey) return undefined
+    let stale = false
+    const ask = () => getCityAvailability(form.fromLat, form.fromLon)
+      .then((r) => { if (!stale) setAvailFor({ key: availKey, data: r.data }) })
+      .catch(() => { if (!stale) setAvailFor({ key: availKey, data: null }) })
+    ask()
+    // Drivers come and go; keep the counts fresh while the rider decides.
+    const every = setInterval(ask, 20000)
+    return () => { stale = true; clearInterval(every) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- availKey already carries the coordinates
+  }, [availKey])
+  const avail = availFor.key === availKey ? availFor.data : null
+  const outsideAreas = city && avail && avail.available === false
+  const nearFor = (type) => avail?.vehicles?.[type]
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
@@ -355,10 +376,29 @@ export default function NewBooking() {
                         {fare ? inr(fare.fare) : estimate.loading ? '…' : '—'}
                       </span>
                       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--pc-muted)' }}>{full ? 'Too many passengers' : v.blurb}</span>
+                      {!full && avail?.available && nearFor(type) && (
+                        <span style={{ fontSize: 12, fontWeight: 800, color: nearFor(type).drivers > 0 ? 'var(--pc-good)' : 'var(--pc-warn)' }}>
+                          {nearFor(type).drivers > 0
+                            ? `${nearFor(type).drivers} nearby · ~${nearFor(type).etaMinutes} min`
+                            : 'None nearby right now'}
+                        </span>
+                      )}
                     </button>
                   )
                 })}
               </div>
+              {outsideAreas && (
+                <p role="alert" style={{ margin: '12px 0 0', fontSize: 13, fontWeight: 700, color: 'var(--pc-warn)' }}>
+                  City rides don&apos;t run at this pickup yet
+                  {avail.nearestZone ? ` (nearest City-ride area: ${avail.nearestZone}, ${avail.nearestZoneKm} km away)` : ''} —{' '}
+                  <button type="button" onClick={() => set('mode', 'TRIP')} style={{ background: 'none', border: 0, padding: 0, color: 'var(--pc-brand-deep)', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}>book it as a Trip</button>.
+                </p>
+              )}
+              {avail?.available && nearFor(form.vehicleType)?.drivers === 0 && (
+                <p role="status" style={{ margin: '12px 0 0', fontSize: 12.5, color: 'var(--pc-muted)' }}>
+                  No {vehicleLabel(form.vehicleType).toLowerCase()} is free near you right now. You can still book: we keep looking for 2 minutes as drivers come online.
+                </p>
+              )}
               {!form.fromLat || !form.toLat ? (
                 <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--pc-muted)' }}>Pick both places to see the fares.</p>
               ) : estimate.failed ? (
@@ -478,6 +518,12 @@ export default function NewBooking() {
                     <span style={{ color: 'var(--pc-ink-2)' }}>Ride</span>
                     <b>{vehicleLabel(form.vehicleType)} · {form.travelMembers} passenger{Number(form.travelMembers) === 1 ? '' : 's'}</b>
                   </div>
+                  {avail?.available && (
+                    <div className="pc-row" style={row}>
+                      <span style={{ color: 'var(--pc-ink-2)' }}>Area · nearest driver</span>
+                      <b>{avail.zoneName} · {nearFor(form.vehicleType)?.etaMinutes ? `~${nearFor(form.vehicleType).etaMinutes} min away` : 'searching'}</b>
+                    </div>
+                  )}
                   {estimate.data && (
                     <div className="pc-row" style={row}>
                       <span style={{ color: 'var(--pc-ink-2)' }}>Road distance · time</span>
@@ -517,7 +563,7 @@ export default function NewBooking() {
             {(city || form.bookingType !== 'HOUR_BASED') && (
               <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--pc-muted)' }}>The final fare is worked out from the road distance when you confirm.</p>
             )}
-            <button type="submit" disabled={loading || (city ? tooManyFor(form.vehicleType) : !carCategory)} className="pc-btn" style={{ width: '100%', marginTop: 16, minHeight: 48, fontSize: 15 }}>
+            <button type="submit" disabled={loading || (city ? tooManyFor(form.vehicleType) || outsideAreas : !carCategory)} className="pc-btn" style={{ width: '100%', marginTop: 16, minHeight: 48, fontSize: 15 }}>
               {loading ? <><div className="spinner" style={{ width: 18, height: 18 }} /> Calculating route & price...</>
                 : <><Icon name={city ? VEHICLES[form.vehicleType]?.icon : 'check'} />{city ? `Book ${vehicleLabel(form.vehicleType).toLowerCase()} now` : 'Confirm Booking'}</>}
             </button>

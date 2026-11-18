@@ -5,9 +5,10 @@ import PlaceAutocomplete from '../../components/PlaceAutocomplete'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, Empty, Skeleton } from '../../components/dash/ui'
 import { getCities, createCity, updateCity } from '../../utils/api'
+import ZoneHeatmap from '../../components/owner/ZoneHeatmap'
 
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
-const EMPTY = { id: null, name: '', centerName: '', centerLat: null, centerLon: null, radiusKm: '30', commissionPercent: '10', active: true }
+const EMPTY = { id: null, name: '', centerName: '', centerLat: null, centerLon: null, radiusKm: '30', commissionPercent: '10', active: true, kind: 'METRO' }
 
 /** The places City rides are served. A pickup outside every active city can only be booked as a Trip. */
 export default function OwnerCities() {
@@ -15,6 +16,7 @@ export default function OwnerCities() {
   const [draft, setDraft] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [heat, setHeat] = useState(null)
 
   useEffect(() => {
     getCities().then((r) => setCities(r.data || [])).catch(() => setCities([]))
@@ -32,7 +34,7 @@ export default function OwnerCities() {
 
   const save = async () => {
     setSaving(true); setError('')
-    const body = { name: draft.name.trim(), centerLat: draft.centerLat, centerLon: draft.centerLon, radiusKm: radius, commissionPercent: commission, active: draft.active }
+    const body = { name: draft.name.trim(), centerLat: draft.centerLat, centerLon: draft.centerLon, radiusKm: radius, commissionPercent: commission, active: draft.active, kind: draft.kind }
     try {
       const r = draft.id ? await updateCity(draft.id, body) : await createCity(body)
       upsert(r.data)
@@ -56,12 +58,12 @@ export default function OwnerCities() {
 
   const edit = (c) => {
     setError('')
-    setDraft({ id: c.id, name: c.name, centerName: `${c.centerLat.toFixed(4)}, ${c.centerLon.toFixed(4)}`, centerLat: c.centerLat, centerLon: c.centerLon, radiusKm: String(c.radiusKm), commissionPercent: String(c.commissionPercent ?? 10), active: c.active })
+    setDraft({ id: c.id, name: c.name, centerName: `${c.centerLat.toFixed(4)}, ${c.centerLon.toFixed(4)}`, centerLat: c.centerLat, centerLon: c.centerLon, radiusKm: String(c.radiusKm), commissionPercent: String(c.commissionPercent ?? 10), active: c.active, kind: c.kind || 'METRO' })
   }
 
   return (
     <DashboardLayout navItems={OWNER_NAV} role="ROLE_OWNER">
-      <PageHead title="Cities" sub="City rides are only offered where a pickup falls inside one of these. Anywhere else is a Trip.">
+      <PageHead title="Cities" sub="City rides are only offered where a pickup falls inside one of these. A driver choosing their town adds it here automatically. Anywhere else is a Trip.">
         {!draft && <button type="button" className="pc-btn" onClick={() => { setError(''); setDraft({ ...EMPTY }) }}><Icon name="plus" size={16} />Add city</button>}
       </PageHead>
 
@@ -91,6 +93,15 @@ export default function OwnerCities() {
                 value={draft.commissionPercent} style={{ width: '100%' }} onChange={(e) => setDraft((d) => ({ ...d, commissionPercent: e.target.value }))} />
               <small style={{ color: 'var(--pc-muted)', fontSize: 12 }}>Kept from each ride by an independent driver here.</small>
             </div>
+            <div>
+              <label style={labelStyle} htmlFor="city-kind">Type</label>
+              <select id="city-kind" className="input-field" value={draft.kind} style={{ width: '100%' }}
+                onChange={(e) => setDraft((d) => ({ ...d, kind: e.target.value }))}>
+                <option value="METRO">Metro: search 1, 3, then 5 km</option>
+                <option value="TOWN">Town: search 2, 5, then 8 km</option>
+              </select>
+              <small style={{ color: 'var(--pc-muted)', fontSize: 12 }}>Towns have fewer drivers, so the search starts wider.</small>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
             <button type="button" className="pc-btn pc-btn-ghost" disabled={saving} onClick={() => setDraft(null)}>Cancel</button>
@@ -100,6 +111,8 @@ export default function OwnerCities() {
           </div>
         </Panel>
       )}
+
+      {heat && <ZoneHeatmap key={heat.id} city={heat} onClose={() => setHeat(null)} />}
 
       <Panel title="Your cities" meta={cities ? `${cities.filter((c) => c.active).length} active` : undefined}>
         {!cities ? <Skeleton rows={3} /> : cities.length === 0 ? (
@@ -111,11 +124,18 @@ export default function OwnerCities() {
           <div style={{ display: 'grid', gap: 10 }}>
             {cities.map((c) => (
               <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '12px 14px', borderRadius: 12, background: 'var(--pc-wash)', border: '1px solid var(--pc-line)' }}>
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <b style={{ fontSize: 15 }}>{c.name}</b>
-                  <div style={{ fontSize: 13, color: 'var(--pc-muted)' }}>{c.radiusKm} km around {c.centerLat.toFixed(4)}, {c.centerLon.toFixed(4)} · {Number(c.commissionPercent ?? 10)}% commission</div>
+                  <span className="pc-chip" style={{ marginLeft: 8 }}>{c.kind === 'TOWN' ? 'Town' : 'Metro'}</span>
+                  {c.autoCreated && <span className="pc-chip" style={{ marginLeft: 6 }}>Added by a driver</span>}
+                  <div style={{ fontSize: 13, color: 'var(--pc-muted)' }}>
+                    {c.district ? `${c.district}, ${c.state} · ` : ''}{c.radiusKm} km around {c.centerLat.toFixed(4)}, {c.centerLon.toFixed(4)} · {Number(c.commissionPercent ?? 10)}% commission
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  {c.active && (
+                    <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => setHeat(c)}><Icon name="map" size={14} />Live demand</button>
+                  )}
                   <button type="button" className="pc-switch" role="switch" aria-checked={c.active} onClick={() => toggle(c)}>
                     <span className="pc-switch-track" />{c.active ? 'Active' : 'Off'}
                   </button>

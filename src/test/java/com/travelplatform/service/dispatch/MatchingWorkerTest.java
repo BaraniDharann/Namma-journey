@@ -311,6 +311,42 @@ class MatchingWorkerTest {
     }
 
     @Test
+    @DisplayName("a TOWN zone searches 2 km at once, where a metro would wait for 3 km")
+    void townSearchesWiderAtOnce() {
+        when(cityService.isTown(CITY)).thenReturn(true);
+        car(1L, 1.8);
+        TravelBooking r = ride(0, 0);
+
+        round();
+
+        assertEquals(1L, row(r).getDriverId());
+        assertEquals(2.0, worker.radiusFor(0, true));
+        assertEquals(8.0, worker.radiusFor(45, true));
+        assertEquals(1.0, worker.radiusFor(0, false));
+    }
+
+    @Test
+    @DisplayName("a driver who lets offers lapse loses a close call to a reliable one slightly further")
+    void unreliableDriverLosesCloseCall() {
+        DriverQualityService quality = mock(DriverQualityService.class);
+        when(quality.penaltySeconds(anyCollection())).thenAnswer(i -> {
+            java.util.Map<Long, Integer> m = new java.util.HashMap<>();
+            for (Object id : i.<java.util.Collection<?>>getArgument(0)) {
+                m.put((Long) id, ((Long) id) == 1L ? 120 : 0);
+            }
+            return m;
+        });
+        worker.setQuality(quality);
+        car(1L, 0.3); // nearest, but ignores offers
+        car(2L, 0.6); // about 54 s further at 20 km/h
+        TravelBooking r = ride(0, 0);
+
+        round();
+
+        assertEquals(2L, row(r).getDriverId());
+    }
+
+    @Test
     @DisplayName("a driver who declined is never offered that ride again, even as the only one near")
     void declinedDriverNeverReOffered() {
         car(1L, 0.3);

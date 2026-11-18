@@ -172,6 +172,21 @@ public class UserController {
     }
 
     /** Distance, time and the fare in a bike, an auto and a car - shown before a City ride is booked. */
+    // Optional so controller tests need not supply it.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.CityAvailabilityService cityAvailabilityService;
+
+    /**
+     * Before booking a City ride: is this pickup in a zone, and how many free drivers of each
+     * vehicle are near it, with the nearest one's rough pickup time.
+     */
+    @GetMapping("/city-availability")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<java.util.Map<String, Object>> cityAvailability(@RequestParam double lat,
+                                                                          @RequestParam double lon) {
+        return ResponseEntity.ok(cityAvailabilityService.check(lat, lon));
+    }
+
     @GetMapping("/city-fares/estimate")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<java.util.Map<String, Object>> estimateCityFares(

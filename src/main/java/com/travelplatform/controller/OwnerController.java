@@ -162,7 +162,22 @@ public class OwnerController {
         // This endpoint only creates: never trust an id or timestamp from the body.
         city.setId(null);
         city.setCreatedAt(null);
+        // Drawn by the admin: not tied to a directory town, and never treated as driver-made.
+        city.setPlaceId(null);
+        city.setAutoCreated(false);
         return ResponseEntity.ok(cityService.save(city));
+    }
+
+    // Optional so controller tests need not supply it.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.ZoneHeatmapService zoneHeatmapService;
+
+    /** Waiting riders and free drivers per H3 hexagon in one zone, right now. */
+    @GetMapping("/cities/{id}/heatmap")
+    @PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<java.util.Map<String, Object>> cityHeatmap(@PathVariable Long id) {
+        ownerScope.requirePlatform(); // a platform screen (City rides, independent drivers)
+        return ResponseEntity.ok(zoneHeatmapService.heatmap(id));
     }
 
     @PutMapping("/cities/{id}")

@@ -244,6 +244,15 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
+        <!-- Uber H3 hexagon grid: City-ride zone lookup and the supply/demand heatmap (ZoneGrid).
+             Ships native builds for linux-x64/arm64, macOS and Windows; ZoneGrid falls back to the
+             circle scan if the native library cannot load. -->
+        <dependency>
+            <groupId>com.uber</groupId>
+            <artifactId>h3</artifactId>
+            <version>4.1.1</version>
+        </dependency>
+
         <!-- ZXing QR Code Generator -->
         <dependency>
             <groupId>com.google.zxing</groupId>

@@ -46,4 +46,29 @@ public class City {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    public static final String KIND_METRO = "METRO";
+    public static final String KIND_TOWN = "TOWN";
+
+    /** The directory town this zone was made for (V38); null for a zone the admin drew freehand. */
+    @Column(name = "place_id")
+    private Long placeId;
+
+    @Column(length = 60)
+    private String state;
+
+    @Column(length = 80)
+    private String district;
+
+    /** METRO searches 1/3/5 km, TOWN 2/5/8 km (app.dispatch.radii-km / town-radii-km). */
+    @Column(nullable = false, length = 8)
+    private String kind = KIND_METRO;
+
+    /** Made when a driver picked the town, not drawn by the admin. */
+    @Column(name = "auto_created", nullable = false)
+    private boolean autoCreated;
+
+    public boolean isTown() {
+        return KIND_TOWN.equals(kind);
+    }
 }
