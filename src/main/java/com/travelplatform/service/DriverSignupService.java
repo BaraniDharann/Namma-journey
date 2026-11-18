@@ -62,6 +62,9 @@ public class DriverSignupService {
     private NotificationService notificationService;
     @Autowired
     private IdentityDocumentChecker documentChecker;
+    // Optional so hand-built tests need not supply it: where the driver works (V38).
+    @Autowired(required = false)
+    private PlaceService placeService;
     // Lazy: approving goes through the same service the owner and admin use.
     @Autowired
     @org.springframework.context.annotation.Lazy
@@ -161,6 +164,12 @@ public class DriverSignupService {
             }
             saved = driverRepository.save(driver);
             driverRepository.flush();
+            // Where they drive is what puts their town on the City-ride map; a bad choice fails the
+            // whole signup (same transaction), with a message to fix it.
+            if (placeService != null && (f.getHomePlaceId() != null || !blank(f.getHomeTown()))) {
+                placeService.setHomeArea(saved.getId(), new PlaceService.HomeAreaRequest(f.getHomePlaceId(),
+                        f.getHomeState(), f.getHomeDistrict(), f.getHomeTown(), f.getHomeLat(), f.getHomeLon()));
+            }
         } catch (RuntimeException e) {
             deleteFiles(stored);
             throw e;

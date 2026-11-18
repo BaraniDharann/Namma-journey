@@ -618,7 +618,7 @@ export default function OwnerDrivers() {
               </Panel>
               <Panel span={12} title="Photo Uploads" meta="Aadhaar required">
                 <p style={{ fontSize: 13, margin: '0 0 12px', color: 'var(--text-muted, #6b7280)' }}>
-                  The driver's Aadhaar is checked with UIDAI's digital signature: upload their e-Aadhaar PDF (the
+                  The driver&apos;s Aadhaar is checked with UIDAI&apos;s digital signature: upload their e-Aadhaar PDF (the
                   password is not needed) or a photo of the side with the big QR code, and type the name and number
                   exactly as on the card. Fake or edited cards are refused.
                 </p>

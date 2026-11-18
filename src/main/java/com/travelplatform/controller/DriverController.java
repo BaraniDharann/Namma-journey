@@ -263,8 +263,8 @@ public class DriverController {
      */
     @PutMapping("/{driverId}/presence")
     @PreAuthorize(SAME_DRIVER)
-    public ResponseEntity<Void> reportPresence(@PathVariable Long driverId,
-                                               @RequestBody(required = false) Map<String, Double> body) {
+    public ResponseEntity<Map<String, Object>> reportPresence(@PathVariable Long driverId,
+                                                              @RequestBody(required = false) Map<String, Double> body) {
         Double lat = body != null ? body.get("latitude") : null;
         Double lon = body != null ? body.get("longitude") : null;
         if (lat == null || lon == null) {
@@ -272,7 +272,70 @@ public class DriverController {
         }
         driverService.requireApproved(driverId);
         driverPresenceService.report(driverId, lat, lon);
-        return ResponseEntity.noContent().build();
+        // Tell the phone whether it can be found: a driver outside every zone used to get a 204
+        // and believe they were online while no search could see them.
+        Map<String, Object> status = new java.util.LinkedHashMap<>();
+        java.util.Optional<com.travelplatform.entity.City> zone = cityService == null
+                ? java.util.Optional.empty() : cityService.cityFor(lat, lon);
+        status.put("inZone", zone.isPresent());
+        zone.ifPresent(c -> {
+            status.put("zoneId", c.getId());
+            status.put("zoneName", c.getName());
+        });
+        if (zone.isEmpty() && cityService != null) {
+            cityService.nearestCity(lat, lon).ifPresent(c -> status.put("nearestZone", c.getName()));
+        }
+        return ResponseEntity.ok(status);
+    }
+
+    // Optional so controller tests need not supply them.
+    @Autowired(required = false)
+    private com.travelplatform.service.CityService cityService;
+    @Autowired(required = false)
+    private com.travelplatform.service.PlaceService placeService;
+
+    /** Where this driver works: State -> District -> Town, with its City zone. */
+    @GetMapping("/{driverId}/home-area")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<Map<String, Object>> homeArea(@PathVariable Long driverId) {
+        return ResponseEntity.ok(placeService.homeAreaOf(driverId));
+    }
+
+    /** Sets where this driver works; the town's City zone is created if it had none. */
+    @PutMapping("/{driverId}/home-area")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<Map<String, Object>> setHomeArea(@PathVariable Long driverId,
+                                                           @RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> b = body == null ? Map.of() : body;
+        return ResponseEntity.ok(placeService.setHomeArea(driverId, new com.travelplatform.service.PlaceService.HomeAreaRequest(
+                asLong(b.get("placeId")), asString(b.get("state")), asString(b.get("district")), asString(b.get("town")),
+                asDouble(b.get("lat")), asDouble(b.get("lon")))));
+    }
+
+    private static Long asLong(Object v) {
+        if (v instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return v == null || v.toString().isBlank() ? null : Long.valueOf(v.toString());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("That town is not in the list. Choose it again.");
+        }
+    }
+
+    private static Double asDouble(Object v) {
+        if (v instanceof Number n) {
+            return n.doubleValue();
+        }
+        try {
+            return v == null || v.toString().isBlank() ? null : Double.valueOf(v.toString());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Find your town on the map search so we know where it is");
+        }
+    }
+
+    private static String asString(Object v) {
+        return v == null ? null : v.toString();
     }
 
     /** The driver's own City rides / Trips switches. */

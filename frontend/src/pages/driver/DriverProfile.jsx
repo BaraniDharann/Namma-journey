@@ -5,6 +5,7 @@ import { getDriverProfile, toggleDriverAvailability } from '../../utils/api'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Skeleton } from '../../components/dash/ui'
 import EarningsPanel from '../../components/driver/EarningsPanel'
+import HomeAreaPanel from '../../components/driver/HomeAreaPanel'
 
 const navItems = [
   { path: '/driver/dashboard', icon: '', label: 'Dashboard' },
@@ -113,6 +114,8 @@ export default function DriverProfile() {
               {isActive ? 'Online' : 'Offline'}
             </button>
           </Panel>
+
+          {d.servesCity !== false && <HomeAreaPanel driverId={user.userId} />}
 
           <Panel span={12} title="Documents" meta={`${DOCS.filter(([key]) => d[key]).length} of ${DOCS.length} uploaded`}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>

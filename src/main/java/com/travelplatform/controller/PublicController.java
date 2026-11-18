@@ -31,6 +31,27 @@ public class PublicController {
                 .body(cityFareService.publicRates());
     }
 
+    // Optional so controller tests need not supply it: the State -> District -> Town directory.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.service.PlaceService placeService;
+
+    /** States for the driver's "where do you drive" picker: those with listed towns, and all 36. */
+    @GetMapping("/places/states")
+    public ResponseEntity<Map<String, Object>> placeStates() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
+                .body(placeService.states());
+    }
+
+    /** Every listed town in a state, with its district, for the District and Town dropdowns. */
+    @GetMapping("/places")
+    public ResponseEntity<List<Map<String, Object>>> places(
+            @org.springframework.web.bind.annotation.RequestParam String state) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.maxAge(5, TimeUnit.MINUTES).cachePublic())
+                .body(placeService.placesIn(state));
+    }
+
     /** Active cities, for a travels owner choosing where they serve at signup. */
     @GetMapping("/cities")
     public ResponseEntity<List<Map<String, Object>>> getCities() {

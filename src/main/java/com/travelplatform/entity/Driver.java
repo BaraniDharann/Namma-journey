@@ -141,6 +141,14 @@ public class Driver {
     @Column(name = "owner_id")
     private Long ownerId;
 
+    /** The town the driver says they work in, State -> District -> Town (V38). */
+    @Column(name = "home_place_id")
+    private Long homePlaceId;
+
+    /** That town's City zone, made for it if it had none. */
+    @Column(name = "home_zone_id")
+    private Long homeZoneId;
+
     /** The car this driver usually drives; pre-selected when a Trip is assigned, swappable per trip. */
     @Column(name = "default_vehicle_id")
     private Long defaultVehicleId;

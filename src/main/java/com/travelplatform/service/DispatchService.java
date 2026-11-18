@@ -114,6 +114,15 @@ public class DispatchService {
      * lost their driver and deserves the full search again. Once it commits, the driver is free
      * and on the ride's declined list, and the ride is back in waiting for the next round.
      */
+    /**
+     * One City-ride search ended in this zone: matched or no_driver. Fill rate per zone is
+     * matched / (matched + no_driver); a town with a low rate needs more drivers, not a bigger radius.
+     */
+    public static void zoneSearch(Long cityId, String outcome) {
+        Metrics.counter("namma.dispatch.zone.searches",
+                "zone", cityId == null ? "none" : Long.toString(cityId), "outcome", outcome).increment();
+    }
+
     public void release(TravelBooking booking, Long driverId) {
         if (booking.getStatus() == TravelBooking.BookingStatus.CONFIRMED) {
             booking.setDispatchStartedAt(now());
@@ -157,6 +166,7 @@ public class DispatchService {
     public void markMatched(TravelBooking booking) {
         settle(booking);
         if (booking.getDispatchMode() == TravelBooking.DispatchMode.RIDE_NOW && booking.getCityId() != null) {
+            zoneSearch(booking.getCityId(), "matched");
             long cityId = booking.getCityId();
             UUID bookingId = booking.getId();
             afterCommit(() -> rideQueue.remove(cityId, bookingId));

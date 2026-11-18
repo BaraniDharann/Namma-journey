@@ -11,12 +11,20 @@ import useDriverDispatch, { DRIVER_TRIPS_EVENT } from '../../hooks/useDriverDisp
  * puts a nearby ride in front of them the moment it is offered, with the seconds they have left.
  */
 export default function DriverDispatch({ driverId, children }) {
-  const { online, offer, locationIssue, refresh } = useDriverDispatch(driverId)
+  const { online, offer, locationIssue, zoneIssue, zone, refresh } = useDriverDispatch(driverId)
 
   return (
     <>
       {online && locationIssue && (
         <div className="rn-notice" role="status"><Icon name="pin" size={16} />{locationIssue}</div>
+      )}
+      {!locationIssue && zoneIssue && (
+        <div className="rn-notice" role="alert"><Icon name="alert" size={16} />{zoneIssue}</div>
+      )}
+      {online && !locationIssue && zone?.inZone && (
+        <div className="rn-notice" role="status" style={{ opacity: 0.85 }}>
+          <Icon name="check" size={16} />Online in {zone.zoneName}. Nearby rides will reach you.
+        </div>
       )}
       {children}
       {offer && (

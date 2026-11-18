@@ -36,6 +36,8 @@ export default function useDriverDispatch(driverId) {
   const [online, setOnline] = useState(null)
   const [offer, setOffer] = useState(null) // { booking, deadline }
   const [locationIssue, setLocationIssue] = useState(null)
+  // The server's answer to each position: in a City-ride area or not. Outside one, no rider can find them.
+  const [zone, setZone] = useState(null)
   const [onTrip, setOnTrip] = useState(lastTripState)
   const deadlines = useRef(new Map())
 
@@ -103,7 +105,9 @@ export default function useDriverDispatch(driverId) {
     const send = () => {
       if (!last) return
       lastSent = Date.now()
-      reportDriverPresence(driverId, last[0], last[1]).catch(() => {})
+      reportDriverPresence(driverId, last[0], last[1])
+        .then((r) => { if (r?.data && typeof r.data.inZone === 'boolean') setZone(r.data) })
+        .catch(() => {})
     }
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
@@ -127,5 +131,9 @@ export default function useDriverDispatch(driverId) {
     }
   }, [driverId, online, onTrip])
 
-  return { online, offer, locationIssue, refresh }
+  const zoneIssue = online && !onTrip && zone && !zone.inZone
+    ? `You are outside every City-ride area, so riders cannot find you here.${zone.nearestZone ? ` Nearest area: ${zone.nearestZone}.` : ''} Set the town you drive in on your Profile.`
+    : null
+
+  return { online, offer, locationIssue, zoneIssue, zone, refresh }
 }

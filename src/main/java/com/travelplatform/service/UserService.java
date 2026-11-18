@@ -150,7 +150,13 @@ public class UserService {
             cityId = request.getFromLat() == null || request.getFromLon() == null ? null
                     : cityService.cityFor(request.getFromLat(), request.getFromLon()).map(com.travelplatform.entity.City::getId).orElse(null);
             if (cityId == null) {
-                throw new IllegalArgumentException("City rides aren't available at this pickup yet. Book it as a Trip instead.");
+                // Name the nearest zone, so the rider knows it is this place, not the app.
+                String nearest = request.getFromLat() == null || request.getFromLon() == null ? null
+                        : cityService.nearestCity(request.getFromLat(), request.getFromLon())
+                                .map(com.travelplatform.entity.City::getName).orElse(null);
+                throw new IllegalArgumentException("City rides aren't available at this pickup yet"
+                        + (nearest == null ? "" : " (nearest City-ride area: " + nearest + ")")
+                        + ". Book it as a Trip instead.");
             }
             java.time.LocalDate today = dispatchService.now().toLocalDate();
             request.setFromDate(today);

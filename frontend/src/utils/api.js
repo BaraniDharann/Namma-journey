@@ -252,6 +252,15 @@ export const getDriverBookings = (driverId) => cachedGet(`/driver/${driverId}/bo
 // seconds, and silent, because it runs in the background on every online phone.
 export const getDriverOffer = (driverId) => api.get(`/driver/${driverId}/offer`, { _silent: true })
 export const reportDriverPresence = (driverId, latitude, longitude) => api.put(`/driver/${driverId}/presence`, { latitude, longitude }, { _silent: true })
+// Where a driver works: State -> District -> Town. Picking a town creates its City-ride zone.
+export const getPlaceStates = () => cachedGet('/public/places/states', 300000, true)
+export const getPlaces = (state) => api.get('/public/places', { params: { state }, _silent: true })
+export const getDriverHomeArea = (driverId) => api.get(`/driver/${driverId}/home-area`, { _silent: true })
+export const setDriverHomeArea = (driverId, area) => api.put(`/driver/${driverId}/home-area`, area)
+// Before a City ride is booked: is the pickup in a zone, and how many free drivers are near it.
+export const getCityAvailability = (lat, lon) => api.get('/user/city-availability', { params: { lat, lon }, _silent: true })
+// Platform admin: waiting riders and free drivers per H3 hexagon in one zone.
+export const getZoneHeatmap = (cityId) => api.get(`/owner/cities/${cityId}/heatmap`)
 export const updateDriverModes = (driverId, modes) => api.put(`/driver/${driverId}/modes`, modes).then(res => { invalidateCache('driver'); return res })
 // City mode: fares for bike, auto and car over one route, and the owner's fare settings.
 export const getCityFareEstimate = ({ fromLat, fromLon, toLat, toLon }) => api.get('/user/city-fares/estimate', { params: { fromLat, fromLon, toLat, toLon }, _silent: true })

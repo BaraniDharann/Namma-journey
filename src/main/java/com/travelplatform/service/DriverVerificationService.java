@@ -43,6 +43,9 @@ public class DriverVerificationService {
     private DriverService driverService;
     @Autowired
     private IdentityDocumentChecker documentChecker;
+    // Optional so hand-built tests need not supply it: switches on a driver-added town's zone.
+    @Autowired(required = false)
+    private PlaceService placeService;
 
     /** Only INDEPENDENT drivers ever go through review, and only once they have confirmed their email. */
     @Transactional(readOnly = true)
@@ -61,6 +64,9 @@ public class DriverVerificationService {
         requireUnderReview(d);
         decide(d, Driver.Verification.APPROVED, null, ownerId);
         evictApproval(driverId);
+        if (placeService != null) {
+            placeService.onDriverApproved(d); // decide() already marked d APPROVED
+        }
         // The in-app row is saved inside this transaction; the notice's email goes out after commit.
         notificationService.notifyDriverApproved(d);
         return ownerService.mapToDriverDetails(d);

@@ -9,8 +9,9 @@ import EmailCodeScreen from '../components/auth/EmailCodeScreen'
 import VehicleFields, { DEFAULT_VEHICLE } from '../components/owner/VehicleFields'
 import DocTile from '../components/driver/DocTile'
 import { DOCUMENTS } from '../components/driver/gateView'
+import HomeAreaPicker from '../components/driver/HomeAreaPicker'
 
-const STEPS = ['About you', 'Vehicle', 'Documents']
+const STEPS = ['About you', 'Vehicle & area', 'Documents']
 // Drivers who sign themselves up can't take Trips; the server forces servesTrip=false regardless.
 const START_VEHICLE = { ...DEFAULT_VEHICLE, servesTrip: false }
 
@@ -18,6 +19,8 @@ export default function DriverSignupPage() {
   const [step, setStep] = useState(0)
   const [about, setAbout] = useState({ name: '', mobile: '', email: '', password: '' })
   const [vehicle, setVehicle] = useState(START_VEHICLE)
+  // Where they drive: riders in that town are matched with them (and the town's City-ride area is created).
+  const [homeArea, setHomeArea] = useState(null)
   const [ids, setIds] = useState({ licenseNumber: '', aadhaarNumber: '' })
   const [files, setFiles] = useState({ photo: null, licensePhoto: null, aadhaarPhoto: null, rcPhoto: null })
   const [loading, setLoading] = useState(false)
@@ -38,6 +41,7 @@ export default function DriverSignupPage() {
       if (about.password.length < 8) return 'Password must be at least 8 characters'
     } else if (step === 1) {
       if (!vehicle.vehicleNumber.trim()) return 'Enter your vehicle number plate'
+      if (!homeArea) return 'Choose the state, district and town you drive in'
     } else {
       if (!ids.licenseNumber.trim()) return 'Enter your licence number'
       if (!/^\d{12}$/.test(ids.aadhaarNumber)) return 'Enter your 12-digit Aadhaar number'
@@ -63,6 +67,11 @@ export default function DriverSignupPage() {
         ...about, name: about.name.trim(), ...ids,
         vehicleType: vehicle.vehicleType, vehicleNumber: vehicle.vehicleNumber.trim(), vehicleModel: vehicle.vehicleModel,
         vehicleSeats: vehicle.vehicleSeats, vehicleAc: vehicle.vehicleAc,
+        ...(homeArea?.placeId ? { homePlaceId: homeArea.placeId } : {}),
+        ...(homeArea && !homeArea.placeId ? {
+          homeState: homeArea.state, homeDistrict: homeArea.district, homeTown: homeArea.town,
+          homeLat: homeArea.lat, homeLon: homeArea.lon,
+        } : {}),
       }
       Object.entries(fields).forEach(([k, v]) => fd.append(k, String(v ?? '')))
       DOCUMENTS.forEach((d) => fd.append(d.key, files[d.key]))
@@ -124,6 +133,11 @@ export default function DriverSignupPage() {
           // VehicleFields is styled with the dashboard (pc) tokens, which only exist under .pc.
           <div className="pc" style={{ background: 'none', marginBottom: 16 }}>
             <VehicleFields value={vehicle} onChange={(p) => setVehicle({ ...vehicle, ...p })} idPrefix="signup-veh" hideTrips />
+            <h3 style={{ fontSize: 14, margin: '20px 0 4px' }}>Where you drive</h3>
+            <p style={{ fontSize: 13, margin: '0 0 12px', color: 'var(--pc-muted, #6b7280)' }}>
+              Riders in this town are sent to you. Go online there to get rides.
+            </p>
+            <HomeAreaPicker onChange={setHomeArea} idPrefix="signup-area" />
           </div>
         )}
         {step === 2 && (
@@ -137,7 +151,7 @@ export default function DriverSignupPage() {
             </Field>
             <div className="pc" style={{ background: 'none', marginBottom: 16 }}>
               <p style={{ fontSize: 13, margin: '0 0 12px', color: 'var(--text-muted, #6b7280)' }}>
-                Your Aadhaar is checked with UIDAI's digital signature. Best: the e-Aadhaar PDF from
+                Your Aadhaar is checked with UIDAI&apos;s digital signature. Best: the e-Aadhaar PDF from
                 myaadhaar.uidai.gov.in (no need to remove its password). Or a clear photo of the side with the big
                 QR code. Type your name exactly as printed on it.
               </p>
