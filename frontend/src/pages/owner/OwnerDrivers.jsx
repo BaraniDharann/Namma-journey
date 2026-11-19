@@ -12,8 +12,10 @@ import { vehicleIcon, vehicleLabel } from '../../dash/vehicles'
 import { categoryLabel } from '../../utils/carCategories'
 import { rejectReasonError, REJECT_MAX } from '../../utils/rejectReason'
 import Icon from '../../components/dash/Icon'
+import PrivateImage from '../../components/PrivateImage'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { useCelebrate } from '../../components/celebrate/Celebration'
+import { F, fieldProps } from '../../utils/indianFormats'
 
 const errorText = (e, fallback) => e.response?.data?.error || e.response?.data?.message || fallback
 const carText = (v) => (v ? `${v.registrationMissing ? 'No registration yet' : v.registrationNumber} · ${categoryLabel(v.category)}${v.model ? ` · ${v.model}` : ''}` : '')
@@ -366,7 +368,7 @@ function DriverDetailModal({ driver, vehicles, onClose, onUpdated }) {
               <div key={key} style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }}>{label}</div>
                 {imgUrl(driver[key])
-                  ? <img src={imgUrl(driver[key])} alt={label} style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--pc-line)' }} />
+                  ? <PrivateImage src={imgUrl(driver[key])} alt={`${label} of ${driver.name || 'driver'}`} height={80} />
                   : <div style={{ height: 80, borderRadius: 10, background: 'var(--pc-wash)', color: 'var(--pc-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={`No ${label.toLowerCase()} uploaded`}><Icon name={icon} size={24} /></div>
                 }
               </div>
@@ -539,6 +541,10 @@ export default function OwnerDrivers() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    // Same official formats the server enforces; say what to fix before uploading three images.
+    const problem = F.name.error(form.name, 'Driver name') || F.mobile.error(form.mobile) || F.email.error(form.email)
+      || F.licence.error(form.licenseNumber) || F.aadhaar.error(form.aadhaarNumber)
+    if (problem) { setError(problem); return }
     setLoading(true); setError('')
     try {
       // My drivers take Trips only, in my cars; City rides are for independent drivers.
@@ -590,15 +596,15 @@ export default function OwnerDrivers() {
             <form onSubmit={handleSubmit} className="pc-grid">
               <Panel span={12} title="Basic Information">
                 <div style={fieldGrid}>
-                  <div><label htmlFor="drv-name" style={labelStyle}>Full Name *</label><input id="drv-name" className="input-field" placeholder="Suresh Sharma" value={form.name} onChange={e => set('name', e.target.value)} required /></div>
-                  <div><label htmlFor="drv-mobile" style={labelStyle}>Mobile Number *</label><input id="drv-mobile" className="input-field" placeholder="9876543210" maxLength={10} value={form.mobile} onChange={e => set('mobile', e.target.value)} required /></div>
-                  <div style={{ gridColumn: '1/-1' }}><label htmlFor="drv-email" style={labelStyle}>Email Address *</label><input id="drv-email" type="email" className="input-field" placeholder="driver@example.com" value={form.email} onChange={e => set('email', e.target.value)} required /></div>
+                  <div><label htmlFor="drv-name" style={labelStyle}>Full Name *</label><input id="drv-name" className="input-field" {...fieldProps('name', form.name, v => set('name', v))} placeholder="Suresh Sharma" required /></div>
+                  <div><label htmlFor="drv-mobile" style={labelStyle}>Mobile Number *</label><input id="drv-mobile" type="tel" className="input-field" {...fieldProps('mobile', form.mobile, v => set('mobile', v))} required /></div>
+                  <div style={{ gridColumn: '1/-1' }}><label htmlFor="drv-email" style={labelStyle}>Email Address *</label><input id="drv-email" type="email" className="input-field" {...fieldProps('email', form.email, v => set('email', v))} placeholder="driver@example.com" required /></div>
                 </div>
               </Panel>
               <Panel span={12} title="Documents">
                 <div style={fieldGrid}>
-                  <div><label htmlFor="drv-licence" style={labelStyle}>License Number *</label><input id="drv-licence" className="input-field" placeholder="DL1420110012345" value={form.licenseNumber} onChange={e => set('licenseNumber', e.target.value)} required /></div>
-                  <div><label htmlFor="drv-aadhaar" style={labelStyle}>Aadhaar Number *</label><input id="drv-aadhaar" className="input-field" placeholder="123456789012" maxLength={12} value={form.aadhaarNumber} onChange={e => set('aadhaarNumber', e.target.value)} required /></div>
+                  <div><label htmlFor="drv-licence" style={labelStyle}>License Number *</label><input id="drv-licence" className="input-field" {...fieldProps('licence', form.licenseNumber, v => set('licenseNumber', v))} required /></div>
+                  <div><label htmlFor="drv-aadhaar" style={labelStyle}>Aadhaar Number *</label><input id="drv-aadhaar" className="input-field" {...fieldProps('aadhaar', form.aadhaarNumber, v => set('aadhaarNumber', v))} required /></div>
                 </div>
               </Panel>
               <Panel span={12} title="Usual car" meta="Trips only">

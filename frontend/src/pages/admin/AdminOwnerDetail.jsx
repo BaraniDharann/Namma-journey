@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import Icon from '../../components/dash/Icon'
+import PrivateImage from '../../components/PrivateImage'
 import { Panel, PageHead, Skeleton } from '../../components/dash/ui'
 import { adminOwner, adminOwnerCheck, adminApproveOwner, adminRejectOwner, adminResendCredentials } from '../../utils/api'
 import { rejectReasonError, REJECT_MAX } from '../../utils/rejectReason'
@@ -152,7 +153,11 @@ export default function AdminOwnerDetail() {
                   <p style={{ fontWeight: 700, color: (QR_STATUS[qr.status] || [])[1] }}>{(QR_STATUS[qr.status] || [qr.status])[0]}</p>
                   {qr.name && (
                     <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginTop: 8 }}>
-                      {qr.photoDataUrl && <img src={qr.photoDataUrl} alt="Photo from the Aadhaar QR" style={{ width: 96, borderRadius: 8 }} />}
+                      {qr.photoDataUrl && (
+                        <div style={{ width: 96, flexShrink: 0 }}>
+                          <PrivateImage src={qr.photoDataUrl} alt="Photo from the Aadhaar QR" height={120} />
+                        </div>
+                      )}
                       <div style={{ flex: 1 }}>
                         <Row k="Name (QR)" v={qr.name} />
                         <Row k="Contact name" v={o.contactName} />
@@ -185,7 +190,9 @@ export default function AdminOwnerDetail() {
                   <figure key={name} style={{ margin: 0 }}>
                     <figcaption style={label}>{name}</figcaption>
                     {src
-                      ? <a href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={name} style={{ width: '100%', maxHeight: 220, objectFit: 'contain', borderRadius: 8, background: 'var(--pc-wash)' }} /></a>
+                      // Hidden until tapped; once shown, tapping it opens the full size in a new tab.
+                      ? <PrivateImage src={src} alt={name} height={220} fit="contain"
+                          onOpen={() => window.open(src, '_blank', 'noopener,noreferrer')} />
                       : <p style={{ fontSize: 13 }}>Not uploaded</p>}
                   </figure>
                 ))}

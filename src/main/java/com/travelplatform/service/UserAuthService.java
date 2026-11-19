@@ -35,6 +35,11 @@ public class UserAuthService {
     private GoogleTokenVerifier googleTokenVerifier;
 
     public AuthResponse signup(UserSignupRequest request) {
+        // Official formats first (IndianFormats); the normalised values are what gets stored.
+        request.setName(com.travelplatform.validation.IndianFormats.requireName(request.getName(), "Name"));
+        request.setEmail(com.travelplatform.validation.IndianFormats.requireEmail(request.getEmail()));
+        request.setMobile(com.travelplatform.validation.IndianFormats.requireMobile(request.getMobile()));
+        com.travelplatform.validation.IndianFormats.requireNewPassword(request.getPassword());
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email already registered");
         }

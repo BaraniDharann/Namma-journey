@@ -42,12 +42,49 @@ public class NotificationService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private TripRateService tripRates;
 
-    /** The feed a booking's owner reads: its owner's id, or the platform owner's for a City ride. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.repository.DriverRepository driverRepository;
+
+    /**
+     * The owner feed that should hear about this booking, or null when no owner should.
+     * A Trip: its owner. A City ride goes to whichever driver is nearest the passenger, so only
+     * the people on that ride hear about it: the owner of the driver who took it (none for an
+     * independent driver), and the platform only when nobody nearby took it and it must place it.
+     */
     String ownerFeed(TravelBooking booking) {
-        if (booking != null && booking.getOwnerId() != null) {
-            return booking.getOwnerId().toString();
+        if (booking == null) {
+            return platformFeed();
         }
-        return platformFeed();
+        if (booking.getServiceMode() != TravelBooking.ServiceMode.CITY) {
+            return booking.getOwnerId() != null ? booking.getOwnerId().toString() : platformFeed();
+        }
+        if (booking.getDispatchState() == TravelBooking.DispatchState.NO_DRIVER) {
+            return platformFeed();
+        }
+        // Still being offered around: nobody has it yet, so it is no owner's business.
+        if (booking.getDriverId() == null
+                || booking.getDispatchState() == TravelBooking.DispatchState.SEARCHING
+                || booking.getDispatchState() == TravelBooking.DispatchState.OFFERED) {
+            return null;
+        }
+        return driversOwner(booking.getDriverId());
+    }
+
+    private String driversOwner(Long driverId) {
+        if (driverRepository == null || driverId == null) {
+            return null;
+        }
+        return driverRepository.findById(driverId)
+                .map(Driver::getOwnerId)
+                .map(String::valueOf)
+                .orElse(null);
+    }
+
+    /** An owner notice, saved only when some owner should hear about it (see {@link #ownerFeed}). */
+    private void saveOwnerNotice(Notification n) {
+        if (n.getRecipientId() != null) {
+            notificationRepository.save(n);
+        }
     }
 
     /** The platform owner's feed (City rides, independent drivers, dues, safety). */
@@ -79,7 +116,7 @@ public class NotificationService {
                 + ". Assign a driver and car from your bookings.");
         n.setBookingId(booking.getId().toString());
         n.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(n);
+        saveOwnerNotice(n);
         if (ownerRepository != null && booking.getOwnerId() != null) {
             ownerRepository.findById(booking.getOwnerId())
                     .ifPresent(o -> emailService.sendOwnerTripNeedsDriver(o.getEmail(), o.getTravelsName(), booking));
@@ -97,7 +134,7 @@ public class NotificationService {
                 " on " + booking.getFromDate() + ". Amount: ₹" + String.format("%.2f", booking.getTotalAmount()));
         notification.setBookingId(booking.getId().toString());
         notification.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(notification);
+        saveOwnerNotice(notification);
         log.info("Notification sent to owner for new booking: {}", booking.getId());
     }
 
@@ -202,7 +239,7 @@ public class NotificationService {
         dispatcher.dispatch("telegram", () -> telegramDispatchService.sendTripAssigned(booking, driver));
     }
 
-    /** Nobody nearby took a Ride Now booking in time: the owner places it, the passenger is told. */
+    /** Nobody nearby took a City ride in time: the platform and the passenger are told. */
     public void notifyNoDriverNearby(TravelBooking booking) {
         String route = booking.getFromPlace() + " to " + booking.getToPlace();
 
@@ -210,12 +247,12 @@ public class NotificationService {
         owner.setRecipientId(ownerFeed(booking));
         owner.setRecipientRole("ROLE_OWNER");
         owner.setType("RIDE_NO_DRIVER");
-        owner.setTitle("Ride Now needs a driver");
-        owner.setMessage("No driver near the pickup took the ride from " + route
-                + " for " + booking.getUserName() + ". Assign one manually.");
+        owner.setTitle("City ride: no driver nearby");
+        owner.setMessage("No City driver near the pickup took the ride from " + route
+                + " for " + booking.getUserName() + ". Check that drivers in this area are online.");
         owner.setBookingId(booking.getId().toString());
         owner.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(owner);
+        saveOwnerNotice(owner);
 
         Notification user = new Notification();
         user.setRecipientId(booking.getUserId().toString());
@@ -223,7 +260,7 @@ public class NotificationService {
         user.setType("RIDE_NO_DRIVER");
         user.setTitle("Still finding your driver");
         user.setMessage("No driver near " + booking.getFromPlace()
-                + " is free right now. Our team is assigning one to you by hand.");
+                + " is free right now. You can cancel and book again in a few minutes.");
         user.setBookingId(booking.getId().toString());
         user.setCreatedAt(LocalDateTime.now());
         notificationRepository.save(user);
@@ -256,6 +293,20 @@ public class NotificationService {
         // Passengers who connected Telegram get the driver's name, phone and vehicle there too.
         if (rideSafetyService != null) {
             rideSafetyService.onTripAccepted(booking, driver);
+        }
+        // A travels owner's driver took a City ride in their City car: the owner gets the money,
+        // so the owner hears about it. An independent driver's ride tells no owner.
+        if (booking.getServiceMode() == TravelBooking.ServiceMode.CITY && driver.getOwnerId() != null) {
+            Notification owner = new Notification();
+            owner.setRecipientId(driver.getOwnerId().toString());
+            owner.setRecipientRole("ROLE_OWNER");
+            owner.setType("CITY_RIDE_ACCEPTED");
+            owner.setTitle("City ride on your car");
+            owner.setMessage(driver.getName() + " took a City ride for " + booking.getUserName() + " from "
+                    + booking.getFromPlace() + " to " + booking.getToPlace() + ".");
+            owner.setBookingId(booking.getId().toString());
+            owner.setCreatedAt(LocalDateTime.now());
+            notificationRepository.save(owner);
         }
         log.info("Notification sent to user {} for trip accepted: {}", booking.getUserId(), booking.getId());
     }
@@ -290,7 +341,9 @@ public class NotificationService {
 
         // Notify owner
         Notification ownerNotification = new Notification();
-        ownerNotification.setRecipientId(ownerFeed(booking));
+        // A City offer turned down just goes to the next nearest driver: no owner's task.
+        ownerNotification.setRecipientId(booking.getServiceMode() == TravelBooking.ServiceMode.CITY
+                ? null : ownerFeed(booking));
         ownerNotification.setRecipientRole("ROLE_OWNER");
         ownerNotification.setType("TRIP_REJECTED");
         ownerNotification.setTitle(replacement != null ? "Trip Reassigned Automatically" : "Trip Needs a Driver");
@@ -301,7 +354,7 @@ public class NotificationService {
                   ". No available driver remains — assign one manually.");
         ownerNotification.setBookingId(booking.getId().toString());
         ownerNotification.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(ownerNotification);
+        saveOwnerNotice(ownerNotification);
 
         log.info("Trip rejected notifications sent for booking {} (reassigned to {})",
                 booking.getId(), replacement != null ? replacement.getId() : "nobody");
@@ -357,7 +410,7 @@ public class NotificationService {
                 ". ₹" + amount + " awaiting payment.");
         ownerNotification.setBookingId(bookingRef);
         ownerNotification.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(ownerNotification);
+        saveOwnerNotice(ownerNotification);
 
         log.info("Trip ended notifications sent for booking: {}", booking.getId());
     }
@@ -373,7 +426,7 @@ public class NotificationService {
         owner.setMessage(booking.getUserName() + " cancelled the trip from " + route + " on " + booking.getFromDate() + ".");
         owner.setBookingId(booking.getId().toString());
         owner.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(owner);
+        saveOwnerNotice(owner);
 
         if (booking.getDriverId() != null) {
             Notification driver = new Notification();
@@ -399,7 +452,7 @@ public class NotificationService {
                 " by " + booking.getUserName());
         notification.setBookingId(booking.getId().toString());
         notification.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(notification);
+        saveOwnerNotice(notification);
 
         // Notify user
         Notification userNotification = new Notification();
@@ -433,7 +486,7 @@ public class NotificationService {
                 + booking.getToPlace() + " by " + booking.getUserName());
         owner.setBookingId(booking.getId().toString());
         owner.setCreatedAt(LocalDateTime.now());
-        notificationRepository.save(owner);
+        saveOwnerNotice(owner);
 
         Notification user = new Notification();
         user.setRecipientId(booking.getUserId().toString());

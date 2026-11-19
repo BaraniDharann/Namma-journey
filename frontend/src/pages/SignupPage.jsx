@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { sendOtp, userSignup } from '../utils/api'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
 import { takeReturn, USER_HOME } from '../utils/returnTo'
+import { F, fieldProps } from '../utils/indianFormats'
 
 export default function SignupPage() {
   const [step, setStep] = useState(1)
@@ -16,6 +17,9 @@ export default function SignupPage() {
 
   const handleSendOtp = async (e) => {
     e.preventDefault()
+    // The server checks the same official formats; this says what to fix before a code is sent.
+    const problem = F.name.error(form.name, 'Name') || F.mobile.error(form.mobile) || F.email.error(form.email)
+    if (problem) { setError(problem); return }
     setLoading(true)
     setError('')
     try {
@@ -31,7 +35,7 @@ export default function SignupPage() {
   const handleSignup = async (e) => {
     e.preventDefault()
     if (!/^\d{6}$/.test(form.otp)) { setError('Please enter the full 6-digit OTP'); return }
-    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
+    if (F.password.error(form.password)) { setError(F.password.error(form.password)); return }
     if (form.password !== form.confirmPassword) { setError('Passwords do not match'); return }
     setLoading(true)
     setError('')
@@ -72,32 +76,28 @@ export default function SignupPage() {
       {step === 1 ? (
         <form onSubmit={handleSendOtp} className="au-form">
           <Field label="Full name" icon="user">
-            <input type="text" placeholder="Rajesh Kumar" value={form.name} autoComplete="name"
-              onChange={e => setForm({ ...form, name: e.target.value })} required />
+            <input type="text" {...fieldProps('name', form.name, v => setForm({ ...form, name: v }))} placeholder="Rajesh Kumar" autoComplete="name" required />
           </Field>
           <Field label="Mobile number" icon="phone">
-            <input type="tel" inputMode="numeric" placeholder="9876543210" maxLength={10} value={form.mobile} autoComplete="tel"
-              onChange={e => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '') })} required />
+            <input type="tel" {...fieldProps('mobile', form.mobile, v => setForm({ ...form, mobile: v }))} autoComplete="tel" required />
           </Field>
           <Field label="Email address" icon="mail">
-            <input type="email" placeholder="you@example.com" value={form.email} autoComplete="email"
-              onChange={e => setForm({ ...form, email: e.target.value })} required />
+            <input type="email" {...fieldProps('email', form.email, v => setForm({ ...form, email: v }))} autoComplete="email" required />
           </Field>
           <Submit loading={loading} loadingText="Sending OTP...">Continue</Submit>
-          <p className="au-note">Test OTP: <b>123456</b></p>
         </form>
       ) : (
         <form onSubmit={handleSignup} className="au-form">
           <Field label="OTP code" icon="lock">
             <input type="text" inputMode="numeric" className="au-otp" placeholder="Enter 6-digit OTP" maxLength={6} value={form.otp}
-              onChange={e => setForm({ ...form, otp: e.target.value })} required />
+              onChange={e => setForm({ ...form, otp: e.target.value.replace(/\D/g, '').slice(0, 6) })} required />
           </Field>
           <Field label="Password" icon="lock">
-            <PasswordInput placeholder="Min 8 chars, include @#$" value={form.password} autoComplete="new-password"
+            <PasswordInput placeholder="8+ characters, a letter and a number" maxLength={F.password.max} value={form.password} autoComplete="new-password"
               onChange={e => setForm({ ...form, password: e.target.value })} required />
           </Field>
           <Field label="Confirm password" icon="lock">
-            <PasswordInput placeholder="Repeat password" value={form.confirmPassword} autoComplete="new-password"
+            <PasswordInput placeholder="Repeat password" maxLength={F.password.max} value={form.confirmPassword} autoComplete="new-password"
               onChange={e => setForm({ ...form, confirmPassword: e.target.value })} required />
           </Field>
           <Submit loading={loading} loadingText="Creating account...">Create account</Submit>

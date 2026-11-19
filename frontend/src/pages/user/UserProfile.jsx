@@ -8,6 +8,7 @@ import { Panel, PageHead, StatusPill } from '../../components/dash/ui'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 import RideSafetyPanel from '../../components/safety/RideSafetyPanel'
 import CloseAccountPanel from '../../components/profile/CloseAccountPanel'
+import { F } from '../../utils/indianFormats'
 
 const navItems = [
   { path: '/user/dashboard', icon: '', label: 'Dashboard' },
@@ -32,6 +33,8 @@ export default function UserProfile() {
   const initial = user?.name?.[0]?.toUpperCase() || 'U'
 
   const handleSave = async () => {
+    const problem = F.name.error(name, 'Name') || (mobile ? F.mobile.error(mobile) : '')
+    if (problem) { setMsg({ type: 'error', text: problem }); return }
     setSaving(true)
     setMsg(null)
     try {
@@ -118,7 +121,8 @@ export default function UserProfile() {
                   id="profile-name"
                   className="input-field"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  maxLength={F.name.max}
+                  onChange={(e) => setName(F.name.clean(e.target.value))}
                   style={inputStyle}
                 />
               ) : (
@@ -135,7 +139,9 @@ export default function UserProfile() {
                   className="input-field"
                   type="tel"
                   value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
+                  inputMode="numeric"
+                  maxLength={10}
+                  onChange={(e) => setMobile(F.mobile.clean(e.target.value))}
                   placeholder="Enter mobile number"
                   style={inputStyle}
                 />

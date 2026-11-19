@@ -1,6 +1,7 @@
 import React from 'react'
 import Icon from '../dash/Icon'
 import { VEHICLES, VEHICLE_ORDER } from '../../dash/vehicles'
+import { F, fieldProps } from '../../utils/indianFormats'
 
 export const DEFAULT_VEHICLE = {
   vehicleType: 'CAR', vehicleNumber: '', vehicleModel: '', vehicleAc: true, vehicleSeats: 4, servesCity: true, servesTrip: true,
@@ -43,8 +44,11 @@ export default function VehicleFields({ value, onChange, idPrefix = 'veh', hideT
       <div style={grid}>
         <div>
           <label htmlFor={`${idPrefix}-number`} style={label}>Number plate</label>
-          <input id={`${idPrefix}-number`} className="input-field" placeholder="KA 01 AB 1234" maxLength={20}
-            value={value.vehicleNumber || ''} onChange={(e) => onChange({ vehicleNumber: e.target.value })} />
+          <input id={`${idPrefix}-number`} className="input-field"
+            {...fieldProps('plate', value.vehicleNumber, (v) => onChange({ vehicleNumber: v }))} />
+          {value.vehicleNumber && F.plate.error(value.vehicleNumber) && value.vehicleNumber.replace(/\s/g, '').length >= 8 && (
+            <small role="alert" style={{ color: 'var(--pc-bad)', fontSize: 12 }}>{F.plate.error(value.vehicleNumber)}</small>
+          )}
         </div>
         <div>
           <label htmlFor={`${idPrefix}-model`} style={label}>Model</label>

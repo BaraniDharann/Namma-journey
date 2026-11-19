@@ -125,7 +125,9 @@ public class VehicleService {
         if (creating || f.registrationNumber() != null) {
             String plate = f.registrationNumber() == null ? ""
                     : f.registrationNumber().replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
-            if (!PLATE.matcher(plate).matches()) {
+            if (!PLATE.matcher(plate).matches()
+                    // Strict plate format for a new or changed number; an older saved plate can be resent as is.
+                    || (!plate.equals(v.getRegistrationNumber()) && !com.travelplatform.validation.IndianFormats.validPlate(plate))) {
                 throw new IllegalArgumentException("Registration number looks wrong. Use the number plate, e.g. KA 01 AB 1234");
             }
             // Through UnscopedLookups: the row filter hides other owners' plates from this owner.

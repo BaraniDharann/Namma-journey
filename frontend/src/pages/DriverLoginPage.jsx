@@ -7,6 +7,7 @@ import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../c
 import Icon from '../components/dash/Icon'
 import { assertCodeResent } from '../components/auth/codeResend'
 import EmailCodeScreen from '../components/auth/EmailCodeScreen'
+import { F } from '../utils/indianFormats'
 
 const OTP_VALIDITY_SECONDS = 5 * 60
 
@@ -92,6 +93,7 @@ export default function DriverLoginPage() {
 
   const handleOtpSubmit = async (e) => {
     e.preventDefault()
+    if (F.password.error(otpForm.newPassword)) { setOtpError(F.password.error(otpForm.newPassword)); return }
     if (otpForm.newPassword !== otpForm.confirmPassword) {
       setOtpError('Passwords do not match')
       return
@@ -132,6 +134,7 @@ export default function DriverLoginPage() {
     e.preventDefault()
     if (!/^\d{4,6}$/.test(forgotForm.otp)) { setForgotError('Enter the OTP you received'); return }
     if (forgotForm.newPassword.length < 6) { setForgotError('Password must be at least 6 characters'); return }
+    if (F.password.error(forgotForm.newPassword)) { setForgotError(F.password.error(forgotForm.newPassword)); return }
     if (forgotForm.newPassword !== forgotForm.confirmPassword) {
       setForgotError('Passwords do not match'); return
     }
@@ -175,7 +178,7 @@ export default function DriverLoginPage() {
               onChange={e => setOtpForm({ ...otpForm, otp: e.target.value })} required disabled={secondsLeft === 0} />
           </Field>
           <Field label="New password" icon="lock">
-            <PasswordInput placeholder="Enter new password" value={otpForm.newPassword} autoComplete="new-password"
+            <PasswordInput placeholder="8+ characters, a letter and a number" maxLength={F.password.max} value={otpForm.newPassword} autoComplete="new-password"
               onChange={e => setOtpForm({ ...otpForm, newPassword: e.target.value })} required disabled={secondsLeft === 0} />
           </Field>
           <Field label="Confirm password" icon="lock">
@@ -210,7 +213,7 @@ export default function DriverLoginPage() {
                 onChange={e => setForgotForm({ ...forgotForm, otp: e.target.value.replace(/\D/g, '') })} required />
             </Field>
             <Field label="New password" icon="lock">
-              <PasswordInput placeholder="Min 6 characters" value={forgotForm.newPassword} autoComplete="new-password"
+              <PasswordInput placeholder="8+ characters, a letter and a number" maxLength={F.password.max} value={forgotForm.newPassword} autoComplete="new-password"
                 onChange={e => setForgotForm({ ...forgotForm, newPassword: e.target.value })} required />
             </Field>
             <Field label="Confirm password" icon="lock">

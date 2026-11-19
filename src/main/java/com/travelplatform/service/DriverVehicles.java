@@ -38,7 +38,11 @@ final class DriverVehicles {
             String number = r.getVehicleNumber().trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", " ");
             if (number.isEmpty()) {
                 driver.setVehicleNumber(null);
-            } else if (!NUMBER.matcher(number).matches()) {
+            } else if (!NUMBER.matcher(number).matches()
+                    // The strict plate format applies to a new or changed number; a plate saved
+                    // before it existed can still be resent unchanged with other edits.
+                    || (!number.equals(driver.getVehicleNumber())
+                        && !com.travelplatform.validation.IndianFormats.validPlate(number))) {
                 throw new IllegalArgumentException("Vehicle number looks wrong. Use the number plate, e.g. KA 01 AB 1234");
             } else {
                 driver.setVehicleNumber(number);

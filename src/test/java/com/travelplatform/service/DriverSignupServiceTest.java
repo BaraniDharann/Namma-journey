@@ -83,8 +83,8 @@ class DriverSignupServiceTest {
         f.setName("Ravi");
         f.setMobile("9000000001");
         f.setEmail("ravi@x.com");
-        f.setPassword("longenough");
-        f.setLicenseNumber("DL-1");
+        f.setPassword("longenough1");
+        f.setLicenseNumber("TN0120190001234");
         f.setAadhaarNumber(TestDocs.VALID_AADHAAR);
         f.setVehicleType("AUTO");
         f.setVehicleNumber("ka 01 ab 1234");
@@ -116,7 +116,7 @@ class DriverSignupServiceTest {
         assertEquals("uploads/drivers/aadhaar_x.jpg", d.getAadhaarPhoto());
         assertEquals("uploads/drivers/rc_x.jpg", d.getRcPhoto());
         assertNotNull(d.getSubmittedAt());
-        assertTrue(encoder.matches("longenough", d.getPassword()));
+        assertTrue(encoder.matches("longenough1", d.getPassword()));
         verify(otp).sendOtp("ravi@x.com");
         verifyNoInteractions(notifications); // the owner hears only after the email is confirmed
         assertEquals("ravi@x.com", result.get("email"));
@@ -134,7 +134,7 @@ class DriverSignupServiceTest {
         assertEquals("Email already registered", refusal());
         when(drivers.findByEmail(anyString())).thenReturn(Optional.empty());
 
-        when(drivers.findByLicenseNumber("DL-1")).thenReturn(Optional.of(verified));
+        when(drivers.findByLicenseNumber("TN0120190001234")).thenReturn(Optional.of(verified));
         assertEquals("License number already registered", refusal());
         when(drivers.findByLicenseNumber(anyString())).thenReturn(Optional.empty());
 
@@ -206,7 +206,7 @@ class DriverSignupServiceTest {
         for (String bad : new String[]{"1234567890", "98765", "98765432101", "98765abcde"}) {
             DriverSelfSignupForm f = form();
             f.setMobile(bad);
-            assertEquals("Invalid Indian mobile number",
+            assertEquals("Enter a 10-digit Indian mobile number starting with 6, 7, 8 or 9",
                     assertThrows(IllegalArgumentException.class, () -> signup(f)).getMessage());
         }
         verify(files, never()).storeFile(any(), anyString());
@@ -216,7 +216,7 @@ class DriverSignupServiceTest {
     void aadhaarMustBeTwelveDigitsAndSpacesAreStripped() {
         DriverSelfSignupForm bad = form();
         bad.setAadhaarNumber("1234 5678");
-        assertEquals("Aadhaar number is not valid - check the 12 digits",
+        assertEquals("Aadhaar number must be exactly 12 digits",
                 assertThrows(IllegalArgumentException.class, () -> signup(bad)).getMessage());
 
         DriverSelfSignupForm ok = form();
@@ -235,14 +235,14 @@ class DriverSignupServiceTest {
     void emailAndLicenceAreNormalised() {
         DriverSelfSignupForm f = form();
         f.setEmail("  Ravi@X.COM ");
-        f.setLicenseNumber("  dl-1 ");
+        f.setLicenseNumber("  tn01-2019 0001234 ");
         signup(f);
         ArgumentCaptor<Driver> saved = ArgumentCaptor.forClass(Driver.class);
         verify(drivers).save(saved.capture());
         assertEquals("ravi@x.com", saved.getValue().getEmail());
-        assertEquals("DL-1", saved.getValue().getLicenseNumber());
+        assertEquals("TN0120190001234", saved.getValue().getLicenseNumber());
         verify(drivers).findByEmail("ravi@x.com");
-        verify(drivers).findByLicenseNumber("DL-1");
+        verify(drivers).findByLicenseNumber("TN0120190001234");
         verify(otp).sendOtp("ravi@x.com");
     }
 
@@ -405,7 +405,7 @@ class DriverSignupServiceTest {
     @Test
     void loginWithUnverifiedEmailResendsCode() {
         Driver d = pending();
-        d.setPassword(encoder.encode("longenough"));
+        d.setPassword(encoder.encode("longenough1"));
         d.setFirstLogin(false);
         when(drivers.findByMobile("9000000001")).thenReturn(Optional.of(d));
         DriverAuthService auth = new DriverAuthService();
@@ -415,7 +415,7 @@ class DriverSignupServiceTest {
         ReflectionTestUtils.setField(auth, "jwtUtil", jwt);
         DriverLoginRequest req = new DriverLoginRequest();
         req.setMobile("9000000001");
-        req.setPassword("longenough");
+        req.setPassword("longenough1");
 
         Map<String, Object> r = auth.login(req);
 

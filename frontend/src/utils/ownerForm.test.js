@@ -3,8 +3,9 @@ import { validPan, validIfsc, validAadhaar, validUpi, validAccount, validPhone, 
 
 describe('owner application field checks (mirror OwnerApplicationChecks on the server)', () => {
   it('PAN: five letters, four digits, a letter', () => {
-    expect(validPan('abcde1234f')).toBe(true)
-    expect(validPan(' ABCDE1234F ')).toBe(true)
+    expect(validPan('abcpe1234f')).toBe(true)
+    expect(validPan(' ABCPE1234F ')).toBe(true)
+    expect(validPan('ABCDE1234F')).toBe(false) // D is not a PAN holder type
     expect(validPan('ABCD1234F')).toBe(false)
     expect(validPan('ABCDE12345')).toBe(false)
   })
@@ -31,7 +32,7 @@ describe('owner application field checks (mirror OwnerApplicationChecks on the s
 describe('ownerFormError', () => {
   const good = {
     travelsName: 'Ravi Travels', contactName: 'Ravi', email: 'ravi@example.com', phone: '9876543210',
-    cityIds: [1], panNumber: 'ABCDE1234F', aadhaarNumber: '234567890124', bankAccountHolder: 'Ravi',
+    cityIds: [1], panNumber: 'ABCPE1234F', aadhaarNumber: '234567890124', bankAccountHolder: 'Ravi',
     bankAccountNumber: '12345678906789', bankIfsc: 'SBIN0001234', bankName: 'SBI', upiId: 'ravi@okaxis',
     aadhaarConsent: true,
   }

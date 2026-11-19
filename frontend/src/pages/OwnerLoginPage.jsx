@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { ownerLogin, ownerForgotPassword, sendOtp } from '../utils/api'
 import { offerToSaveLogin } from '../utils/rememberLogin'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton, CtaLink } from '../components/auth/AuthShell'
+import { F } from '../utils/indianFormats'
 
 export default function OwnerLoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
@@ -53,6 +54,7 @@ export default function OwnerLoginPage() {
     e.preventDefault()
     if (!/^\d{4,6}$/.test(forgotForm.otp)) { setForgotError('Enter the OTP you received'); return }
     if (forgotForm.newPassword.length < 6) { setForgotError('Password must be at least 6 characters'); return }
+    if (F.password.error(forgotForm.newPassword)) { setForgotError(F.password.error(forgotForm.newPassword)); return }
     if (forgotForm.newPassword !== forgotForm.confirmPassword) {
       setForgotError('Passwords do not match'); return
     }
@@ -93,7 +95,7 @@ export default function OwnerLoginPage() {
                 onChange={e => setForgotForm({ ...forgotForm, otp: e.target.value.replace(/\D/g, '') })} required />
             </Field>
             <Field label="New password" icon="lock">
-              <PasswordInput placeholder="Min 6 characters" value={forgotForm.newPassword} autoComplete="new-password"
+              <PasswordInput placeholder="8+ characters, a letter and a number" maxLength={F.password.max} value={forgotForm.newPassword} autoComplete="new-password"
                 onChange={e => setForgotForm({ ...forgotForm, newPassword: e.target.value })} required />
             </Field>
             <Field label="Confirm password" icon="lock">

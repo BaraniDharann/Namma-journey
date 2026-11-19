@@ -77,6 +77,12 @@ public class AdminDriverService {
             MultipartFile photo, MultipartFile licensePhoto, MultipartFile aadhaarPhoto,
             com.travelplatform.dto.VehicleRequest vehicle, Long defaultVehicleId) {
         Long ownerId = ownerScope.ownerId();
+        // Same formats as driver self-signup (IndianFormats), before anything is looked up or stored.
+        name = com.travelplatform.validation.IndianFormats.requireName(name, "Driver name");
+        mobile = com.travelplatform.validation.IndianFormats.requireMobile(mobile);
+        email = com.travelplatform.validation.IndianFormats.requireEmail(email);
+        licenseNumber = com.travelplatform.validation.IndianFormats.requireLicence(licenseNumber);
+        aadhaarNumber = com.travelplatform.validation.IndianFormats.requireAadhaar(aadhaarNumber);
         requireUsableCar(ownerId, defaultVehicleId);
 
         // Checked before any file is written: a bad number plate should not leave orphaned uploads.

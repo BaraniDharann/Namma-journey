@@ -1,5 +1,6 @@
 package com.travelplatform.service;
 
+import com.travelplatform.validation.IndianFormats;
 import com.travelplatform.dto.OwnerSignupForm;
 import com.travelplatform.entity.City;
 import com.travelplatform.entity.Owner;
@@ -20,7 +21,6 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Pattern;
 
 /**
  * A travels owner applying to join NammaJourney. Everything is checked before anything is stored;
@@ -34,10 +34,6 @@ public class OwnerSignupService {
     static final Duration REVIEW_WINDOW = Duration.ofHours(48);
     static final long MAX_DOCUMENT_BYTES = 5L * 1024 * 1024;
 
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
-    private static final Pattern PHONE = Pattern.compile("^[6-9]\\d{9}$");
-    private static final Pattern ACCOUNT = Pattern.compile("^\\d{9,18}$");
-    private static final Pattern UPI = Pattern.compile("^[\\w.-]{2,}@[a-zA-Z]{2,}$");
 
     public record SignupResult(Long ownerId, LocalDateTime reviewBy) {
     }
@@ -140,37 +136,21 @@ public class OwnerSignupService {
      * @return the Aadhaar QR result, or null when no new Aadhaar image was sent
      */
     AadhaarSecureQr.Result applyForm(Owner owner, OwnerSignupForm form, boolean documentsOptional) {
-        String email = required(form.getEmail(), "Email").toLowerCase(Locale.ROOT);
-        if (!EMAIL.matcher(email).matches()) {
-            throw new IllegalArgumentException("Enter a valid email address");
-        }
-        String travelsName = required(form.getTravelsName(), "Travels name");
-        String contactName = required(form.getContactName(), "Contact person's name");
-        String phone = required(form.getPhone(), "Mobile number");
-        if (!PHONE.matcher(phone).matches()) {
-            throw new IllegalArgumentException("Enter a 10-digit Indian mobile phone number");
-        }
+        // Every field in its official format (IndianFormats); normalised values are written back
+        // to the form so the code below (hashing, masking, checks) sees exactly what is stored.
+        String email = IndianFormats.requireEmail(form.getEmail());
+        String travelsName = IndianFormats.requireBusinessName(form.getTravelsName(), "Travels name");
+        String contactName = IndianFormats.requireName(form.getContactName(), "Contact person's name");
+        String phone = IndianFormats.requireMobile(form.getPhone());
         List<String> areas = ServiceAreas.normalize(form.getServiceAreas());
         List<City> cities = cities(form.getCityIds(), areas.isEmpty());
-        if (!OwnerApplicationChecks.validPan(form.getPanNumber())) {
-            throw new IllegalArgumentException("PAN must look like ABCDE1234F");
-        }
-        if (!DriverApplicationChecks.validAadhaar(form.getAadhaarNumber())) {
-            throw new IllegalArgumentException("Aadhaar number is not valid - check the 12 digits");
-        }
-        String holder = required(form.getBankAccountHolder(), "Bank account holder name");
-        String account = required(form.getBankAccountNumber(), "Bank account number");
-        if (!ACCOUNT.matcher(account).matches()) {
-            throw new IllegalArgumentException("Bank account number must be 9 to 18 digits");
-        }
-        if (!OwnerApplicationChecks.validIfsc(form.getBankIfsc())) {
-            throw new IllegalArgumentException("IFSC must look like SBIN0001234");
-        }
-        String bankName = required(form.getBankName(), "Bank name");
-        String upi = required(form.getUpiId(), "UPI ID");
-        if (!UPI.matcher(upi).matches()) {
-            throw new IllegalArgumentException("UPI ID must look like name@bank");
-        }
+        form.setPanNumber(IndianFormats.requirePan(form.getPanNumber()));
+        form.setAadhaarNumber(IndianFormats.requireAadhaar(form.getAadhaarNumber()));
+        String holder = IndianFormats.requireName(form.getBankAccountHolder(), "Bank account holder name");
+        String account = IndianFormats.requireAccount(form.getBankAccountNumber());
+        form.setBankIfsc(IndianFormats.requireIfsc(form.getBankIfsc()));
+        String bankName = IndianFormats.requireBusinessName(form.getBankName(), "Bank name");
+        String upi = IndianFormats.requireUpi(form.getUpiId());
         if (!form.isAadhaarConsent()) {
             throw new IllegalArgumentException("Please give consent for offline Aadhaar verification");
         }

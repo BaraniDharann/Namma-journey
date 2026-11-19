@@ -30,7 +30,6 @@ public class OwnerAuthService {
     public static final String SETUP_ROLE = "ROLE_OWNER_SETUP";
 
     private static final Pattern OWNER_CODE = Pattern.compile("^NJO-\\d{4,}$", Pattern.CASE_INSENSITIVE);
-    private static final int MIN_PASSWORD = 8;
 
     @Autowired
     private OwnerRepository ownerRepository;
@@ -76,9 +75,7 @@ public class OwnerAuthService {
             // 400, not 401: the web app reads 401 as "session expired" and would sign the owner out.
             throw new IllegalArgumentException("Current password is wrong");
         }
-        if (newPassword == null || newPassword.length() < MIN_PASSWORD) {
-            throw new IllegalArgumentException("Choose a password of at least " + MIN_PASSWORD + " characters");
-        }
+        com.travelplatform.validation.IndianFormats.requireNewPassword(newPassword);
         if (newPassword.equals(currentPassword)) {
             throw new IllegalArgumentException("Choose a password different from the one we emailed");
         }
@@ -105,6 +102,7 @@ public class OwnerAuthService {
                 .filter(o -> o.getStatus() == OwnerStatus.APPROVED)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP"));
 
+        com.travelplatform.validation.IndianFormats.requireNewPassword(request.getNewPassword());
         owner.setPassword(passwordEncoder.encode(request.getNewPassword()));
         owner.setMustChangePassword(false);
         tokenVersionService.revokeOwner(owner); // saves; ends every session issued before the reset

@@ -86,6 +86,7 @@ public class DriverAuthService {
     
     @Transactional
     public Map<String, String> verifyOtpAndSetPassword(String email, String otp, String newPassword) {
+        com.travelplatform.validation.IndianFormats.requireNewPassword(newPassword);
         boolean verified = otpService.verifyOtp(email, otp);
         
         if (!verified) {
@@ -127,6 +128,7 @@ public class DriverAuthService {
 
     @Transactional
     public Map<String, String> resetPassword(DriverResetPasswordRequest request) {
+        com.travelplatform.validation.IndianFormats.requireNewPassword(request.getNewPassword());
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new IllegalArgumentException("Passwords do not match");
         }

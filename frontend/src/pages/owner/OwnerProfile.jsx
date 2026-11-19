@@ -9,6 +9,7 @@ import CloseAccountPanel from '../../components/profile/CloseAccountPanel'
 import {
   updateOwnerDetails, updateOwnerPayout, getOwnerClosurePreview, closeOwnerAccount,
 } from '../../utils/api'
+import { F } from '../../utils/indianFormats'
 
 const errorText = (e, fallback) => e.response?.data?.error || e.response?.data?.message || fallback
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
@@ -36,15 +37,16 @@ function Rows({ rows, missing = 'Not added' }) {
 function EditForm({ fields, values, onChange, error, saving, onCancel, onSave, note }) {
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      {fields.map(([key, label, props = {}]) => (
+      {fields.map(([key, label, props = {}, kind]) => (
         <div key={key}>
           <label htmlFor={`own-${key}`} style={labelStyle}>{label}</label>
           <input
             id={`own-${key}`}
             className="input-field"
             value={values[key]}
-            onChange={(e) => onChange(key, e.target.value)}
+            onChange={(e) => onChange(key, kind ? F[kind].clean(e.target.value) : e.target.value)}
             style={inputStyle}
+            maxLength={kind ? F[kind].max : 128}
             {...props}
           />
         </div>
@@ -69,19 +71,28 @@ function Saved({ text }) {
   )
 }
 
+// [key, label, input props, official format (utils/indianFormats)]
 const DETAIL_FIELDS = [
-  ['travelsName', 'Travels name'],
-  ['contactName', 'Contact person'],
-  ['phone', 'Mobile number', { type: 'tel', inputMode: 'numeric' }],
+  ['travelsName', 'Travels name', {}, 'business'],
+  ['contactName', 'Contact person', {}, 'name'],
+  ['phone', 'Mobile number', { type: 'tel', inputMode: 'numeric' }, 'mobile'],
 ]
 const PAYOUT_FIELDS = [
-  ['bankAccountHolder', 'Account holder name'],
-  ['bankAccountNumber', 'Account number', { inputMode: 'numeric', autoComplete: 'off', placeholder: '9 to 18 digits' }],
-  ['bankIfsc', 'IFSC', { placeholder: 'SBIN0001234', autoCapitalize: 'characters' }],
-  ['bankName', 'Bank name'],
-  ['upiId', 'UPI ID', { placeholder: 'name@bank' }],
+  ['bankAccountHolder', 'Account holder name', {}, 'name'],
+  ['bankAccountNumber', 'Account number', { inputMode: 'numeric', autoComplete: 'off', placeholder: '9 to 18 digits' }, 'account'],
+  ['bankIfsc', 'IFSC', { placeholder: 'SBIN0001234', autoCapitalize: 'characters' }, 'ifsc'],
+  ['bankName', 'Bank name', {}, 'business'],
+  ['upiId', 'UPI ID', { placeholder: 'name@bank' }, 'upi'],
   ['currentPassword', 'Current password', { type: 'password', autoComplete: 'current-password' }],
 ]
+
+/** The first field not in its official format, as a message; '' when all are fine. */
+const firstProblem = (fields, values) => {
+  for (const [key, label, , kind] of fields) {
+    if (kind && F[kind].error(values[key] ?? '', label)) return F[kind].error(values[key] ?? '', label)
+  }
+  return ''
+}
 
 export default function OwnerProfile() {
   const loaded = useOwnerMe()
@@ -160,7 +171,7 @@ export default function OwnerProfile() {
                   error={error}
                   saving={saving}
                   onCancel={() => setDetails(null)}
-                  onSave={() => save(updateOwnerDetails, details, 'details', () => setDetails(null))}
+                  onSave={() => (firstProblem(DETAIL_FIELDS, details) ? setError(firstProblem(DETAIL_FIELDS, details)) : save(updateOwnerDetails, details, 'details', () => setDetails(null)))}
                   note={<div style={{ fontSize: 12.5, color: 'var(--pc-muted)' }}>
                     Email is your login and cities are set by NammaJourney; email nammajourney463@gmail.com to change them.
                   </div>}
@@ -196,7 +207,7 @@ export default function OwnerProfile() {
                   error={error}
                   saving={saving}
                   onCancel={() => setPayout(null)}
-                  onSave={() => save(updateOwnerPayout, payout, 'payout', () => setPayout(null))}
+                  onSave={() => (firstProblem(PAYOUT_FIELDS, payout) ? setError(firstProblem(PAYOUT_FIELDS, payout)) : save(updateOwnerPayout, payout, 'payout', () => setPayout(null)))}
                   note={<div style={{ fontSize: 12.5, color: 'var(--pc-muted)', display: 'flex', gap: 6 }}>
                     <Icon name="lock" size={14} style={{ flexShrink: 0, marginTop: 2 }} />
                     Your password is needed because this changes where your money goes. We&apos;ll email you when it changes.

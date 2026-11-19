@@ -1,5 +1,7 @@
 package com.travelplatform.service;
 
+import com.travelplatform.validation.IndianFormats;
+
 import com.travelplatform.entity.Driver;
 import com.travelplatform.entity.Owner;
 import com.travelplatform.exception.ResourceNotFoundException;
@@ -9,9 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Locale;
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 /**
  * Edits a driver or owner makes to their own Profile (travellers use UserService#updateProfile).
@@ -23,10 +23,6 @@ import java.util.regex.Pattern;
 @Service
 public class ProfileEditService {
 
-    private static final Pattern PHONE = Pattern.compile("^[6-9]\\d{9}$");
-    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
-    private static final Pattern ACCOUNT = Pattern.compile("^\\d{9,18}$");
-    private static final Pattern UPI = Pattern.compile("^[\\w.-]{2,}@[a-zA-Z]{2,}$");
 
     private final OwnerRepository owners;
     private final DriverRepository drivers;
@@ -53,12 +49,9 @@ public class ProfileEditService {
     @Transactional
     public void updateOwnerDetails(Long ownerId, OwnerDetails req) {
         Owner owner = owner(ownerId);
-        String travelsName = required(req.travelsName(), "Travels name");
-        String contactName = required(req.contactName(), "Contact person's name");
-        String phone = required(req.phone(), "Mobile number");
-        if (!PHONE.matcher(phone).matches()) {
-            throw new IllegalArgumentException("Enter a 10-digit Indian mobile phone number");
-        }
+        String travelsName = IndianFormats.requireBusinessName(req.travelsName(), "Travels name");
+        String contactName = IndianFormats.requireName(req.contactName(), "Contact person's name");
+        String phone = IndianFormats.requireMobile(req.phone());
         owner.setTravelsName(limit(travelsName, 255, "Travels name"));
         owner.setContactName(limit(contactName, 255, "Contact person's name"));
         owner.setPhone(phone);
@@ -70,23 +63,15 @@ public class ProfileEditService {
         Owner owner = owner(ownerId);
         requirePassword(req.currentPassword(), owner.getPassword());
 
-        String holder = required(req.bankAccountHolder(), "Bank account holder name");
-        String account = required(req.bankAccountNumber(), "Bank account number").replace(" ", "");
-        if (!ACCOUNT.matcher(account).matches()) {
-            throw new IllegalArgumentException("Bank account number must be 9 to 18 digits");
-        }
-        if (!OwnerApplicationChecks.validIfsc(req.bankIfsc())) {
-            throw new IllegalArgumentException("IFSC must look like SBIN0001234");
-        }
-        String bankName = required(req.bankName(), "Bank name");
-        String upi = required(req.upiId(), "UPI ID");
-        if (!UPI.matcher(upi).matches()) {
-            throw new IllegalArgumentException("UPI ID must look like name@bank");
-        }
+        String holder = IndianFormats.requireName(req.bankAccountHolder(), "Bank account holder name");
+        String account = IndianFormats.requireAccount(req.bankAccountNumber());
+        String ifsc = IndianFormats.requireIfsc(req.bankIfsc());
+        String bankName = IndianFormats.requireBusinessName(req.bankName(), "Bank name");
+        String upi = IndianFormats.requireUpi(req.upiId());
 
         owner.setBankAccountHolder(limit(holder, 255, "Bank account holder name"));
         owner.setBankAccountNumber(account);
-        owner.setBankIfsc(req.bankIfsc().trim().toUpperCase(Locale.ROOT));
+        owner.setBankIfsc(ifsc);
         owner.setBankName(limit(bankName, 255, "Bank name"));
         owner.setUpiId(upi);
         owners.save(owner);
@@ -104,15 +89,9 @@ public class ProfileEditService {
                 .filter(d -> d.getClosedAt() == null)
                 .orElseThrow(() -> new ResourceNotFoundException("Driver not found"));
 
-        String name = required(req.name(), "Name");
-        String mobile = required(req.mobile(), "Mobile number");
-        if (!PHONE.matcher(mobile).matches()) {
-            throw new IllegalArgumentException("Enter a 10-digit Indian mobile phone number");
-        }
-        String email = req.email() == null || req.email().isBlank() ? null : req.email().trim().toLowerCase(Locale.ROOT);
-        if (email != null && !EMAIL.matcher(email).matches()) {
-            throw new IllegalArgumentException("Enter a valid email address");
-        }
+        String name = IndianFormats.requireName(req.name(), "Name");
+        String mobile = IndianFormats.requireMobile(req.mobile());
+        String email = req.email() == null || req.email().isBlank() ? null : IndianFormats.requireEmail(req.email());
         if (email == null && driver.getEmail() != null) {
             // Password reset and first-login codes go to this address; it can be changed, not removed.
             throw new IllegalArgumentException("Email is needed for password reset codes");

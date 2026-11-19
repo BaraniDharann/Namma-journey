@@ -7,6 +7,8 @@ import { Panel, PageHead, StatusPill, Skeleton } from '../../components/dash/ui'
 import EarningsPanel from '../../components/driver/EarningsPanel'
 import HomeAreaPanel from '../../components/driver/HomeAreaPanel'
 import CloseAccountPanel from '../../components/profile/CloseAccountPanel'
+import PrivateImage from '../../components/PrivateImage'
+import { F } from '../../utils/indianFormats'
 
 const errorText = (e, fallback) => e.response?.data?.error || e.response?.data?.message || fallback
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
@@ -36,12 +38,16 @@ export default function DriverProfile() {
     setForm({ name: p.name || '', mobile: p.mobile || '', email: p.email || '', currentPassword: '' })
     setFormError(''); setSaved(false)
   }
-  const setField = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  // Cleaned as typed to the official format (utils/indianFormats); the password is left as typed.
+  const KIND = { name: 'name', mobile: 'mobile', email: 'email' }
+  const setField = (k) => (e) => setForm((f) => ({ ...f, [k]: KIND[k] ? F[KIND[k]].clean(e.target.value) : e.target.value }))
   // Mobile is the login ID and email gets reset codes, so changing either asks for the password.
   const loginChanged = !!form && (form.mobile.trim() !== (profile?.mobile || '')
     || form.email.trim().toLowerCase() !== (profile?.email || '').toLowerCase())
 
   const saveEdit = async () => {
+    const problem = F.name.error(form.name, 'Name') || F.mobile.error(form.mobile) || (form.email.trim() ? F.email.error(form.email) : '')
+    if (problem) { setFormError(problem); return }
     setSaving(true); setFormError('')
     try {
       const res = await updateDriverProfile(user.userId, {
@@ -131,15 +137,15 @@ export default function DriverProfile() {
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
                   <label htmlFor="drv-name" style={labelStyle}>Name</label>
-                  <input id="drv-name" className="input-field" value={form.name} onChange={setField('name')} style={inputStyle} />
+                  <input id="drv-name" className="input-field" maxLength={F.name.max} value={form.name} onChange={setField("name")} style={inputStyle} />
                 </div>
                 <div>
                   <label htmlFor="drv-mobile" style={labelStyle}>Mobile (your login ID)</label>
-                  <input id="drv-mobile" className="input-field" type="tel" inputMode="numeric" value={form.mobile} onChange={setField('mobile')} style={inputStyle} />
+                  <input id="drv-mobile" className="input-field" type="tel" inputMode="numeric" maxLength={10} value={form.mobile} onChange={setField('mobile')} style={inputStyle} />
                 </div>
                 <div>
                   <label htmlFor="drv-email" style={labelStyle}>Email</label>
-                  <input id="drv-email" className="input-field" type="email" value={form.email} onChange={setField('email')} style={inputStyle} />
+                  <input id="drv-email" className="input-field" type="email" maxLength={F.email.max} value={form.email} onChange={setField('email')} style={inputStyle} />
                 </div>
                 {loginChanged && (
                   <div>
@@ -202,11 +208,14 @@ export default function DriverProfile() {
           {d.servesCity !== false && <HomeAreaPanel driverId={user.userId} />}
 
           <Panel span={12} title="Documents" meta={`${DOCS.filter(([key]) => d[key]).length} of ${DOCS.length} uploaded`}>
+            <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--pc-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="lock" size={14} />Hidden for your privacy. Tap one to see it for 30 seconds.
+            </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
               {DOCS.map(([key, icon, label]) => (
                 <div key={key} style={{ padding: 14, textAlign: 'center', borderRadius: 16, background: 'var(--pc-panel)', border: `1.5px solid ${d[key] ? 'var(--pc-brand-deep)' : 'var(--pc-line)'}` }}>
                   {imgUrl(d[key])
-                    ? <img src={imgUrl(d[key])} alt={label} style={{ width: '100%', height: 96, objectFit: 'cover', borderRadius: 12, marginBottom: 8 }} />
+                    ? <div style={{ marginBottom: 8 }}><PrivateImage src={imgUrl(d[key])} alt={label} /></div>
                     : <div style={{ marginBottom: 8, width: '100%', height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--pc-wash)', borderRadius: 12, border: '2px dashed var(--pc-line)', color: 'var(--pc-muted)' }}><Icon name={icon} size={28} /></div>
                   }
                   <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--pc-ink)', marginBottom: 4 }}>{label}</div>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { ownerChangePassword } from '../../utils/api'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../../components/auth/AuthShell'
+import { F } from '../../utils/indianFormats'
 
 /**
  * First sign-in of an approved owner: the emailed one-time password only opens this page. Choosing
@@ -18,7 +19,7 @@ export default function OwnerChangePassword() {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (form.newPassword.length < 8) { setError('Choose a password of at least 8 characters'); return }
+    if (F.password.error(form.newPassword)) { setError(F.password.error(form.newPassword)); return }
     if (form.newPassword !== form.confirm) { setError('The two new passwords do not match'); return }
     setLoading(true)
     setError('')
@@ -60,7 +61,7 @@ export default function OwnerChangePassword() {
           <PasswordInput value={form.currentPassword} autoComplete="current-password" onChange={set('currentPassword')} required />
         </Field>
         <Field label="New password" icon="lock">
-          <PasswordInput placeholder="At least 8 characters" value={form.newPassword} autoComplete="new-password" onChange={set('newPassword')} required />
+          <PasswordInput placeholder="8+ characters, a letter and a number" maxLength={F.password.max} value={form.newPassword} autoComplete="new-password" onChange={set('newPassword')} required />
         </Field>
         <Field label="Repeat new password" icon="lock">
           <PasswordInput value={form.confirm} autoComplete="new-password" onChange={set('confirm')} required />
