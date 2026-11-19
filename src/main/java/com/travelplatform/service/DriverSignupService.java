@@ -33,8 +33,6 @@ public class DriverSignupService {
 
     private static final Logger log = LoggerFactory.getLogger(DriverSignupService.class);
 
-    private static final Pattern MOBILE = Pattern.compile("^[6-9]\\d{9}$");
-    private static final Pattern AADHAAR = Pattern.compile("^\\d{12}$");
 
     /** Unconfirmed signups hold the mobile, email, licence, Aadhaar and plate; they are dropped after this long. */
     @Value("${app.drivers.unverified-ttl-hours:48}")
@@ -85,25 +83,19 @@ public class DriverSignupService {
                 || blank(f.getLicenseNumber()) || blank(f.getAadhaarNumber())) {
             throw new IllegalArgumentException("Name, mobile, email, licence number and Aadhaar number are required");
         }
-        if (f.getPassword() == null || f.getPassword().length() < 8) {
-            throw new IllegalArgumentException("Password must be at least 8 characters");
-        }
+        // Every field in its official format (IndianFormats), before any file is written.
+        f.setName(com.travelplatform.validation.IndianFormats.requireName(f.getName(), "Name"));
+        com.travelplatform.validation.IndianFormats.requireNewPassword(f.getPassword());
         if (blank(f.getVehicleNumber())) {
             throw new IllegalArgumentException("Vehicle number plate is required");
         }
+        String mobile = com.travelplatform.validation.IndianFormats.requireMobile(f.getMobile());
+        String aadhaarNumber = com.travelplatform.validation.IndianFormats.requireAadhaar(f.getAadhaarNumber());
+        String email = com.travelplatform.validation.IndianFormats.requireEmail(f.getEmail());
+        String licence = com.travelplatform.validation.IndianFormats.requireLicence(f.getLicenseNumber());
         if (missing(photo) || missing(license) || missing(aadhaar) || missing(rc)) {
             throw new IllegalArgumentException("All four documents are required: photo, licence, Aadhaar and vehicle RC");
         }
-        String mobile = f.getMobile().trim();
-        if (!MOBILE.matcher(mobile).matches()) {
-            throw new IllegalArgumentException("Invalid Indian mobile number");
-        }
-        String aadhaarNumber = f.getAadhaarNumber().replaceAll("\\s+", "");
-        if (!AADHAAR.matcher(aadhaarNumber).matches() || !DriverApplicationChecks.validAadhaar(aadhaarNumber)) {
-            throw new IllegalArgumentException("Aadhaar number is not valid - check the 12 digits");
-        }
-        String email = f.getEmail().trim().toLowerCase(Locale.ROOT);
-        String licence = f.getLicenseNumber().trim().toUpperCase(Locale.ROOT);
 
         // Validates the plate and vehicle fields on the new driver first, so a bad form leaves no files behind.
         Driver driver = new Driver();

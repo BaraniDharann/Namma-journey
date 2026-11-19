@@ -75,7 +75,7 @@ class AdminDriverServiceTest {
             return d;
         });
 
-        service.createDriver("Ravi", "9000000001", "r@x.com", "DL1", TestDocs.VALID_AADHAAR, img, img, img, null, 500L);
+        service.createDriver("Ravi", "9000000001", "r@x.com", "TN0120190001234", TestDocs.VALID_AADHAAR, img, img, img, null, 500L);
 
         org.mockito.ArgumentCaptor<Driver> saved = org.mockito.ArgumentCaptor.forClass(Driver.class);
         verify(drivers).save(saved.capture());
@@ -94,9 +94,9 @@ class AdminDriverServiceTest {
         car(600, 8L, true);
         car(501, OWNER, false);
         assertThrows(com.travelplatform.exception.ResourceNotFoundException.class, () -> service.createDriver(
-                "Ravi", "9000000001", "r@x.com", "DL1", TestDocs.VALID_AADHAAR, img, img, img, null, 600L));
+                "Ravi", "9000000001", "r@x.com", "TN0120190001234", TestDocs.VALID_AADHAAR, img, img, img, null, 600L));
         assertThrows(IllegalArgumentException.class, () -> service.createDriver(
-                "Ravi", "9000000001", "r@x.com", "DL1", TestDocs.VALID_AADHAAR, img, img, img, null, 501L));
+                "Ravi", "9000000001", "r@x.com", "TN0120190001234", TestDocs.VALID_AADHAAR, img, img, img, null, 501L));
         verify(drivers, never()).save(any());
     }
 
@@ -116,7 +116,7 @@ class AdminDriverServiceTest {
         when(drivers.findByVehicleKey("KA01AB1234")).thenReturn(Optional.of(holder(5)));
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> service.createDriver(
-                "Ravi", "9000000001", "r@x.com", "DL1", TestDocs.VALID_AADHAAR, img, img, img, car("KA 01 ab 1234")));
+                "Ravi", "9000000001", "r@x.com", "TN0120190001234", TestDocs.VALID_AADHAAR, img, img, img, car("KA 01 ab 1234")));
 
         assertEquals("Vehicle number already registered", e.getMessage());
         verify(files, never()).storeFile(any(), anyString());
@@ -128,7 +128,7 @@ class AdminDriverServiceTest {
         when(drivers.save(any(Driver.class))).thenThrow(new org.springframework.dao.DataIntegrityViolationException("dup"));
 
         assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () -> service.createDriver(
-                "Ravi", "9000000001", "r@x.com", "DL1", TestDocs.VALID_AADHAAR, img, img, img, car("KA 01 AB 1234")));
+                "Ravi", "9000000001", "r@x.com", "TN0120190001234", TestDocs.VALID_AADHAAR, img, img, img, car("KA 01 AB 1234")));
 
         verify(files).delete("uploads/drivers/photo_x.jpg");
         verify(files).delete("uploads/drivers/license_x.jpg");
@@ -164,11 +164,11 @@ class AdminDriverServiceTest {
     @org.junit.jupiter.api.DisplayName("a mobile another owner's or an independent driver already has is refused clearly")
     void driverConflictSeenAcrossOwners() {
         UnscopedLookups lookups = mock(UnscopedLookups.class);
-        when(lookups.driverConflict("9000000001", "r@x.com", "DL1", TestDocs.VALID_AADHAAR)).thenReturn("Mobile number already registered");
+        when(lookups.driverConflict("9000000001", "r@x.com", "TN0120190001234", TestDocs.VALID_AADHAAR)).thenReturn("Mobile number already registered");
         ReflectionTestUtils.setField(service, "lookups", lookups);
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> service.createDriver(
-                "Ravi", "9000000001", "r@x.com", "DL1", TestDocs.VALID_AADHAAR, img, img, img, null, null));
+                "Ravi", "9000000001", "r@x.com", "TN0120190001234", TestDocs.VALID_AADHAAR, img, img, img, null, null));
         assertEquals("Mobile number already registered", e.getMessage());
         verify(files, never()).storeFile(any(), anyString());
     }
@@ -180,7 +180,7 @@ class AdminDriverServiceTest {
                 TestDocs.rejecting("This Aadhaar failed UIDAI's digital signature check"));
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> service.createDriver(
-                "Ravi", "9000000001", "r@x.com", "DL1", TestDocs.VALID_AADHAAR, img, img, img, null, null));
+                "Ravi", "9000000001", "r@x.com", "TN0120190001234", TestDocs.VALID_AADHAAR, img, img, img, null, null));
 
         assertEquals("This Aadhaar failed UIDAI's digital signature check", e.getMessage());
         verify(files, never()).storeFile(any(), anyString());
@@ -194,7 +194,7 @@ class AdminDriverServiceTest {
                 + ((TestDocs.VALID_AADHAAR.charAt(11) - '0' + 1) % 10);
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> service.createDriver(
-                "Ravi", "9000000001", "r@x.com", "DL1", wrong, img, img, img, null, null));
+                "Ravi", "9000000001", "r@x.com", "TN0120190001234", wrong, img, img, img, null, null));
 
         assertTrue(e.getMessage().startsWith("Aadhaar number is not valid"));
         verify(files, never()).storeFile(any(), anyString());

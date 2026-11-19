@@ -7,6 +7,7 @@ import { ownerStepProblem, OWNER_STEPS } from '../utils/ownerForm'
 import AuthShell, { Field, FieldError, Alert, Submit, CtaLink, FormSection, WizardSteps } from '../components/auth/AuthShell'
 import Icon from '../components/dash/Icon'
 import DocTile from '../components/driver/DocTile'
+import { F } from '../utils/indianFormats'
 
 const EMPTY = {
   // cityIds: City-ride zones from the earlier form, kept only for a resubmission that had them.
@@ -82,7 +83,13 @@ export default function OwnerSignupPage() {
 
   const clearIf = (k) => { if (badField === k) { setBadField(''); setError('') } }
   const setValue = (k, v) => { setForm((f) => ({ ...f, [k]: v })); clearIf(k) }
-  const set = (k) => (e) => setValue(k, e.target.value)
+  // The official format of each field, applied as it is typed (utils/indianFormats).
+  const KIND = {
+    travelsName: 'business', contactName: 'name', email: 'email', phone: 'mobile', panNumber: 'pan',
+    aadhaarNumber: 'aadhaar', bankAccountHolder: 'name', bankName: 'business', bankAccountNumber: 'account',
+    bankIfsc: 'ifsc', upiId: 'upi',
+  }
+  const set = (k) => (e) => setValue(k, KIND[k] ? F[KIND[k]].clean(e.target.value) : e.target.value)
 
   const goTo = (s) => { moved.current = true; setError(''); setBadField(''); setStep(s); setReached((r) => Math.max(r, s)) }
 
@@ -171,19 +178,19 @@ export default function OwnerSignupPage() {
               <div className="au-grid2">
                 <Field label="Travels name" icon="bus" error={err('travelsName')}>
                   <input type="text" name="travelsName" {...bad('travelsName')} placeholder="e.g. Sri Murugan Travels" value={form.travelsName}
-                    onChange={set('travelsName')} maxLength={255} required />
+                    onChange={set('travelsName')} maxLength={F.business.max} required />
                 </Field>
                 <Field label="Contact person" icon="user" error={err('contactName')}>
                   <input type="text" name="contactName" {...bad('contactName')} placeholder="Full name" value={form.contactName} autoComplete="name"
-                    onChange={set('contactName')} maxLength={255} required />
+                    onChange={set('contactName')} maxLength={F.name.max} required />
                 </Field>
                 <Field label="Email" icon="mail" error={err('email')}>
                   <input type="email" name="email" {...bad('email')} placeholder="owner@example.com" value={form.email} autoComplete="email"
-                    onChange={set('email')} required />
+                    onChange={set('email')} maxLength={F.email.max} required />
                 </Field>
                 <Field label="Mobile number" icon="phone" error={err('phone')}>
                   <input type="tel" name="phone" {...bad('phone')} inputMode="numeric" placeholder="10 digits" maxLength={10} value={form.phone} autoComplete="tel"
-                    onChange={(e) => setValue('phone', e.target.value.replace(/\D/g, ''))} required />
+                    onChange={set('phone')} required />
                 </Field>
               </div>
               <div>
@@ -196,12 +203,12 @@ export default function OwnerSignupPage() {
             {step === 1 && (
               <div className="au-grid2">
                 <Field label={panHint ? `PAN (on file: ${panHint})` : 'PAN'} icon="id" error={err('panNumber')}>
-                  <input type="text" name="panNumber" {...bad('panNumber')} placeholder="ABCDE1234F" maxLength={10} value={form.panNumber} autoCapitalize="characters"
-                    onChange={(e) => setValue('panNumber', e.target.value.toUpperCase())} required />
+                  <input type="text" name="panNumber" {...bad('panNumber')} placeholder="ABCPE1234F" maxLength={10} value={form.panNumber} autoCapitalize="characters"
+                    onChange={set('panNumber')} required />
                 </Field>
                 <Field label="Aadhaar number" icon="id" error={err('aadhaarNumber')}>
                   <input type="text" name="aadhaarNumber" {...bad('aadhaarNumber')} inputMode="numeric" placeholder="12 digits" maxLength={12} value={form.aadhaarNumber}
-                    onChange={(e) => setValue('aadhaarNumber', e.target.value.replace(/\D/g, ''))} required />
+                    onChange={set('aadhaarNumber')} required />
                 </Field>
               </div>
             )}
@@ -210,24 +217,24 @@ export default function OwnerSignupPage() {
               <div className="au-grid2">
                 <Field label="Account holder name" icon="user" error={err('bankAccountHolder')}>
                   <input type="text" name="bankAccountHolder" {...bad('bankAccountHolder')} placeholder="As printed on the passbook" value={form.bankAccountHolder}
-                    onChange={set('bankAccountHolder')} required />
+                    onChange={set('bankAccountHolder')} maxLength={F.name.max} required />
                 </Field>
                 <Field label="Bank name" icon="card" error={err('bankName')}>
                   <input type="text" name="bankName" {...bad('bankName')} placeholder="e.g. State Bank of India" value={form.bankName}
-                    onChange={set('bankName')} required />
+                    onChange={set('bankName')} maxLength={F.business.max} required />
                 </Field>
                 <Field label="Account number" icon="card" error={err('bankAccountNumber')}>
                   <input type="text" name="bankAccountNumber" {...bad('bankAccountNumber')} inputMode="numeric" placeholder="9 to 18 digits" maxLength={18} value={form.bankAccountNumber}
-                    onChange={(e) => setValue('bankAccountNumber', e.target.value.replace(/\D/g, ''))} required />
+                    onChange={set('bankAccountNumber')} required />
                 </Field>
                 <Field label="IFSC" icon="id" error={err('bankIfsc')}>
                   <input type="text" name="bankIfsc" {...bad('bankIfsc')} placeholder="SBIN0001234" maxLength={11} value={form.bankIfsc} autoCapitalize="characters"
-                    onChange={(e) => setValue('bankIfsc', e.target.value.toUpperCase())} required />
+                    onChange={set('bankIfsc')} required />
                 </Field>
                 <div className="au-span2">
                   <Field label="UPI ID (customers pay you here)" icon="qr" error={err('upiId')}>
                     <input type="text" name="upiId" {...bad('upiId')} placeholder="name@bank" value={form.upiId} autoCapitalize="none"
-                      onChange={set('upiId')} required />
+                      onChange={set('upiId')} maxLength={F.upi.max} required />
                   </Field>
                 </div>
               </div>

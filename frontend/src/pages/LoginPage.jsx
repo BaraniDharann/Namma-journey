@@ -6,6 +6,7 @@ import { userLogin, googleLogin, sendOtp, userForgotPassword, saveUserPassword }
 import { offerToSaveLogin, wasSaveOfferSkipped, skipSaveOffer } from '../utils/rememberLogin'
 import AuthShell, { Field, PasswordInput, Alert, Submit, TextButton } from '../components/auth/AuthShell'
 import { takeReturn, USER_HOME } from '../utils/returnTo'
+import { F } from '../utils/indianFormats'
 
 export default function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' })
@@ -28,7 +29,7 @@ export default function LoginPage() {
 
   const handleSavePassword = async (e) => {
     e.preventDefault()
-    if (savePw.password.length < 8) { setSaveError('Password must be at least 8 characters'); return }
+    if (F.password.error(savePw.password)) { setSaveError(F.password.error(savePw.password)); return }
     if (savePw.password !== savePw.confirm) { setSaveError('Passwords do not match'); return }
     setSaving(true); setSaveError('')
     try {
@@ -118,6 +119,7 @@ export default function LoginPage() {
 
   const handleForgotReset = async (e) => {
     e.preventDefault()
+    if (F.password.error(forgotForm.newPassword)) { setForgotError(F.password.error(forgotForm.newPassword)); return }
     setForgotLoading(true); setForgotError('')
     try {
       await userForgotPassword(forgotForm)
@@ -136,7 +138,7 @@ export default function LoginPage() {
           <input type="email" name="username" autoComplete="username" value={saveFor.email} readOnly />
         </Field>
         <Field label="Password" icon="lock">
-          <PasswordInput name="new-password" placeholder="Min 8 characters" value={savePw.password} autoComplete="new-password" autoFocus
+          <PasswordInput name="new-password" placeholder="8+ characters, a letter and a number" maxLength={F.password.max} value={savePw.password} autoComplete="new-password" autoFocus
             onChange={e => setSavePw(p => ({ ...p, password: e.target.value }))} required />
         </Field>
         <Field label="Confirm password" icon="lock">
@@ -175,7 +177,7 @@ export default function LoginPage() {
               onChange={e => setForgotForm(p => ({ ...p, otp: e.target.value }))} required />
           </Field>
           <Field label="New password" icon="lock">
-            <PasswordInput placeholder="New password (min 8 chars, include @#$)" value={forgotForm.newPassword} autoComplete="new-password"
+            <PasswordInput placeholder="New password: 8+ characters, a letter and a number" maxLength={F.password.max} value={forgotForm.newPassword} autoComplete="new-password"
               onChange={e => setForgotForm(p => ({ ...p, newPassword: e.target.value }))} required />
           </Field>
           <Submit loading={forgotLoading} loadingText="Resetting...">Reset password</Submit>

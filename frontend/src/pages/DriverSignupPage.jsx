@@ -10,6 +10,7 @@ import VehicleFields, { DEFAULT_VEHICLE } from '../components/owner/VehicleField
 import DocTile from '../components/driver/DocTile'
 import { DOCUMENTS } from '../components/driver/gateView'
 import HomeAreaPicker from '../components/driver/HomeAreaPicker'
+import { F, fieldProps } from '../utils/indianFormats'
 
 const STEPS = ['About you', 'Vehicle & area', 'Documents']
 // Drivers who sign themselves up can't take Trips; the server forces servesTrip=false regardless.
@@ -36,15 +37,16 @@ export default function DriverSignupPage() {
   const validate = () => {
     if (step === 0) {
       if (!about.name.trim()) return 'Enter your name'
-      if (!/^\d{10}$/.test(about.mobile)) return 'Enter a 10-digit mobile number'
-      if (!/^\S+@\S+\.\S+$/.test(about.email)) return 'Enter a valid email address'
-      if (about.password.length < 8) return 'Password must be at least 8 characters'
+      return F.name.error(about.name, 'Name') || F.mobile.error(about.mobile) || F.email.error(about.email)
+        || F.password.error(about.password)
     } else if (step === 1) {
       if (!vehicle.vehicleNumber.trim()) return 'Enter your vehicle number plate'
+      if (F.plate.error(vehicle.vehicleNumber)) return F.plate.error(vehicle.vehicleNumber)
       if (!homeArea) return 'Choose the state, district and town you drive in'
     } else {
       if (!ids.licenseNumber.trim()) return 'Enter your licence number'
-      if (!/^\d{12}$/.test(ids.aadhaarNumber)) return 'Enter your 12-digit Aadhaar number'
+      if (F.licence.error(ids.licenseNumber)) return F.licence.error(ids.licenseNumber)
+      if (F.aadhaar.error(ids.aadhaarNumber)) return F.aadhaar.error(ids.aadhaarNumber)
       if (DOCUMENTS.some((d) => !files[d.key])) return 'Upload all four documents'
     }
     return ''
@@ -115,17 +117,16 @@ export default function DriverSignupPage() {
         {step === 0 && (
           <>
             <Field label="Full name" icon="user">
-              <input type="text" placeholder="As on your licence" value={about.name} autoComplete="name" onChange={setA('name')} required />
+              <input type="text" {...fieldProps('name', about.name, (v) => setAbout({ ...about, name: v }))} placeholder="As on your licence" autoComplete="name" required />
             </Field>
             <Field label="Mobile number" icon="phone">
-              <input type="tel" inputMode="numeric" placeholder="9876543210" maxLength={10} value={about.mobile} autoComplete="tel"
-                onChange={(e) => setAbout({ ...about, mobile: e.target.value.replace(/\D/g, '') })} required />
+              <input type="tel" {...fieldProps('mobile', about.mobile, (v) => setAbout({ ...about, mobile: v }))} autoComplete="tel" required />
             </Field>
             <Field label="Email" icon="mail">
-              <input type="email" placeholder="you@example.com" value={about.email} autoComplete="email" onChange={setA('email')} required />
+              <input type="email" {...fieldProps('email', about.email, (v) => setAbout({ ...about, email: v }))} autoComplete="email" required />
             </Field>
             <Field label="Password" icon="lock">
-              <PasswordInput placeholder="At least 8 characters" value={about.password} autoComplete="new-password" onChange={setA('password')} required />
+              <PasswordInput placeholder="8+ characters, a letter and a number" value={about.password} maxLength={F.password.max} autoComplete="new-password" onChange={setA('password')} required />
             </Field>
           </>
         )}
@@ -143,11 +144,10 @@ export default function DriverSignupPage() {
         {step === 2 && (
           <>
             <Field label="Driving licence number" icon="id">
-              <input type="text" value={ids.licenseNumber} maxLength={30} onChange={(e) => setIds({ ...ids, licenseNumber: e.target.value })} required />
+              <input type="text" {...fieldProps('licence', ids.licenseNumber, (v) => setIds({ ...ids, licenseNumber: v }))} required />
             </Field>
             <Field label="Aadhaar number" icon="id">
-              <input type="text" inputMode="numeric" placeholder="12 digits" maxLength={12} value={ids.aadhaarNumber}
-                onChange={(e) => setIds({ ...ids, aadhaarNumber: e.target.value.replace(/\D/g, '') })} required />
+              <input type="text" {...fieldProps('aadhaar', ids.aadhaarNumber, (v) => setIds({ ...ids, aadhaarNumber: v }))} required />
             </Field>
             <div className="pc" style={{ background: 'none', marginBottom: 16 }}>
               <p style={{ fontSize: 13, margin: '0 0 12px', color: 'var(--text-muted, #6b7280)' }}>

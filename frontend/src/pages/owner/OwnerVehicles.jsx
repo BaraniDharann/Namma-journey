@@ -5,6 +5,7 @@ import { getOwnerVehicles, createVehicle, updateVehicle, deactivateVehicle, acti
 import { CAR_CATEGORIES, categoryLabel } from '../../utils/carCategories'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, Empty, Skeleton, ErrorNote } from '../../components/dash/ui'
+import { fieldProps } from '../../utils/indianFormats'
 
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
 const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14 }
@@ -61,8 +62,8 @@ function VehicleForm({ vehicle, onSaved, onCancel }) {
       <div style={grid}>
         <div>
           <label htmlFor="car-reg" style={labelStyle}>Registration number *</label>
-          <input id="car-reg" className="input-field" placeholder="KA 01 AB 1234" maxLength={20} required
-            value={form.registrationNumber} onChange={(e) => set({ registrationNumber: e.target.value })} />
+          <input id="car-reg" className="input-field" required
+            {...fieldProps('plate', form.registrationNumber, (v) => set({ registrationNumber: v }))} />
         </div>
         <div>
           <label htmlFor="car-model" style={labelStyle}>Model</label>

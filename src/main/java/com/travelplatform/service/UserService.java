@@ -698,6 +698,7 @@ public class UserService {
         }
         com.travelplatform.entity.User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP"));
+        com.travelplatform.validation.IndianFormats.requireNewPassword(request.getNewPassword());
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         // Saves the user and ends every existing session - the point of a reset is often that
         // someone else has a token.
@@ -717,9 +718,7 @@ public class UserService {
         if (user.getPassword() != null && !user.getPassword().isBlank()) {
             throw new IllegalArgumentException("This account already has a password. Use Forgot password to change it.");
         }
-        if (password == null || password.length() < 8) {
-            throw new IllegalArgumentException("Password must be at least 8 characters");
-        }
+        com.travelplatform.validation.IndianFormats.requireNewPassword(password);
         user.setPassword(passwordEncoder.encode(password));
         userRepository.save(user);
     }
@@ -729,7 +728,7 @@ public class UserService {
         com.travelplatform.entity.User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         if (request.getName() != null && !request.getName().isBlank()) {
-            user.setName(request.getName().trim());
+            user.setName(com.travelplatform.validation.IndianFormats.requireName(request.getName(), "Name"));
         }
         if (request.getPhone() != null && !request.getPhone().isBlank()) {
             String phone = request.getPhone().trim();

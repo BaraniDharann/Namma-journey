@@ -100,7 +100,7 @@ class OwnerSignupServiceTest {
         f.setEmail("Ravi@Example.com");
         f.setPhone("9876543210");
         f.setCityIds(List.of(1L));
-        f.setPanNumber("abcde1234f");
+        f.setPanNumber("abcpe1234f");
         f.setAadhaarNumber("2345 6789 0124");
         f.setBankAccountHolder("Ravi Kumar");
         f.setBankAccountNumber("12345678906789");
@@ -126,9 +126,9 @@ class OwnerSignupServiceTest {
         assertNull(o.getPassword());
         assertNull(o.getOwnerCode());
         assertEquals("ravi@example.com", o.getEmail());
-        assertTrue(com.travelplatform.security.IdNumberHash.matches("ABCDE1234F", o.getPanBcrypt()));
+        assertTrue(com.travelplatform.security.IdNumberHash.matches("ABCPE1234F", o.getPanBcrypt()));
         assertEquals("XXXXX1234F", o.getPanMasked());
-        assertEquals(OwnerApplicationChecks.panHash("ABCDE1234F"), o.getPanHash());
+        assertEquals(OwnerApplicationChecks.panHash("ABCPE1234F"), o.getPanHash());
         assertEquals("0124", o.getAadhaarLast4());
         assertEquals("SBIN0001234", o.getBankIfsc());
         assertNotNull(o.getAadhaarConsentAt());
@@ -175,9 +175,9 @@ class OwnerSignupServiceTest {
         assertEquals("This email is already registered", e.getMessage());
 
         when(owners.findByEmailIgnoreCase(anyString())).thenReturn(Optional.empty());
-        when(owners.findByPanHash(OwnerApplicationChecks.panHash("ABCDE1234F"))).thenReturn(Optional.of(other));
+        when(owners.findByPanHash(OwnerApplicationChecks.panHash("ABCPE1234F"))).thenReturn(Optional.of(other));
         OwnerSignupForm f = form();
-        f.setPanNumber(" ABCDE 1234F ");
+        f.setPanNumber(" ABCPE 1234F ");
         e = assertThrows(IllegalArgumentException.class, () -> service.signup(f));
         assertEquals("This PAN is already registered", e.getMessage());
 
@@ -212,7 +212,7 @@ class OwnerSignupServiceTest {
         assertRefused(f -> f.setAadhaarNumber("234567890123"), "Aadhaar");
         assertRefused(f -> f.setCityIds(List.of(99L)), "city");
         assertRefused(f -> f.setCityIds(List.of()), "city");
-        assertRefused(f -> f.setPhone("12345"), "phone");
+        assertRefused(f -> f.setPhone("12345"), "mobile number");
         assertRefused(f -> f.setUpiId("not-a-upi"), "UPI");
         assertRefused(f -> f.setBankAccountNumber("12ab"), "account");
         assertRefused(f -> f.setAadhaarConsent(false), "consent");
@@ -250,7 +250,7 @@ class OwnerSignupServiceTest {
         c.setId(1L);
         o.setCities(new java.util.HashSet<>(List.of(c)));
         o.setPanMasked("XXXXX1234F");
-        o.setPanHash(OwnerApplicationChecks.panHash("ABCDE1234F"));
+        o.setPanHash(OwnerApplicationChecks.panHash("ABCPE1234F"));
         o.setBankAccountHolder("Ravi Kumar");
         o.setBankAccountNumber("12345678906789");
         o.setBankIfsc("SBIN0001234");
@@ -283,7 +283,7 @@ class OwnerSignupServiceTest {
         String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(p);
         assertFalse(json.contains("12345678906789"));
         assertFalse(json.contains("ravi@okaxis"));
-        assertFalse(json.contains("ABCDE1234F"));
+        assertFalse(json.contains("ABCPE1234F"));
     }
 
     @Test
@@ -369,8 +369,8 @@ class OwnerSignupServiceTest {
         squatter.setId(7L);
         squatter.setEmail("someone-else@example.com");
         squatter.setStatus(OwnerStatus.REJECTED);
-        squatter.setPanHash(OwnerApplicationChecks.panHash("ABCDE1234F"));
-        when(owners.findByPanHash(OwnerApplicationChecks.panHash("ABCDE1234F"))).thenReturn(Optional.of(squatter));
+        squatter.setPanHash(OwnerApplicationChecks.panHash("ABCPE1234F"));
+        when(owners.findByPanHash(OwnerApplicationChecks.panHash("ABCPE1234F"))).thenReturn(Optional.of(squatter));
 
         assertDoesNotThrow(() -> service.signup(form()));
 

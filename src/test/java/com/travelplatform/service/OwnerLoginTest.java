@@ -71,11 +71,11 @@ class OwnerLoginTest {
         assertEquals("ROLE_OWNER_SETUP", service.login(login("NJO-0002", "emailed-pass")).getRole());
 
         // ...and changing it signs them straight in: every owner screen is now scoped to the owner (V27/V28).
-        AuthResponse changed = service.changePassword(9L, "emailed-pass", "my-own-password");
+        AuthResponse changed = service.changePassword(9L, "emailed-pass", "my-own-password1");
         assertNotNull(changed.getToken());
         assertEquals("ROLE_OWNER", changed.getRole());
         assertFalse(owner.isMustChangePassword());
-        assertEquals("ROLE_OWNER", service.login(login("NJO-0002", "my-own-password")).getRole());
+        assertEquals("ROLE_OWNER", service.login(login("NJO-0002", "my-own-password1")).getRole());
     }
 
     static OwnerLoginRequest login(String id, String password) {
@@ -126,14 +126,14 @@ class OwnerLoginTest {
     void changePasswordIssuesOwnerToken() {
         owner.setMustChangePassword(true);
 
-        AuthResponse r = service.changePassword(9L, "emailed-pass", "my-own-password");
+        AuthResponse r = service.changePassword(9L, "emailed-pass", "my-own-password1");
 
         assertEquals("ROLE_OWNER", r.getRole());
         assertFalse(owner.isMustChangePassword());
-        assertTrue(encoder.matches("my-own-password", owner.getPassword()));
+        assertTrue(encoder.matches("my-own-password1", owner.getPassword()));
         // 400, not 401: the web app treats any 401 as an expired session and signs the owner out.
-        assertThrows(IllegalArgumentException.class, () -> service.changePassword(9L, "wrong", "another-password"));
-        assertThrows(IllegalArgumentException.class, () -> service.changePassword(9L, "my-own-password", "short"));
+        assertThrows(IllegalArgumentException.class, () -> service.changePassword(9L, "wrong", "another-password1"));
+        assertThrows(IllegalArgumentException.class, () -> service.changePassword(9L, "my-own-password1", "short"));
     }
 
     @Test
@@ -143,7 +143,7 @@ class OwnerLoginTest {
         long issuedAt = owner.getTokenVersion();
         assertTrue(versions.isCurrent("ROLE_OWNER_SETUP", "9", issuedAt));
 
-        service.changePassword(9L, "emailed-pass", "my-own-password");
+        service.changePassword(9L, "emailed-pass", "my-own-password1");
 
         assertFalse(versions.isCurrent("ROLE_OWNER_SETUP", "9", issuedAt));
         assertFalse(versions.isCurrent("ROLE_OWNER", "9", issuedAt));
