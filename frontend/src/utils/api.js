@@ -377,6 +377,16 @@ export const rejectDues = (paymentId) => api.post(`/owner/dues/${paymentId}/reje
 export const toggleDriverAvailability = (driverId, status) => api.put(`/driver/${driverId}/availability`, { status }).then(res => { invalidateCache('driver'); return res })
 export const updateUserProfile = (userId, data) => api.put(`/user/${userId}/profile`, data).then(res => { invalidateCache('profile'); return res })
 
+// Own-profile edits and "Delete account" (the account is closed: details wiped, history kept).
+// Silent: each screen shows the API's reason itself ("Current password is wrong", open trips, ...).
+export const updateDriverProfile = (driverId, data) => api.put(`/driver/${driverId}/profile`, data, { _silent: true })
+export const updateOwnerDetails = (data) => api.put('/owner/me', data, { _silent: true }).then(res => { invalidateCache('/owner/me'); return res })
+export const updateOwnerPayout = (data) => api.put('/owner/me/payout', data, { _silent: true }).then(res => { invalidateCache('/owner/me'); return res })
+export const getOwnerClosurePreview = () => api.get('/owner/me/closure-preview', { _silent: true })
+export const closeUserAccount = (userId, password) => api.post(`/user/${userId}/close`, { password }, { _silent: true })
+export const closeDriverAccount = (driverId, password) => api.post(`/driver/${driverId}/close`, { password }, { _silent: true })
+export const closeOwnerAccount = (password) => api.post('/owner/me/close', { password }, { _silent: true })
+
 // Public APIs (silent — landing page has fallbacks)
 export const getPublicReviews = () => cachedGet('/public/reviews', 5000, true)
 // Trip prices by car category; only the categories that are priced come back.

@@ -285,6 +285,21 @@ public class EmailService {
                 HTML_FOOTER);
     }
 
+    /**
+     * Sent whenever an owner's bank or UPI details change from the Profile screen. A hijacked
+     * account redirecting payouts is the risk; this tells the real owner the moment it happens.
+     */
+    public void sendOwnerPayoutDetailsChanged(String toEmail, String travelsName) {
+        queue(toEmail, "Your Namma Journey payout details were changed", HTML_HEADER +
+                "<h2>Payout details changed</h2>" +
+                "<p>Dear " + esc(travelsName == null ? "owner" : travelsName) + ",</p>" +
+                "<p>The bank account and UPI details where Namma Journey sends your money were just changed " +
+                "from your owner account (" + esc(WHEN.format(java.time.LocalDateTime.now())) + ").</p>" +
+                "<p>If this was you, there is nothing to do. If it was not, change your password now and email " +
+                "nammajourney463@gmail.com so we can hold your payouts.</p>" +
+                HTML_FOOTER);
+    }
+
     /** A Trip with no driver yet: the owner assigns one (MANUAL), or none of theirs was free. */
     public void sendOwnerTripNeedsDriver(String toEmail, String travelsName, com.travelplatform.entity.TravelBooking booking) {
         queue(toEmail, "Trip needs a driver: " + booking.getFromPlace() + " to " + booking.getToPlace(), HTML_HEADER +

@@ -22,6 +22,11 @@ export default function useOwnerMe(enabled = true) {
   return me
 }
 
+/** Replace the remembered owner after an edit on the Profile screen, so other screens see it too. */
+export function rememberOwnerMe(me) {
+  lastMe = me || null
+}
+
 /** Forget the cached owner (on logout), so the next owner never sees the previous one's menu. */
 export function clearOwnerMe() {
   lastMe = null
