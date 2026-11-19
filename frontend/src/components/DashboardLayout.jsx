@@ -34,6 +34,14 @@ const BOOKING_ROUTES = {
   ROLE_OWNER: '/owner/bookings',
 }
 
+// Where a booking notice opens. A City ride nobody took is on the platform's City rides tab
+// (not My Trips), and a City ride in an owner's car shows under Revenue → City rides in your cars.
+export function bookingRoute(role, type) {
+  if (role === 'ROLE_OWNER' && type === 'RIDE_NO_DRIVER') return '/owner/bookings?scope=city'
+  if (role === 'ROLE_OWNER' && type === 'CITY_RIDE_ACCEPTED') return '/owner/revenue'
+  return BOOKING_ROUTES[role]
+}
+
 const ROLE_LABEL = { ROLE_USER: 'Traveller', ROLE_DRIVER: 'Driver', ROLE_OWNER: 'Owner', ROLE_ADMIN: 'Admin' }
 
 // Every page renders its own copy of this shell, so a sidebar click mounts a fresh one. These
@@ -153,7 +161,7 @@ export default function DashboardLayout({ children, navItems: pageNavItems, role
     }
     if (notif.bookingId && BOOKING_ROUTES[user?.role]) {
       setDropdownOpen(false)
-      navigate(BOOKING_ROUTES[user.role])
+      navigate(bookingRoute(user.role, notif.type))
     }
   }
 

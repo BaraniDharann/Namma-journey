@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 import { OWNER_NAV } from '../../components/owner/ownerNav'
 import Pagination, { usePagination } from '../../components/Pagination'
@@ -83,7 +83,10 @@ export default function OwnerBookings() {
 
   // The platform owner can also look at City rides (read-only here: independent drivers take them).
   const me = useOwnerMe()
-  const [scope, setScope] = useState('trips')
+  // A "no driver nearby" notice opens ?scope=city: City rides are not on My Trips.
+  const [params] = useSearchParams()
+  const [scope, setScope] = useState(params.get('scope') === 'city' ? 'city' : 'trips')
+  useEffect(() => { if (params.get('scope') === 'city') setScope('city') }, [params])
 
   const load = async () => {
     try {
