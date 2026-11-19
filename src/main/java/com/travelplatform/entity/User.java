@@ -128,7 +128,11 @@ public class User {
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
-    
+
+    /** Set when the traveller closed their own account (V39): personal details wiped, login refused. */
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
     public enum LoginType {
         GOOGLE, EMAIL
     }

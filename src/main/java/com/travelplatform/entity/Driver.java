@@ -367,7 +367,11 @@ public class Driver {
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
-    
+
+    /** Set when the driver closed their own account (V39): personal details wiped, login refused. */
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
     public enum Status {
         ACTIVE, INACTIVE
     }

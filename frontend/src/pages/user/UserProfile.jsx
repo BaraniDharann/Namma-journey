@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { useAuth } from '../../context/AuthContext'
-import { updateUserProfile } from '../../utils/api'
+import { updateUserProfile, closeUserAccount } from '../../utils/api'
 import { needsMobileNumber } from '../../components/MobileNumberGate'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill } from '../../components/dash/ui'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 import RideSafetyPanel from '../../components/safety/RideSafetyPanel'
+import CloseAccountPanel from '../../components/profile/CloseAccountPanel'
 
 const navItems = [
   { path: '/user/dashboard', icon: '', label: 'Dashboard' },
@@ -163,6 +164,12 @@ export default function UserProfile() {
         </Panel>
 
         <RideSafetyPanel userId={user.userId} />
+
+        <CloseAccountPanel
+          span={8}
+          onClose={(password) => closeUserAccount(user.userId, password)}
+          passwordHint="If you only sign in with Google, leave this empty."
+        />
       </div>
     </DashboardLayout>
   )

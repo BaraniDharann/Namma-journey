@@ -358,4 +358,30 @@ public class DriverController {
         driverService.updateAvailability(driverId, status);
         return ResponseEntity.ok(java.util.Map.of("message", "Availability updated", "status", status));
     }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.travelplatform.service.ProfileEditService profileEditService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.travelplatform.service.AccountClosureService accountClosureService;
+
+    /** Name, mobile and email. Changing the mobile (login ID) or email needs the current password. */
+    @PutMapping("/{driverId}/profile")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<DriverDetailsResponse> updateProfile(
+            @PathVariable Long driverId,
+            @RequestBody com.travelplatform.service.ProfileEditService.DriverDetails request) {
+        profileEditService.updateDriverDetails(driverId, request);
+        return ResponseEntity.ok(driverService.getDriverProfile(driverId));
+    }
+
+    /** Closes the driver's own account (see AccountClosureService). */
+    @PostMapping("/{driverId}/close")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<Map<String, String>> closeAccount(
+            @PathVariable Long driverId,
+            @RequestBody(required = false) Map<String, String> body) {
+        accountClosureService.closeDriver(driverId, body == null ? null : body.get("password"));
+        return ResponseEntity.ok(Map.of("message", "Your account is closed"));
+    }
 }

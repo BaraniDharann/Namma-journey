@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { useAuth } from '../../context/AuthContext'
-import { getDriverProfile, toggleDriverAvailability } from '../../utils/api'
+import { getDriverProfile, toggleDriverAvailability, updateDriverProfile, closeDriverAccount } from '../../utils/api'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Skeleton } from '../../components/dash/ui'
 import EarningsPanel from '../../components/driver/EarningsPanel'
 import HomeAreaPanel from '../../components/driver/HomeAreaPanel'
+import CloseAccountPanel from '../../components/profile/CloseAccountPanel'
+
+const errorText = (e, fallback) => e.response?.data?.error || e.response?.data?.message || fallback
+const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
+const inputStyle = { width: '100%', padding: '8px 12px' }
 
 const navItems = [
   { path: '/driver/dashboard', icon: '', label: 'Dashboard' },
@@ -17,10 +22,41 @@ const DOCS = [['photo', 'camera', 'Driver Photo'], ['licensePhoto', 'card', 'Lic
 
 
 export default function DriverProfile() {
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
+  const [form, setForm] = useState(null) // non-null while editing
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  const startEdit = () => {
+    const p = profile || {}
+    setForm({ name: p.name || '', mobile: p.mobile || '', email: p.email || '', currentPassword: '' })
+    setFormError(''); setSaved(false)
+  }
+  const setField = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  // Mobile is the login ID and email gets reset codes, so changing either asks for the password.
+  const loginChanged = !!form && (form.mobile.trim() !== (profile?.mobile || '')
+    || form.email.trim().toLowerCase() !== (profile?.email || '').toLowerCase())
+
+  const saveEdit = async () => {
+    setSaving(true); setFormError('')
+    try {
+      const res = await updateDriverProfile(user.userId, {
+        name: form.name, mobile: form.mobile.trim(), email: form.email.trim(),
+        currentPassword: loginChanged ? form.currentPassword : null,
+      })
+      setProfile(res.data)
+      updateUser({ name: res.data.name, mobile: res.data.mobile, email: res.data.email })
+      setForm(null); setSaved(true)
+    } catch (e) {
+      setFormError(errorText(e, 'Could not save your details'))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const imgUrl = (path) => {
     if (!path) return null
@@ -63,7 +99,16 @@ export default function DriverProfile() {
         <div className="pc-grid"><Panel span={12}><Skeleton rows={5} /></Panel></div>
       ) : (
         <div className="pc-grid">
-          <Panel span={7} title="Profile" meta={<StatusPill status={isActive ? 'ACTIVE' : 'INACTIVE'} />}>
+          <Panel
+            span={7}
+            title="Profile"
+            meta={<StatusPill status={isActive ? 'ACTIVE' : 'INACTIVE'} />}
+            action={!form && (
+              <button type="button" className="pc-btn pc-btn-ghost" onClick={startEdit}>
+                <Icon name="edit" />Edit
+              </button>
+            )}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
               {imgUrl(d.photo)
                 ? <img src={imgUrl(d.photo)} alt="Driver" style={{ width: 72, height: 72, borderRadius: 20, objectFit: 'cover', border: '3px solid var(--pc-line)' }} />
@@ -77,6 +122,44 @@ export default function DriverProfile() {
                 </div>
               </div>
             </div>
+            {saved && (
+              <div className="alert-success" role="status" style={{ padding: '10px 14px', fontSize: 13.5, display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                <Icon name="check" size={16} />Your details are saved.
+              </div>
+            )}
+            {form ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div>
+                  <label htmlFor="drv-name" style={labelStyle}>Name</label>
+                  <input id="drv-name" className="input-field" value={form.name} onChange={setField('name')} style={inputStyle} />
+                </div>
+                <div>
+                  <label htmlFor="drv-mobile" style={labelStyle}>Mobile (your login ID)</label>
+                  <input id="drv-mobile" className="input-field" type="tel" inputMode="numeric" value={form.mobile} onChange={setField('mobile')} style={inputStyle} />
+                </div>
+                <div>
+                  <label htmlFor="drv-email" style={labelStyle}>Email</label>
+                  <input id="drv-email" className="input-field" type="email" value={form.email} onChange={setField('email')} style={inputStyle} />
+                </div>
+                {loginChanged && (
+                  <div>
+                    <label htmlFor="drv-password" style={labelStyle}>Current password</label>
+                    <input id="drv-password" className="input-field" type="password" autoComplete="current-password" value={form.currentPassword} onChange={setField('currentPassword')} style={inputStyle} />
+                    <div style={{ fontSize: 12, color: 'var(--pc-muted)', marginTop: 4 }}>Needed to change your mobile or email.</div>
+                  </div>
+                )}
+                <div style={{ fontSize: 12.5, color: 'var(--pc-muted)' }}>
+                  License and Aadhaar are verified documents; ask your owner or NammaJourney to change them.
+                </div>
+                {formError && <div className="pc-error" role="alert"><Icon name="alert" size={16} /><span>{formError}</span></div>}
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  <button type="button" className="pc-btn pc-btn-ghost" onClick={() => setForm(null)} disabled={saving}>Cancel</button>
+                  <button type="button" className="pc-btn" onClick={saveEdit} disabled={saving}>
+                    <Icon name="check" />{saving ? 'Saving...' : 'Save changes'}
+                  </button>
+                </div>
+              </div>
+            ) : (
             <div className="pc-rows">
               {[
                 ['Name', d.name || user?.name],
@@ -92,6 +175,7 @@ export default function DriverProfile() {
                 </div>
               ))}
             </div>
+            )}
           </Panel>
 
           <Panel span={5} title="Availability" meta={isActive ? 'online' : 'offline'}>
@@ -135,6 +219,8 @@ export default function DriverProfile() {
           </Panel>
 
           {d.fleet === 'INDEPENDENT' && <EarningsPanel driverId={user.userId} />}
+
+          <CloseAccountPanel onClose={(password) => closeDriverAccount(user.userId, password)} />
         </div>
       )}
     </DashboardLayout>

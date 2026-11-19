@@ -202,4 +202,20 @@ public class UserController {
             @Valid @RequestBody com.travelplatform.dto.ForgotPasswordRequest request) {
         return ResponseEntity.ok(userService.forgotPassword(request));
     }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.travelplatform.service.AccountClosureService accountClosureService;
+
+    /**
+     * Closes the traveller's own account (see AccountClosureService). {@code password} is needed
+     * when the account has one; a Google-only account confirms on screen instead.
+     */
+    @PostMapping("/{userId}/close")
+    @PreAuthorize(SAME_USER)
+    public ResponseEntity<java.util.Map<String, String>> closeAccount(
+            @PathVariable UUID userId,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+        accountClosureService.closeUser(userId, body == null ? null : body.get("password"));
+        return ResponseEntity.ok(java.util.Map.of("message", "Your account is closed"));
+    }
 }

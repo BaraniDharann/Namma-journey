@@ -51,6 +51,10 @@ public class Owner {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /** Set when the owner closed their own account (V39): personal and bank details wiped, login refused. */
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
     @Column(name = "owner_code", length = 20, unique = true)
     private String ownerCode;
 
