@@ -101,6 +101,21 @@ class UploadsControllerTest {
     }
 
     @Test
+    @DisplayName("an identity document never leaks its link onward, is never indexed, and saves under a neutral name")
+    void identityDocumentsCarryPrivacyHeaders() throws Exception {
+        String signed = signer.signIfSensitive("/uploads/drivers/aadhaar_ab.jpg");
+        mvc.perform(get(java.net.URI.create(signed)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet"))
+                .andExpect(header().string("Content-Disposition", "inline; filename=\"document\""));
+        // An ordinary trip photo is left alone.
+        mvc.perform(get("/uploads/drivers/photo_a.jpg"))
+                .andExpect(header().doesNotExist("X-Robots-Tag"))
+                .andExpect(header().doesNotExist("Content-Disposition"));
+    }
+
+    @Test
     @DisplayName("missing files and non-image extensions are 404 - even if the store has them")
     void notFoundCases() throws Exception {
         mvc.perform(get("/uploads/drivers/nope.jpg")).andExpect(status().isNotFound());

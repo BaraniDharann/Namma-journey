@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import { OWNER_NAV } from '../../components/owner/ownerNav'
 import Icon from '../../components/dash/Icon'
+import PrivateImage from '../../components/PrivateImage'
 import { Panel, PageHead, Empty, Skeleton } from '../../components/dash/ui'
 import { getDriverApplications, approveDriver, rejectDriver } from '../../utils/api'
 import { vehicleIcon, vehicleLabel } from '../../dash/vehicles'
@@ -74,7 +75,9 @@ function DocumentViewer({ doc, onClose }) {
           <strong style={{ color: 'var(--pc-ink)' }}>{doc.label} — {doc.name}</strong>
           <button type="button" data-autofocus onClick={onClose} aria-label="Close" className="pc-btn pc-btn-ghost pc-btn-sm" style={{ width: 34, padding: 0 }}><Icon name="x" size={16} /></button>
         </div>
-        <img src={doc.src} alt={`${doc.label} of ${doc.name}`} style={{ display: 'block', maxWidth: '100%', maxHeight: '75vh', margin: '0 auto', borderRadius: 10 }} />
+        <img src={doc.src} alt={`${doc.label} of ${doc.name}`} draggable={false} referrerPolicy="no-referrer"
+          onContextMenu={(e) => e.preventDefault()}
+          style={{ display: 'block', maxWidth: '100%', maxHeight: '75vh', margin: '0 auto', borderRadius: 10, userSelect: 'none' }} />
       </div>
     </div>
   )
@@ -148,10 +151,8 @@ function ApplicationCard({ app, tab, busy, onApprove, onReject, onView }) {
           <div key={d.key} style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }}>{d.label}</div>
             {d.src ? (
-              <button type="button" onClick={() => onView({ ...d, name: app.name })} aria-label={`View ${d.label} of ${app.name} full size`}
-                style={{ display: 'block', width: '100%', padding: 0, border: 0, background: 'none', cursor: 'zoom-in' }}>
-                <img src={d.src} alt={`${d.label} of ${app.name}`} style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--pc-line)' }} />
-              </button>
+              // Hidden until tapped; once shown, tapping the picture opens it full size.
+              <PrivateImage src={d.src} alt={`${d.label} of ${app.name}`} height={90} onOpen={() => onView({ ...d, name: app.name })} />
             ) : (
               <div style={{ height: 90, borderRadius: 10, background: 'var(--pc-wash)', color: 'var(--pc-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>Not uploaded</div>
             )}

@@ -39,7 +39,7 @@ public class SignedUploadUrls {
     @Autowired
     public SignedUploadUrls(@Value("${app.uploads.signing-key:}") String signingKey,
                             @Value("${jwt.secret}") String jwtSecret,
-                            @Value("${app.uploads.signed-url-ttl:30m}") Duration ttl) {
+                            @Value("${app.uploads.signed-url-ttl:10m}") Duration ttl) {
         this(signingKey == null || signingKey.isBlank() ? "uploads:" + jwtSecret : signingKey, ttl, Clock.systemUTC());
     }
 

@@ -66,17 +66,31 @@ public class UploadsController {
     private static ResponseEntity<Resource> respond(ServedFile served, MediaType type, boolean sensitive) {
         if (served instanceof ServedFile.Redirect redirect) {
             // The redirect itself must not be cached: the signed URL behind it expires.
-            return ResponseEntity.status(HttpStatus.FOUND)
+            ResponseEntity.BodyBuilder found = ResponseEntity.status(HttpStatus.FOUND)
                     .location(redirect.location())
-                    .cacheControl(CacheControl.noStore())
-                    .build();
+                    .cacheControl(CacheControl.noStore());
+            return privacyHeaders(found, sensitive).build();
         }
-        return ResponseEntity.ok()
+        return privacyHeaders(ResponseEntity.ok(), sensitive)
                 .contentType(type)
                 .header("X-Content-Type-Options", "nosniff")
                 // Identity documents are never cached (not even by the browser); other photos privately.
                 .cacheControl(sensitive ? CacheControl.noStore() : CacheControl.maxAge(7, TimeUnit.DAYS).cachePrivate())
                 .body(((ServedFile.Stream) served).resource());
+    }
+
+    /**
+     * For identity documents: the signed link must not travel on in a Referer header (a page that
+     * opens it cannot pass it to another site), must never be indexed or archived by a search
+     * engine, and a saved file gets a neutral name instead of the stored key.
+     */
+    private static ResponseEntity.BodyBuilder privacyHeaders(ResponseEntity.BodyBuilder b, boolean sensitive) {
+        if (!sensitive) {
+            return b;
+        }
+        return b.header("Referrer-Policy", "no-referrer")
+                .header("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet")
+                .header("Content-Disposition", "inline; filename=\"document\"");
     }
 
     private static MediaType imageType(String key) {
