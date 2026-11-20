@@ -54,8 +54,6 @@ class PaymentLifecycleTest {
         notifications = mock(NotificationService.class);
         DriverRepository drivers = mock(DriverRepository.class);
         service = new PaymentService(payments, bookings, drivers, notifications, mock(LocationTrackingService.class));
-        ReflectionTestUtils.setField(service, "ownerUpiId", "owner@bank");
-        ReflectionTestUtils.setField(service, "ownerName", "Namma Journey");
 
         booking = new TravelBooking();
         booking.setId(BOOKING);
@@ -111,6 +109,7 @@ class PaymentLifecycleTest {
         PaymentResponse r = service.generateTripEndQr(DRIVER, BOOKING);
 
         assertEquals("PENDING", r.getStatus());
+        assertEquals("RAZORPAY", r.getPaymentMethod(), "the QR is a Razorpay Payment Link now");
         assertEquals(TravelBooking.BookingStatus.STARTED, booking.getStatus());
     }
 
@@ -175,7 +174,7 @@ class PaymentLifecycleTest {
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
         Payment p = payment(Payment.PaymentMethod.UPI, Payment.PaymentStatus.PENDING);
         PaymentRequest req = new PaymentRequest();
-        req.setPaymentMethod("UPI");
+        req.setPaymentMethod("CASH");
         req.setUpiTransactionId(" 412345678901 ");
 
         service.initiatePayment(booking.getUserId(), BOOKING, req);
@@ -184,16 +183,26 @@ class PaymentLifecycleTest {
     }
 
     @Test
-    @DisplayName("choosing UPI after picking cash switches the pending payment to UPI")
+    @DisplayName("choosing cash after the driver showed the Razorpay QR switches the pending payment to cash")
     void methodChangeIsHonoured() {
         booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
-        Payment p = payment(Payment.PaymentMethod.CASH, Payment.PaymentStatus.PENDING);
+        Payment p = payment(Payment.PaymentMethod.RAZORPAY, Payment.PaymentStatus.PENDING);
         PaymentRequest req = new PaymentRequest();
-        req.setPaymentMethod("UPI");
+        req.setPaymentMethod("CASH");
 
         PaymentResponse r = service.initiatePayment(booking.getUserId(), BOOKING, req);
 
-        assertEquals(Payment.PaymentMethod.UPI, p.getPaymentMethod());
-        assertEquals("UPI", r.getPaymentMethod());
+        assertEquals(Payment.PaymentMethod.CASH, p.getPaymentMethod());
+        assertEquals("CASH", r.getPaymentMethod());
+    }
+
+    @Test
+    @DisplayName("a plain UPI payment is no longer offered: UPI goes through Razorpay")
+    void upiIsRefused() {
+        booking.setStatus(TravelBooking.BookingStatus.CONFIRMED);
+        PaymentRequest req = new PaymentRequest();
+        req.setPaymentMethod("UPI");
+        assertThrows(IllegalArgumentException.class, () -> service.initiatePayment(booking.getUserId(), BOOKING, req));
+        verify(payments, never()).save(any());
     }
 }

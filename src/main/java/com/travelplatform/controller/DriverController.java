@@ -32,6 +32,9 @@ public class DriverController {
     private PaymentService paymentService;
 
     @Autowired
+    private com.travelplatform.service.RazorpayPaymentService razorpayPaymentService;
+
+    @Autowired
     private LocationTrackingService locationTrackingService;
 
     @Autowired
@@ -65,6 +68,13 @@ public class DriverController {
     @PreAuthorize(SAME_DRIVER)
     public ResponseEntity<com.travelplatform.service.DriverDuesService.DuesView> getDues(@PathVariable Long driverId) {
         return ResponseEntity.ok(duesService.view(driverId));
+    }
+
+    /** "Pay online": a Razorpay Payment Link for what is owed; {url}. Settled by Razorpay's webhook. */
+    @PostMapping("/{driverId}/dues/pay-online")
+    @PreAuthorize(SAME_DRIVER)
+    public ResponseEntity<Map<String, String>> payDuesOnline(@PathVariable Long driverId) {
+        return ResponseEntity.ok(Map.of("url", duesService.payOnline(driverId)));
     }
 
     /** "I paid": {amount, utr}. Waits for the owner to confirm before the balance moves. */
@@ -155,7 +165,8 @@ public class DriverController {
     public ResponseEntity<PaymentResponse> endTripAndGenerateQr(
             @PathVariable Long driverId,
             @PathVariable String bookingId) {
-        PaymentResponse response = paymentService.generateTripEndQr(driverId, UUID.fromString(bookingId));
+        // Ends the trip and returns a Razorpay Payment Link QR for what is still owed.
+        PaymentResponse response = razorpayPaymentService.tripEndQr(driverId, UUID.fromString(bookingId));
         return ResponseEntity.ok(response);
     }
 

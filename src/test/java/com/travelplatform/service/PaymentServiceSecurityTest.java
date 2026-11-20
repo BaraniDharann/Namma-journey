@@ -59,8 +59,6 @@ class PaymentServiceSecurityTest {
 
         service = new PaymentService(paymentRepository, bookingRepository, driverRepository,
                 notificationService, locationTrackingService);
-        ReflectionTestUtils.setField(service, "ownerUpiId", "owner@examplebank");
-        ReflectionTestUtils.setField(service, "ownerName", "Namma Journey");
 
         when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
         when(bookingRepository.save(any(TravelBooking.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -258,7 +256,7 @@ class PaymentServiceSecurityTest {
     }
 
     @Test
-    @DisplayName("a booking belonging to another account cannot be paid, so its QR cannot be minted")
+    @DisplayName("a booking belonging to another account cannot be paid")
     void cannotInitiatePaymentForAnotherAccountsBooking() {
         when(bookingRepository.findById(BOOKING_ID))
                 .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.CONFIRMED)));
@@ -275,46 +273,15 @@ class PaymentServiceSecurityTest {
     }
 
     @Test
-    @DisplayName("the UPI intent carries a dot decimal whatever locale the host runs in")
-    void upiLinkAmountIsLocaleIndependent() {
-        Locale original = Locale.getDefault();
-        try {
-            // Germany renders 2500.00 as "2500,00". Before Locale.ROOT was pinned, that comma
-            // went straight into the am= parameter of the UPI intent.
-            Locale.setDefault(Locale.GERMANY);
-
-            when(bookingRepository.findById(BOOKING_ID))
-                    .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.CONFIRMED)));
-            when(paymentRepository.findByBookingId(BOOKING_ID)).thenReturn(Optional.empty());
-
-            PaymentRequest request = new PaymentRequest();
-            request.setPaymentMethod("UPI");
-
-            PaymentResponse response = service.initiatePayment(USER_ID, BOOKING_ID, request);
-
-            assertTrue(response.getUpiDeepLink().contains("am=2500.00"),
-                    "expected a dot decimal separator, got: " + response.getUpiDeepLink());
-        } finally {
-            Locale.setDefault(original);
-        }
-    }
-
-    @Test
-    @DisplayName("a payee address containing a separator cannot inject extra intent parameters")
-    void upiLinkEscapesThePayeeAddress() {
-        ReflectionTestUtils.setField(service, "ownerUpiId", "evil@bank&am=1");
-
+    @DisplayName("no plain UPI link is ever issued: anything but cash is refused here")
+    void upiIsNotIssued() {
         when(bookingRepository.findById(BOOKING_ID))
                 .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.CONFIRMED)));
-        when(paymentRepository.findByBookingId(BOOKING_ID)).thenReturn(Optional.empty());
 
         PaymentRequest request = new PaymentRequest();
         request.setPaymentMethod("UPI");
 
-        String link = service.initiatePayment(USER_ID, BOOKING_ID, request).getUpiDeepLink();
-
-        // The injected "&am=1" must arrive percent-encoded inside pa=, not as its own parameter.
-        assertTrue(link.contains("evil%40bank%26am%3D1"), "payee not escaped: " + link);
-        assertTrue(link.contains("am=2500.00"), "real amount missing: " + link);
+        assertThrows(IllegalArgumentException.class, () -> service.initiatePayment(USER_ID, BOOKING_ID, request));
+        verify(paymentRepository, never()).save(any(Payment.class));
     }
 }

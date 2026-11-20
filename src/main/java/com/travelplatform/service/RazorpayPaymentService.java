@@ -87,11 +87,106 @@ public class RazorpayPaymentService {
     private com.travelplatform.service.bus.BusBookingService busBooking;
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.travelplatform.service.bus.BusRefunds busRefunds;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private DriverDuesService driverDues;
 
     void setBusModule(com.travelplatform.service.bus.BusBookingService busBooking,
                       com.travelplatform.service.bus.BusRefunds busRefunds) {
         this.busBooking = busBooking;
         this.busRefunds = busRefunds;
+    }
+
+    /** How long the end-of-ride Payment Link stays payable. Razorpay requires at least 15 minutes. */
+    static final int LINK_EXPIRY_MINUTES = 30;
+
+    /**
+     * The driver tapped "End ride": the trip ends (PaymentService.generateTripEndQr) and the
+     * passenger is shown a QR of a Razorpay Payment Link for what is still owed. They pay with any
+     * UPI app or card on Razorpay's page and {@code payment_link.paid} settles the trip - nobody
+     * checks a bank statement. An open link for the same amount is shown again instead of minting
+     * a new one, so two taps never leave two payable links.
+     *
+     * <p>Not {@code @Transactional}, for the same reason as {@link #createOrder}: the Razorpay call
+     * runs with no database connection held.
+     */
+    public PaymentResponse tripEndQr(Long driverId, UUID bookingId) {
+        PaymentResponse ended = paymentService.generateTripEndQr(driverId, bookingId);
+        if ("VERIFIED".equals(ended.getStatus())) {
+            return ended; // prepaid: the trip is complete, nothing to collect
+        }
+        if (!properties.isOperational()) {
+            // The trip has ended either way; without Razorpay keys there is just no QR to show.
+            ended.setMessage("Trip ended. Online payment is not set up: collect cash and tap Cash received.");
+            return ended;
+        }
+
+        PaymentResponse open = tx.execute(s -> openLink(bookingId));
+        if (open != null) {
+            return open;
+        }
+
+        Payment pending = paymentRepository.findByBookingId(bookingId)
+                .orElseThrow(() -> new RuntimeException("Payment not found"));
+        long paise = toPaise(pending.getAmount());
+        LocalDateTime expires = LocalDateTime.now().plusMinutes(LINK_EXPIRY_MINUTES);
+        long expireBy = expires.atZone(java.time.ZoneId.systemDefault()).toEpochSecond();
+        Map<String, String> notes = new LinkedHashMap<>();
+        notes.put("booking_id", bookingId.toString());
+        notes.put("payment_id", String.valueOf(pending.getId()));
+        notes.put("purpose", "FARE");
+        // Unique per link (Razorpay refuses a reused reference), at most 40 characters.
+        String reference = "NJ-" + bookingId.toString().substring(0, 8) + "-"
+                + Long.toString(System.currentTimeMillis(), 36);
+        TravelBooking booking = bookingRepository.findById(bookingId).orElse(null);
+        String description = booking == null ? properties.getMerchantName() + " trip" : describe(booking);
+        RazorpayGateway.PaymentLink link = gateway.createPaymentLink(paise, reference, description, expireBy, notes);
+
+        return tx.execute(s -> {
+            Payment payment = paymentRepository.findByBookingId(bookingId)
+                    .orElseThrow(() -> new RuntimeException("Payment not found"));
+            if (payment.getStatus() == Payment.PaymentStatus.VERIFIED) {
+                // Paid (cash, or an earlier link) while we were at Razorpay: the new link goes unused.
+                PaymentResponse done = new PaymentResponse();
+                done.setPaymentId(payment.getId());
+                done.setBookingId(bookingId);
+                done.setAmount(payment.getAmount());
+                done.setPaymentMethod(payment.getPaymentMethod().name());
+                done.setStatus(payment.getStatus().name());
+                done.setMessage("Already paid. Trip completed.");
+                return done;
+            }
+            payment.setPaymentMethod(Payment.PaymentMethod.RAZORPAY);
+            payment.setRazorpayLinkId(link.id());
+            payment.setRazorpayLinkUrl(link.shortUrl());
+            payment.setUpiLinkExpiresAt(expires);
+            payment.setStatus(Payment.PaymentStatus.PENDING);
+            return linkResponse(paymentRepository.save(payment));
+        });
+    }
+
+    /** The payment's Payment Link, when one is still open for the amount owed; else null. */
+    private PaymentResponse openLink(UUID bookingId) {
+        Payment payment = paymentRepository.findByBookingId(bookingId).orElse(null);
+        if (payment == null || payment.getRazorpayLinkUrl() == null || payment.getUpiLinkExpiresAt() == null
+                || payment.getUpiLinkExpiresAt().isBefore(LocalDateTime.now().plusMinutes(2))) {
+            return null;
+        }
+        return linkResponse(payment);
+    }
+
+    private PaymentResponse linkResponse(Payment payment) {
+        PaymentResponse response = new PaymentResponse();
+        response.setPaymentId(payment.getId());
+        response.setBookingId(payment.getBookingId());
+        response.setAmount(payment.getAmount());
+        response.setPaymentMethod(payment.getPaymentMethod().name());
+        response.setStatus(payment.getStatus().name());
+        response.setCreatedAt(payment.getCreatedAt());
+        response.setUpiLinkExpiresAt(payment.getUpiLinkExpiresAt());
+        response.setUpiDeepLink(payment.getRazorpayLinkUrl());
+        response.setUpiQrCode(PaymentService.qrPng(payment.getRazorpayLinkUrl()));
+        response.setMessage("Scan to pay with any UPI app or card. Confirmed automatically by Razorpay.");
+        return response;
     }
 
     /**
@@ -311,6 +406,7 @@ public class RazorpayPaymentService {
 
         switch (event) {
             case "payment.captured", "order.paid" -> settleFromWebhook(event, entity);
+            case "payment_link.paid" -> settleFromLink(root.path("payload").path("payment_link").path("entity"), entity);
             case "refund.processed" -> {
                 JsonNode refund = root.path("payload").path("refund").path("entity");
                 if (isBusPayment(refund)) {
@@ -358,8 +454,13 @@ public class RazorpayPaymentService {
             return; // a bus ticket's order: settled (or refunded) by the bus module
         }
         if (found.isEmpty()) {
-            // Money arrived for an order we hold no record of. Loud, because someone was charged.
-            log.error("Razorpay {} for unknown order {} (payment {}): reconcile manually", event, orderId, razorpayPaymentId);
+            if (paymentRepository.findByRazorpayPaymentId(razorpayPaymentId).isPresent()) {
+                return; // a Payment Link's charge, already settled by payment_link.paid
+            }
+            // Either a driver's end-of-ride Payment Link (Razorpay makes its own order for it, which
+            // we never see; payment_link.paid settles it) or money for an order we hold no record of.
+            log.warn("Razorpay {} for unknown order {} (payment {}): settled by payment_link.paid if it "
+                    + "came from a driver's QR, otherwise reconcile manually", event, orderId, razorpayPaymentId);
             return;
         }
         Payment payment = found.get();
@@ -375,6 +476,54 @@ public class RazorpayPaymentService {
         Optional<TravelBooking> booking = bookingRepository.findById(payment.getBookingId());
         if (booking.isEmpty()) {
             log.error("Razorpay {} paid order {} for missing booking {}: refund needed", event, orderId, payment.getBookingId());
+            return;
+        }
+        apply(payment, booking.get(), razorpayPaymentId);
+    }
+
+    /** The passenger paid the driver's end-of-ride QR (a Razorpay Payment Link). */
+    private void settleFromLink(JsonNode link, JsonNode paymentEntity) {
+        String linkId = link.path("id").asText(null);
+        String razorpayPaymentId = paymentEntity.path("id").asText(null);
+        long paidPaise = paymentEntity.path("amount").asLong(link.path("amount_paid").asLong(-1));
+        if (linkId == null || razorpayPaymentId == null) {
+            log.warn("Razorpay payment_link.paid without link or payment id; ignoring");
+            return;
+        }
+        Optional<Payment> found = paymentRepository.findByRazorpayLinkId(linkId);
+        JsonNode notes = link.path("notes");
+        if (found.isEmpty() && driverDues != null
+                && DriverDuesService.LINK_KIND.equals(notes.path("kind").asText(""))) {
+            // A driver paying their commission (DriverDuesService.payOnline), not a fare.
+            try {
+                driverDues.settleOnline(Long.valueOf(notes.path("driver_id").asText()), paidPaise, razorpayPaymentId);
+            } catch (RuntimeException e) {
+                log.error("Razorpay dues link {} paid by {} could not be recorded: reconcile by hand", linkId, razorpayPaymentId, e);
+            }
+            return;
+        }
+        if (found.isEmpty()) {
+            log.error("Razorpay payment link {} paid (payment {}) but no fare holds it: reconcile manually",
+                    linkId, razorpayPaymentId);
+            return;
+        }
+        Payment payment = found.get();
+        if (payment.getStatus() != Payment.PaymentStatus.PENDING && payment.getStatus() != Payment.PaymentStatus.FAILED) {
+            if (!razorpayPaymentId.equals(payment.getRazorpayPaymentId())) {
+                // Settled another way first (cash, or checkout) and then the QR was paid as well.
+                log.error("Payment link {} paid by {} after payment {} was already {} ({}): refund {} from the dashboard",
+                        linkId, razorpayPaymentId, payment.getId(), payment.getStatus(), payment.getVerifiedBy(), razorpayPaymentId);
+            }
+            return;
+        }
+        if (paidPaise != toPaise(payment.getAmount())) {
+            log.error("Razorpay payment link {} paid {} paise but payment {} is due {}: not settling",
+                    linkId, paidPaise, payment.getId(), payment.getAmount());
+            return;
+        }
+        Optional<TravelBooking> booking = bookingRepository.findById(payment.getBookingId());
+        if (booking.isEmpty()) {
+            log.error("Razorpay payment link {} paid for missing booking {}: refund needed", linkId, payment.getBookingId());
             return;
         }
         apply(payment, booking.get(), razorpayPaymentId);

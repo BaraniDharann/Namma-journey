@@ -382,6 +382,7 @@ export const setDriverPayoutUpi = (driverId, upiId) => api.put(`/driver/${driver
 // Commission a driver owes on cash rides, paid to the owner's UPI and confirmed by the owner
 export const getDriverDues = (driverId) => api.get(`/driver/${driverId}/dues`)
 export const submitDriverDuesPayment = (driverId, amount, utr) => api.post(`/driver/${driverId}/dues/payments`, { amount, utr })
+export const payDriverDuesOnline = (driverId) => api.post(`/driver/${driverId}/dues/pay-online`, null, { _noSuccess: true })
 export const getPendingDues = () => api.get('/owner/dues/pending')
 export const confirmDues = (paymentId) => api.post(`/owner/dues/${paymentId}/confirm`)
 export const rejectDues = (paymentId) => api.post(`/owner/dues/${paymentId}/reject`)

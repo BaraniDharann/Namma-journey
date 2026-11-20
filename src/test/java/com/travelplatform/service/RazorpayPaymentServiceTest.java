@@ -60,8 +60,6 @@ class RazorpayPaymentServiceTest {
         notifications = mock(NotificationService.class);
         PaymentService paymentService = new PaymentService(payments, bookings, mock(DriverRepository.class),
                 notifications, mock(LocationTrackingService.class));
-        ReflectionTestUtils.setField(paymentService, "ownerUpiId", "owner@bank");
-        ReflectionTestUtils.setField(paymentService, "ownerName", "Namma Journey");
 
         RazorpayProperties props = new RazorpayProperties();
         props.setKeyId("rzp_test_key");
@@ -234,6 +232,51 @@ class RazorpayPaymentServiceTest {
         when(payments.findByRazorpayOrderId("order_x")).thenReturn(Optional.empty());
         service.handleWebhook(capturedEvent("order_x", 250050L));
         service.handleWebhook("not json".getBytes(StandardCharsets.UTF_8));
+        verify(notifications, never()).notifyPaymentReceived(any());
+    }
+
+    private static byte[] linkPaidEvent(String linkId, String paymentId, long paise) {
+        return ("{\"event\":\"payment_link.paid\",\"payload\":{"
+                + "\"payment_link\":{\"entity\":{\"id\":\"" + linkId + "\",\"amount_paid\":" + paise + "}},"
+                + "\"payment\":{\"entity\":{\"id\":\"" + paymentId + "\",\"order_id\":\"order_link\",\"amount\":" + paise + "}}}}")
+                .getBytes(StandardCharsets.UTF_8);
+    }
+
+    private Payment pendingLink() {
+        Payment p = pendingOnline();
+        p.setRazorpayOrderId(null);
+        p.setRazorpayLinkId("plink_1");
+        when(payments.findByRazorpayLinkId("plink_1")).thenReturn(Optional.of(p));
+        return p;
+    }
+
+    @Test
+    @DisplayName("the driver's QR (a Razorpay Payment Link) settles the trip when payment_link.paid arrives")
+    void paymentLinkPaidSettles() {
+        Payment p = pendingLink();
+        service.handleWebhook(linkPaidEvent("plink_1", "pay_9", 250050L));
+        assertEquals(Payment.PaymentStatus.VERIFIED, p.getStatus());
+        assertEquals("pay_9", p.getRazorpayPaymentId());
+        verify(notifications).notifyPaymentReceived(booking);
+    }
+
+    @Test
+    @DisplayName("a payment link paid for the wrong amount, or paid twice, settles nothing more")
+    void paymentLinkGuards() {
+        Payment p = pendingLink();
+        service.handleWebhook(linkPaidEvent("plink_1", "pay_9", 100L));
+        assertEquals(Payment.PaymentStatus.PENDING, p.getStatus());
+
+        service.handleWebhook(linkPaidEvent("plink_1", "pay_9", 250050L));
+        service.handleWebhook(linkPaidEvent("plink_1", "pay_9", 250050L));
+        verify(notifications, times(1)).notifyPaymentReceived(booking);
+    }
+
+    @Test
+    @DisplayName("an unknown payment link is logged, not thrown")
+    void unknownPaymentLinkIgnored() {
+        when(payments.findByRazorpayLinkId("plink_x")).thenReturn(Optional.empty());
+        service.handleWebhook(linkPaidEvent("plink_x", "pay_9", 250050L));
         verify(notifications, never()).notifyPaymentReceived(any());
     }
 

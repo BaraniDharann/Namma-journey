@@ -67,6 +67,14 @@ public class Payment {
     @Column
     private String razorpayOrderId;
 
+    /** Razorpay Payment Link behind the driver's end-of-ride QR (plink_...), V40. */
+    @Column
+    private String razorpayLinkId;
+
+    /** The link's short_url, which the QR encodes; reused while the link is open (V40). */
+    @Column
+    private String razorpayLinkUrl;
+
     /** Razorpay payment that settled the order (pay_...). Unique: one charge settles one fare. */
     @Column
     private String razorpayPaymentId;

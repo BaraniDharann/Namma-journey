@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,7 +54,6 @@ class DriverDuesServiceTest {
         service = new DriverDuesService(payments, ledger, ledgerService, drivers, mock(NotificationRepository.class),
                 mock(OwnerTelegramAlerts.class), mock(TelegramClient.class), mock(AfterCommitDispatcher.class),
                 mock(TransactionTemplate.class));
-        ReflectionTestUtils.setField(service, "ownerUpiId", "owner@okaxis");
 
         driver = new Driver();
         driver.setId(DRIVER);
@@ -83,21 +83,32 @@ class DriverDuesServiceTest {
     }
 
     @Test
-    @DisplayName("The UPI link carries the owner's UPI ID and exactly what is owed")
-    void viewBuildsTheUpiLink() {
+    @DisplayName("The view shows exactly what is owed, and no online option until Razorpay is set up")
+    void viewShowsWhatIsOwed() {
         DriverDuesService.DuesView v = service.view(DRIVER);
 
         assertEquals(0, v.payable().compareTo(new BigDecimal("450.00")));
-        assertTrue(v.upiLink().startsWith("upi://pay?pa=owner%40okaxis"));
-        assertTrue(v.upiLink().contains("am=450.00"));
+        assertFalse(v.payOnline());
     }
 
     @Test
-    @DisplayName("Nothing owed: no payment link")
-    void noLinkWhenNothingOwed() {
+    @DisplayName("Nothing owed: nothing payable")
+    void nothingPayableWhenNothingOwed() {
         when(ledger.balanceOf(DRIVER)).thenReturn(new BigDecimal("120.00")); // the platform owes them
 
-        assertNull(service.view(DRIVER).upiLink());
+        assertEquals(0, service.view(DRIVER).payable().signum());
+    }
+
+    @Test
+    @DisplayName("A Razorpay dues payment is recorded as confirmed and moves the ledger, once")
+    void onlinePaymentSettlesOnce() {
+        assertTrue(service.settleOnline(DRIVER, 45000L, "pay_D1"));
+        verify(ledgerService).recordTransfer(eq(DRIVER), eq(DriverLedgerEntry.Type.COLLECTION),
+                eq(new BigDecimal("450.00")), eq("pay_D1"), any(), eq("razorpay:pay_D1"));
+
+        when(payments.utrInUse("pay_D1")).thenReturn(true);
+        assertTrue(service.settleOnline(DRIVER, 45000L, "pay_D1"));
+        verify(ledgerService, times(1)).recordTransfer(any(), any(), any(), any(), any(), any());
     }
 
     @Test

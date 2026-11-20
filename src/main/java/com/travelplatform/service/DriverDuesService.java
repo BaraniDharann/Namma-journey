@@ -11,15 +11,12 @@ import com.travelplatform.repository.DriverRepository;
 import com.travelplatform.repository.NotificationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -55,11 +52,16 @@ public class DriverDuesService {
     private final AfterCommitDispatcher dispatcher;
     private final TransactionTemplate tx;
 
-    @Value("${payment.upi.id:}")
-    private String ownerUpiId = "";
+    // Commission is paid online through a Razorpay Payment Link; payment_link.paid (handled in
+    // RazorpayPaymentService) calls settleOnline. Field-injected so hand-built tests are unaffected.
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private RazorpayGateway gateway;
 
-    @Value("${payment.upi.name:Namma Journey}")
-    private String ownerName = "Namma Journey";
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.travelplatform.config.RazorpayProperties razorpay;
+
+    /** The note on a dues Payment Link that tells the webhook it is commission, not a fare. */
+    public static final String LINK_KIND = "DRIVER_DUES";
 
     public DriverDuesService(DriverDuesPaymentRepository payments, DriverLedgerRepository ledger,
                              DriverLedgerService ledgerService, DriverRepository drivers,
@@ -80,11 +82,11 @@ public class DriverDuesService {
     /**
      * @param owed    commission the driver owes now (0 when the platform owes them, or all settled)
      * @param pending already submitted, waiting for the owner
-     * @param payable what is left to pay: owed less pending; the amount the UPI link carries
-     * @param upiLink {@code upi://pay?...} for {@code payable}, or null when nothing is payable
+     * @param payable what is left to pay: owed less pending
+     * @param payOnline whether Razorpay is set up, so the "Pay online" button can be offered
      */
-    public record DuesView(BigDecimal owed, BigDecimal pending, BigDecimal payable, String ownerUpiId,
-                           String ownerName, String upiLink, List<PaymentRow> recent) {
+    public record DuesView(BigDecimal owed, BigDecimal pending, BigDecimal payable, boolean payOnline,
+                           List<PaymentRow> recent) {
     }
 
     public record PaymentRow(Long id, BigDecimal amount, String utr, String status,
@@ -104,10 +106,88 @@ public class DriverDuesService {
         BigDecimal owed = ledger.balanceOf(driver.getId()).negate().max(BigDecimal.ZERO);
         BigDecimal pending = payments.pendingTotal(driverId);
         BigDecimal payable = owed.subtract(pending).max(BigDecimal.ZERO);
-        String link = payable.signum() > 0 && !ownerUpiId.isBlank() ? upiLink(payable, driverId) : null;
         List<PaymentRow> recent = payments.findByDriverIdOrderBySubmittedAtDesc(driverId, PageRequest.of(0, 10))
                 .stream().map(PaymentRow::of).toList();
-        return new DuesView(owed, pending, payable, ownerUpiId.isBlank() ? null : ownerUpiId, ownerName, link, recent);
+        boolean online = razorpay != null && gateway != null && razorpay.isOperational();
+        return new DuesView(owed, pending, payable, online, recent);
+    }
+
+    /**
+     * "Pay online": a Razorpay Payment Link for everything the driver owes right now. The driver
+     * pays it with any UPI app or card; payment_link.paid then calls {@link #settleOnline} and the
+     * balance moves at once - no UTR to type, no owner checking a bank statement.
+     *
+     * <p>Not {@code @Transactional}: the Razorpay call must not hold a database connection.
+     */
+    public String payOnline(Long driverId) {
+        if (razorpay == null || gateway == null || !razorpay.isOperational()) {
+            throw new IllegalArgumentException("Online payment is not set up yet. Please try again later.");
+        }
+        BigDecimal payable = tx.execute(s -> {
+            independent(driverId);
+            BigDecimal owed = ledger.balanceOf(driverId).negate().max(BigDecimal.ZERO);
+            return owed.subtract(payments.pendingTotal(driverId)).max(BigDecimal.ZERO);
+        });
+        if (payable == null || payable.signum() <= 0) {
+            throw new IllegalArgumentException("You have no commission to pay right now");
+        }
+        long paise = payable.movePointRight(2).setScale(0, java.math.RoundingMode.UNNECESSARY).longValueExact();
+        long expireBy = LocalDateTime.now().plusMinutes(30).atZone(java.time.ZoneId.systemDefault()).toEpochSecond();
+        Map<String, String> notes = new java.util.LinkedHashMap<>();
+        notes.put("kind", LINK_KIND);
+        notes.put("driver_id", driverId.toString());
+        String reference = "NJD-" + driverId + "-" + Long.toString(System.currentTimeMillis(), 36);
+        return gateway.createPaymentLink(paise, reference, "Commission dues", expireBy, notes).shortUrl();
+    }
+
+    /**
+     * Razorpay confirmed a dues Payment Link was paid: record it as a confirmed payment and move
+     * the driver's balance. A repeat delivery of the same payment is a no-op.
+     *
+     * @return false when it could not be applied (logged for a person to refund or reconcile)
+     */
+    @Transactional
+    public boolean settleOnline(Long driverId, long paidPaise, String razorpayPaymentId) {
+        if (payments.utrInUse(razorpayPaymentId) || ledger.existsByReference(razorpayPaymentId)) {
+            return true; // already recorded
+        }
+        Driver driver = drivers.findById(driverId).orElse(null);
+        if (driver == null) {
+            log.error("Razorpay dues payment {} for unknown driver {}: refund it from the dashboard", razorpayPaymentId, driverId);
+            return false;
+        }
+        BigDecimal amount = BigDecimal.valueOf(paidPaise, 2);
+        ledger.lockDriver(driverId);
+        BigDecimal owed = ledger.balanceOf(driverId).negate().max(BigDecimal.ZERO);
+        if (amount.compareTo(owed) > 0) {
+            log.error("Razorpay dues payment {} of {} is more than driver {} owes ({}): refund the difference from the dashboard",
+                    razorpayPaymentId, amount, driverId, owed);
+            if (owed.signum() <= 0) {
+                return false;
+            }
+            amount = owed;
+        }
+        String actor = "razorpay:" + razorpayPaymentId;
+        LocalDateTime now = LocalDateTime.now();
+        DriverDuesPayment p = new DriverDuesPayment();
+        p.setDriverId(driverId);
+        p.setAmount(amount);
+        p.setUtr(razorpayPaymentId);
+        p.setSubmittedAt(now);
+        p.setStatus(DriverDuesPayment.Status.CONFIRMED);
+        p.setDecidedAt(now);
+        p.setDecidedBy(actor);
+        payments.save(p);
+        ledgerService.recordTransfer(driverId, DriverLedgerEntry.Type.COLLECTION, amount,
+                razorpayPaymentId, "Paid online (Razorpay)", actor);
+
+        String rupees = String.format(Locale.ROOT, "₹%.2f", amount);
+        tellDriver(driver, "DUES_CONFIRMED", "Payment received",
+                "Your commission payment of " + rupees + " was received. Thank you!");
+        ownerNotice("DUES_PAID", "Driver paid commission online",
+                driver.getName() + " paid " + rupees + " commission online (Razorpay " + razorpayPaymentId + ").");
+        log.info("Driver {} paid {} commission online ({})", driverId, amount, razorpayPaymentId);
+        return true;
     }
 
     /**
@@ -265,15 +345,6 @@ public class DriverDuesService {
             throw new IllegalArgumentException("This payment was already confirmed or rejected");
         }
         return p;
-    }
-
-    private String upiLink(BigDecimal amount, Long driverId) {
-        return String.format(Locale.ROOT, "upi://pay?pa=%s&pn=%s&am=%.2f&cu=INR&tn=%s",
-                encode(ownerUpiId), encode(ownerName), amount, encode("Commission driver " + driverId));
-    }
-
-    private static String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     private static String ownerText(Driver d, DriverDuesPayment p, String status) {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import DashboardLayout from '../../components/DashboardLayout'
 import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
-import { getDriverBookings, driverBookingAction, endTrip, markCashReceived, startTrip, uploadEndTripPhoto } from '../../utils/api'
+import { getDriverBookings, driverBookingAction, endTrip, markCashReceived, startTrip, uploadEndTripPhoto, invalidateCache } from '../../utils/api'
 import Pagination, { usePagination } from '../../components/Pagination'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
@@ -132,11 +132,14 @@ function QrModal({ qrData, onClose }) {
           <p style={modalSub}>Amount: <strong style={{ color: '#fff' }}>{inr(qrData.amount)}</strong></p>
         </div>
         <div style={{ padding: 24 }}>
-          <p style={{ fontSize: 12.5, color: 'var(--pc-muted)', margin: '0 0 16px', fontWeight: 600 }}>Customer scans with GPay, PhonePe, Paytm or any UPI app</p>
+          <p style={{ fontSize: 12.5, color: 'var(--pc-muted)', margin: '0 0 16px', fontWeight: 600 }}>Customer scans and pays with GPay, PhonePe, Paytm, any UPI app or a card</p>
           {qrData.upiQrCode && (
-            <img src={qrData.upiQrCode} alt="UPI QR" style={{ width: 220, height: 220, borderRadius: 16, border: '2px solid var(--pc-line)', marginBottom: 16 }} />
+            <img src={qrData.upiQrCode} alt="Razorpay payment QR" style={{ width: 220, height: 220, borderRadius: 16, border: '2px solid var(--pc-line)', marginBottom: 16 }} />
           )}
-          <p style={{ fontSize: 12.5, color: 'var(--pc-muted)', margin: '0 0 12px' }}>{qrData.message}</p>
+          <p style={{ fontSize: 12.5, color: 'var(--pc-muted)', margin: '0 0 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <span className="spinner" style={{ width: 14, height: 14 }} />
+            Waiting for payment · confirmed automatically by Razorpay
+          </p>
           <button type="button" className="pc-btn pc-btn-ghost" onClick={onClose} style={{ width: '100%' }}>Close</button>
         </div>
       </div>
@@ -164,6 +167,25 @@ export default function DriverBookings() {
   }
 
   useEffect(() => { load() }, [user.userId])
+
+  // While the payment QR is up, check every few seconds whether Razorpay has confirmed it: the
+  // webhook completes the trip, and then the QR closes on its own.
+  useEffect(() => {
+    if (!qrData?.bookingId) return undefined
+    const id = setInterval(async () => {
+      try {
+        invalidateCache('/bookings')
+        const res = await getDriverBookings(user.userId)
+        const list = res.data || []
+        setBookings(list)
+        if (list.find(b => b.bookingId === qrData.bookingId)?.status === 'COMPLETED') {
+          setQrData(null)
+          celebrate({ title: 'Payment received', message: `${inr(qrData.amount)} paid online. Trip completed.` })
+        }
+      } catch { /* keep waiting */ }
+    }, 4000)
+    return () => clearInterval(id)
+  }, [qrData, user.userId, celebrate])
   // Starting or ending a trip here changes whether presence reports should pause.
   useEffect(() => { if (!loading) announceTripState(bookings) }, [bookings, loading])
 

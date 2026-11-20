@@ -69,8 +69,6 @@ class OwnerScreensScopeTest {
     private static PaymentService payments(PaymentRepository repo, TravelBookingRepository bookings) {
         PaymentService s = new PaymentService(repo, bookings, mock(DriverRepository.class), mock(NotificationService.class),
                 mock(LocationTrackingService.class));
-        ReflectionTestUtils.setField(s, "ownerUpiId", "platform@bank");
-        ReflectionTestUtils.setField(s, "ownerName", "Namma Journey");
         return s;
     }
 
@@ -102,33 +100,6 @@ class OwnerScreensScopeTest {
         assertThrows(ResourceNotFoundException.class, () -> service.requireVisibleTo(city.getId(), ME, false));
         assertDoesNotThrow(() -> service.requireVisibleTo(city.getId(), ME, true));
         assertDoesNotThrow(() -> service.requireVisibleTo(theirs.getId(), OTHER, false));
-    }
-
-    @Test
-    @DisplayName("a Trip's UPI link pays its travels owner; without their UPI ID, the platform's")
-    void upiLinkUsesBookingOwnersUpi() {
-        TravelBookingRepository bookings = mock(TravelBookingRepository.class);
-        OwnerRepository owners = mock(OwnerRepository.class);
-        UUID trip = UUID.randomUUID();
-        TravelBooking b = new TravelBooking();
-        b.setId(trip);
-        b.setOwnerId(ME);
-        when(bookings.findById(trip)).thenReturn(Optional.of(b));
-        Owner o = new Owner();
-        o.setId(ME);
-        o.setUpiId("ravitravels@okbank");
-        o.setTravelsName("Ravi Travels");
-        when(owners.findById(ME)).thenReturn(Optional.of(o));
-        PaymentService service = payments(mock(PaymentRepository.class), bookings);
-        ReflectionTestUtils.setField(service, "ownerRepository", owners);
-
-        String link = ReflectionTestUtils.invokeMethod(service, "generateUpiDeepLink", new BigDecimal("500.00"), trip.toString());
-        assertTrue(link.contains("pa=ravitravels%40okbank"), link);
-        assertTrue(link.contains("pn=Ravi+Travels"), link);
-
-        o.setUpiId(null);
-        link = ReflectionTestUtils.invokeMethod(service, "generateUpiDeepLink", new BigDecimal("500.00"), trip.toString());
-        assertTrue(link.contains("pa=platform%40bank"), link);
     }
 
     @Test

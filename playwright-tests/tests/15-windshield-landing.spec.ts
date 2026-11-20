@@ -12,9 +12,7 @@ import { contexts, disposeAll, bookingPayload } from '../helpers/booking';
  *    the booking form sits beside it (below it on phones).
  *  - The memory album: at each stop the friends pose, the driver takes the photo, and the
  *    polaroid flies into the album, which counts up.
- *  - A successful form ends in a celebration popup; a UPI payment celebrates in two steps:
- *    "Payment sent" when the traveller taps "I've paid", "Payment confirmed" once the owner has
- *    verified it (the app polls while open).
+ *  - A successful form ends in a celebration popup.
  */
 
 const acc = readAccounts();
@@ -181,50 +179,5 @@ test.describe('Celebrations', () => {
     await pop.getByRole('button').last().click();
     await expect(pop).toBeHidden();
     await ctx.close();
-  });
-
-  test('a UPI payment celebrates twice: sent, then confirmed once the owner verifies it', async ({ browser }, info) => {
-    test.setTimeout(150_000);
-    const c = await contexts('cel-pay');
-    const label = `PAY${Date.now().toString().slice(-6)}`;
-    const created = await c.user.post(`/api/user/${acc.user.userId}/bookings`, { data: bookingPayload({ toPlace: `Chennai ${label}` }) });
-    expect(created.status(), (await created.text()).slice(0, 300)).toBe(201);
-    const booking = await created.json();
-    // A booking becomes CONFIRMED when a driver is assigned - passengers can no longer confirm their
-    // own booking over the driver's head (that endpoint was removed).
-    const confirm = await c.owner.post(`/api/owner/bookings/${booking.bookingId}/assign-driver`, {
-      data: { driverId: Number(acc.driver.driverId) },
-    });
-    expect(confirm.status(), (await confirm.text()).slice(0, 300)).toBe(200);
-
-    const { ctx, page } = await signedInTraveller(browser, 'cel-pay-ui');
-    const problems = watch(page, '/user/bookings');
-    await page.goto('/user/bookings', { waitUntil: 'domcontentloaded' });
-    const card = page.locator('div').filter({ hasText: label }).filter({ has: page.getByRole('button', { name: 'Pay', exact: true }) }).last();
-    await card.getByRole('button', { name: 'Pay', exact: true }).click();
-    await page.getByRole('radio', { name: 'UPI' }).click();
-    await page.getByRole('button', { name: 'Pay Now' }).click();
-    await page.getByRole('button', { name: "I've paid" }).click();
-
-    const sent = page.getByRole('dialog', { name: 'Payment sent' });
-    await expect(sent, 'step one: the calm "payment sent" popup').toBeVisible({ timeout: 15_000 });
-    await snap(page, info, 'payment-sent');
-    await sent.getByRole('button').last().click();
-
-    // The owner verifies it, exactly as they would from the Payments page.
-    const payments = await (await c.user.get(`/api/user/${acc.user.userId}/payments`)).json();
-    const mine = (Array.isArray(payments) ? payments : []).find((p: any) => p.bookingId === booking.bookingId);
-    expect(mine, 'the payment the traveller sent exists').toBeTruthy();
-    const verified = await c.owner.post(`/api/owner/payments/${mine.paymentId}/verify`);
-    expect(verified.status(), (await verified.text()).slice(0, 300)).toBe(200);
-
-    const confirmed = page.getByRole('dialog', { name: 'Payment confirmed' });
-    await expect(confirmed, 'step two: the party popup once verified (polled every 10s)').toBeVisible({ timeout: 30_000 });
-    await expect(confirmed).toContainText('₹');
-    await snap(page, info, 'payment-confirmed');
-
-    expect(problems.pageErrors, summarize(problems)).toEqual([]);
-    await ctx.close();
-    await disposeAll(c);
   });
 });

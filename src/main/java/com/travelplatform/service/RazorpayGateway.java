@@ -68,6 +68,49 @@ public class RazorpayGateway {
         }
     }
 
+    /** A created Payment Link: its id ({@code plink_...}) and the short_url the QR encodes. */
+    public record PaymentLink(String id, String shortUrl) {
+    }
+
+    /**
+     * Creates a Standard Payment Link for the end-of-ride QR. The passenger scans it and pays by
+     * any UPI app, card or netbanking on Razorpay's page; {@code payment_link.paid} settles it.
+     *
+     * @param referenceId our reference, at most 40 characters and unique per link
+     * @param expireBy    unix seconds; Razorpay wants at least 15 minutes ahead
+     */
+    public PaymentLink createPaymentLink(long amountPaise, String referenceId, String description,
+                                         long expireBy, Map<String, String> notes) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBasicAuth(properties.getKeyId(), properties.getKeySecret());
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("amount", amountPaise);
+        body.put("currency", "INR");
+        body.put("accept_partial", false);
+        body.put("reference_id", referenceId);
+        body.put("description", description);
+        body.put("expire_by", expireBy);
+        body.put("reminder_enable", false);
+        body.put("notes", notes);
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> link = http.postForObject(
+                    properties.getApiBaseUrl() + "/v1/payment_links", new HttpEntity<>(body, headers), Map.class);
+            Object id = link == null ? null : link.get("id");
+            Object url = link == null ? null : link.get("short_url");
+            if (id == null || url == null) {
+                throw new IllegalStateException("Razorpay returned a payment link without an id or url");
+            }
+            return new PaymentLink(id.toString(), url.toString());
+        } catch (RestClientException | IllegalStateException e) {
+            log.error("Razorpay payment link creation failed for reference {}", referenceId, e);
+            throw new RuntimeException("Could not make the payment QR right now. Try again, or collect cash.");
+        }
+    }
+
     /**
      * Refunds {@code amountPaise} of a captured payment and returns the refund id ({@code rfnd_...}),
      * or {@code null} when Razorpay says the payment is already fully refunded - a repeat of a

@@ -8,7 +8,6 @@ import com.travelplatform.entity.TravelBooking;
 import com.travelplatform.repository.PaymentRepository;
 import com.travelplatform.repository.TravelBookingRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
@@ -21,8 +20,6 @@ import com.google.zxing.qrcode.QRCodeWriter;
 import java.awt.image.BufferedImage;
 import java.math.BigDecimal;
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.StandardCharsets;
-import java.net.URLEncoder;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
@@ -40,17 +37,7 @@ public class PaymentService {
     private final com.travelplatform.repository.DriverRepository driverRepository;
     private final NotificationService notificationService;
     private final LocationTrackingService locationTrackingService;
-    
-    @Value("${payment.upi.id}")
-    private String ownerUpiId;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private com.travelplatform.repository.OwnerRepository ownerRepository;
-    
-    @Value("${payment.upi.name:Namma Journey}")
-    private String ownerName;
-    
-    private static final int UPI_LINK_EXPIRY_MINUTES = 5;
 
     /**
      * What the passenger still owes for the trip: the fare, less a paid advance (V20). Every fare
@@ -122,7 +109,11 @@ public class PaymentService {
             throw new RuntimeException("Booking must be confirmed before payment");
         }
 
-        // Check existing payment
+        // Every non-cash payment goes through Razorpay (the "Pay online" checkout, or the driver's
+        // end-of-ride QR, which is a Razorpay Payment Link). This endpoint only records "I will pay
+        // cash"; a plain UPI QR to a fixed UPI ID is no longer issued anywhere.
+        Payment.PaymentMethod method = parseMethod(request);
+
         java.util.Optional<Payment> existing = paymentRepository.findByBookingId(bookingId);
         if (existing.isPresent()) {
             Payment p = existing.get();
@@ -130,54 +121,15 @@ public class PaymentService {
                 throw new RuntimeException("Payment already completed");
             }
             rememberUpiReference(p, request);
-            // A passenger who first picked cash and then chose UPI (or the reverse) gets what they
-            // chose. The old row kept its first method: a CASH payment was handed a UPI QR, the
-            // owner's UPI verify then refused it, and only the driver could settle it, as "cash".
-            if (request != null && request.getPaymentMethod() != null && !request.getPaymentMethod().isBlank()) {
-                Payment.PaymentMethod requested = parseMethod(request);
-                if (requested != p.getPaymentMethod()) {
-                    p.setPaymentMethod(requested);
-                    if (requested == Payment.PaymentMethod.CASH) {
-                        p.setUpiLinkExpiresAt(null);
-                        PaymentResponse response = mapToResponse(paymentRepository.save(p));
-                        response.setMessage("Pay cash to driver. Driver will mark payment received.");
-                        return response;
-                    }
-                    p.setUpiLinkExpiresAt(null); // forces a fresh link below
-                }
-            }
-            if (p.getPaymentMethod() == Payment.PaymentMethod.CASH) {
-                PaymentResponse response = mapToResponse(p);
-                response.setMessage("Pay cash to driver. Driver will mark payment received.");
-                return response;
-            }
-            // If UPI link is still active (not expired), return it
-            if (p.getPaymentMethod() == Payment.PaymentMethod.UPI
-                    && p.getUpiLinkExpiresAt() != null
-                    && p.getUpiLinkExpiresAt().isAfter(LocalDateTime.now())) {
-                PaymentResponse response = mapToResponse(p);
-                String deepLink = generateUpiDeepLink(p.getAmount(), bookingId.toString());
-                response.setUpiDeepLink(deepLink);
-                response.setUpiQrCode(generateQrCodeBase64(deepLink));
-                response.setMessage("Scan QR code or tap to open UPI app.");
-                return response;
-            }
-            // Link expired or failed — refresh expiry and return new link
-            p.setUpiLinkExpiresAt(LocalDateTime.now().plusMinutes(UPI_LINK_EXPIRY_MINUTES));
-            p.setStatus(Payment.PaymentStatus.PENDING);
-            Payment refreshed = paymentRepository.save(p);
-            String deepLink = generateUpiDeepLink(refreshed.getAmount(), bookingId.toString());
-            PaymentResponse response = mapToResponse(refreshed);
-            response.setUpiDeepLink(deepLink);
-            response.setUpiQrCode(generateQrCodeBase64(deepLink));
-            response.setMessage("New QR generated. Valid for " + UPI_LINK_EXPIRY_MINUTES + " minutes.");
+            // A passenger who opened online checkout (or was shown the driver's QR) and then hands
+            // over cash: the open Razorpay order/link stays on the row, so if it is paid after all
+            // the webhook still finds it and refunds the second charge.
+            p.setPaymentMethod(method);
+            p.setUpiLinkExpiresAt(null);
+            PaymentResponse response = mapToResponse(paymentRepository.save(p));
+            response.setMessage("Pay cash to driver. Driver will mark payment received.");
             return response;
         }
-
-        // New payment. parseMethod rejects anything that is not UPI or CASH before a row is
-        // built — Payment.PaymentMethod.valueOf on raw request input threw IllegalArgumentException
-        // (and NullPointerException on a null) from inside the transaction, surfacing as a 500.
-        Payment.PaymentMethod method = parseMethod(request);
 
         // The booking is the only source of truth for what is owed. The request deliberately
         // carries no amount: if it did, a customer could name their own fare.
@@ -191,22 +143,8 @@ public class PaymentService {
         payment.setCreatedAt(LocalDateTime.now());
         rememberUpiReference(payment, request);
 
-        if (method == Payment.PaymentMethod.UPI) {
-            payment.setUpiLinkExpiresAt(LocalDateTime.now().plusMinutes(UPI_LINK_EXPIRY_MINUTES));
-        }
-
-        Payment saved = paymentRepository.save(payment);
-
-        PaymentResponse response = mapToResponse(saved);
-        if (saved.getPaymentMethod() == Payment.PaymentMethod.UPI) {
-            String deepLink = generateUpiDeepLink(saved.getAmount(), bookingId.toString());
-            response.setUpiDeepLink(deepLink);
-            response.setUpiQrCode(generateQrCodeBase64(deepLink));
-            response.setMessage("Scan QR code or tap to open UPI app. Valid for " + UPI_LINK_EXPIRY_MINUTES + " minutes.");
-        } else {
-            response.setMessage("Pay cash to driver. Driver will mark payment received.");
-        }
-
+        PaymentResponse response = mapToResponse(paymentRepository.save(payment));
+        response.setMessage("Pay cash to driver. Driver will mark payment received.");
         return response;
     }
     
@@ -449,20 +387,16 @@ public class PaymentService {
             p.setBookingId(bookingId);
             p.setUserId(booking.getUserId());
             p.setAmount(amountDue(booking));
-            p.setPaymentMethod(Payment.PaymentMethod.UPI);
+            p.setPaymentMethod(Payment.PaymentMethod.RAZORPAY);
             p.setStatus(Payment.PaymentStatus.PENDING);
             p.setDriverId(driverId);
             p.setCreatedAt(LocalDateTime.now());
             return p;
         });
-        // The driver is showing a UPI QR, so this is a UPI payment now - otherwise a passenger who
-        // had opened online checkout earlier would scan, and the owner's UPI verify would refuse
-        // it. The Razorpay order id stays: if that earlier checkout completes after all, its
-        // webhook still finds and settles this row.
-        if (payment.getPaymentMethod() == Payment.PaymentMethod.RAZORPAY) {
-            payment.setPaymentMethod(Payment.PaymentMethod.UPI);
-        }
-        payment.setUpiLinkExpiresAt(LocalDateTime.now().plusMinutes(UPI_LINK_EXPIRY_MINUTES));
+        // The driver is about to show a Razorpay QR (RazorpayPaymentService.tripEndQr), so this is
+        // an online payment now, whatever the passenger picked before. Any open checkout order id
+        // stays: if that earlier checkout completes after all, its webhook still settles this row.
+        payment.setPaymentMethod(Payment.PaymentMethod.RAZORPAY);
         payment.setStatus(Payment.PaymentStatus.PENDING);
         Payment saved = paymentRepository.save(payment);
 
@@ -473,11 +407,10 @@ public class PaymentService {
         driverRepository.findById(driverId)
                 .ifPresent(driver -> notificationService.notifyTripEnded(booking, driver));
 
-        String deepLink = generateUpiDeepLink(saved.getAmount(), bookingId.toString());
+        // No QR here: RazorpayPaymentService.tripEndQr adds the Payment Link outside this
+        // transaction, so a slow Razorpay never holds a database connection.
         PaymentResponse response = mapToResponse(saved);
-        response.setUpiDeepLink(deepLink);
-        response.setUpiQrCode(generateQrCodeBase64(deepLink));
-        response.setMessage("QR generated. Valid for " + UPI_LINK_EXPIRY_MINUTES + " minutes.");
+        response.setMessage("Trip ended. Payment due.");
         return response;
     }
     
@@ -541,26 +474,6 @@ public class PaymentService {
     }
 
     /**
-     * Builds the {@code upi://pay} intent the customer's UPI app opens.
-     *
-     * <p>Every interpolated value is percent-encoded, including the payee address. A UPI ID
-     * containing an unescaped {@code &} would otherwise close the {@code pa} parameter and let
-     * the rest of the string inject its own — {@code am}, or a second {@code pa} — so an
-     * operator who mistyped the configured ID could silently produce links that pay the wrong
-     * account or the wrong amount.
-     *
-     * <p>The amount is formatted with {@link Locale#ROOT}. Without it {@code String.format}
-     * follows the JVM default locale, and on a host set to a comma-decimal locale (de, fr, and
-     * most of the EU) a 2500.00 fare renders as {@code am=2500,00} — which UPI apps either
-     * reject outright or read as 2500 rupees short of the real fare.
-     */
-    /**
-     * Maps the request's payment method onto the enum, rejecting anything else with a 400.
-     * {@code PaymentMethod.valueOf} was previously applied straight to the request string, so a
-     * body of {@code {"paymentMethod":"BITCOIN"}} raised IllegalArgumentException and a missing
-     * field raised NullPointerException, both from inside the transaction.
-     */
-    /**
      * Keeps the UPI reference (UTR) a passenger supplies, so the owner has something to match
      * against the bank statement when verifying. It arrived on the request and was thrown away.
      * Trimmed and length-capped; only letters and digits, as UPI references are.
@@ -579,68 +492,21 @@ public class PaymentService {
     private Payment.PaymentMethod parseMethod(PaymentRequest request) {
         String raw = request != null ? request.getPaymentMethod() : null;
         if (raw == null || raw.isBlank()) {
-            throw new IllegalArgumentException("Payment method is required (UPI or CASH)");
+            throw new IllegalArgumentException("Payment method is required (CASH, or pay online)");
         }
-        Payment.PaymentMethod method;
-        try {
-            method = Payment.PaymentMethod.valueOf(raw.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Unsupported payment method. Use UPI or CASH");
+        // Only cash is recorded here. Online payment (UPI apps, cards) goes through Razorpay's own
+        // order/verify endpoints; the old plain UPI QR to a fixed UPI ID is gone.
+        if (!"CASH".equalsIgnoreCase(raw.trim())) {
+            throw new IllegalArgumentException("Pay online (UPI, card) through Razorpay, or choose cash");
         }
-        // Online payment has its own order/verify endpoints (RazorpayPaymentService). Accepting it
-        // here would make a RAZORPAY row with no order and hand it a UPI QR.
-        if (method == Payment.PaymentMethod.RAZORPAY) {
-            throw new IllegalArgumentException("Unsupported payment method. Use UPI or CASH");
-        }
-        return method;
+        return Payment.PaymentMethod.CASH;
     }
 
-    private String generateUpiDeepLink(BigDecimal amount, String bookingRef) {
-        if (amount == null || amount.signum() <= 0) {
-            throw new IllegalStateException("Refusing to build a UPI link for a non-positive amount");
-        }
-        // A Trip is paid straight to its travels owner when they have given a UPI ID (V27);
-        // City rides and owners without one pay the platform's configured ID.
-        String payee = ownerUpiId;
-        String payeeName = ownerName;
-        com.travelplatform.entity.Owner owner = bookingOwner(bookingRef);
-        if (owner != null && owner.getUpiId() != null && !owner.getUpiId().isBlank()) {
-            payee = owner.getUpiId().trim();
-            if (owner.getTravelsName() != null && !owner.getTravelsName().isBlank()) {
-                payeeName = owner.getTravelsName().trim();
-            }
-        }
-        return String.format(
-                Locale.ROOT,
-                "upi://pay?pa=%s&pn=%s&am=%.2f&cu=INR&tn=%s",
-                encode(payee),
-                encode(payeeName),
-                amount,
-                encode("Booking:" + bookingRef));
-    }
-
-    private com.travelplatform.entity.Owner bookingOwner(String bookingRef) {
-        if (ownerRepository == null) {
-            return null;
-        }
-        try {
-            return bookingRepository.findById(UUID.fromString(bookingRef))
-                    .map(TravelBooking::getOwnerId)
-                    .flatMap(ownerRepository::findById)
-                    .orElse(null);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    private static String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8);
-    }
-
-    private String generateQrCodeBase64(String upiDeepLink) {
+    /** A PNG data URL of a QR code for {@code text} (the Razorpay Payment Link the driver shows). */
+    public static String qrPng(String text) {
         try {
             QRCodeWriter writer = new QRCodeWriter();
-            BitMatrix matrix = writer.encode(upiDeepLink, BarcodeFormat.QR_CODE, 300, 300);
+            BitMatrix matrix = writer.encode(text, BarcodeFormat.QR_CODE, 300, 300);
             BufferedImage image = MatrixToImageWriter.toBufferedImage(matrix);
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             ImageIO.write(image, "PNG", baos);

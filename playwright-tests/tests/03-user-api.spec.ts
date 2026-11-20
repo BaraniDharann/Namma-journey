@@ -97,7 +97,7 @@ test.describe('User API', () => {
     expect(confirm.status(), (await confirm.text()).slice(0, 300)).toBe(200);
 
     const pay = await c.user.post(`/api/user/${U}/bookings/${b.bookingId}/payment`, {
-      data: { paymentMethod: 'UPI', upiTransactionId: `E2E${Date.now()}` },
+      data: { paymentMethod: 'CASH' },
     });
     expect(pay.status(), (await pay.text()).slice(0, 300)).toBe(201);
 
@@ -125,7 +125,7 @@ test.describe('User API', () => {
     expect(b.status).toBe('PENDING');
 
     const pay = await c.user.post(`/api/user/${U}/bookings/${b.bookingId}/payment`, {
-      data: { paymentMethod: 'UPI', upiTransactionId: `E2E${Date.now()}` },
+      data: { paymentMethod: 'CASH' },
     });
     expect(pay.status()).toBe(400);
     expect((await pay.text()).toLowerCase()).toContain('confirmed');

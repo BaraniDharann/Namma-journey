@@ -60,12 +60,16 @@ async function quiesceOtherTrips(c: Ctxs, keepBookingId?: string) {
       await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/start-trip`);
     }
     if (b.status === 'CONFIRMED' || b.status === 'STARTED') {
-      // end-trip only raises a UPI invoice; the booking leaves STARTED when the owner
-      // verifies that payment.
+      // end-trip only raises the invoice; the booking leaves STARTED once it is paid - here,
+      // in cash, which the driver records.
       const ended = await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/end-trip`);
       if (ended.status() === 200) {
         const invoice = await ended.json();
-        if (invoice.paymentId) await c.owner.post(`/api/owner/payments/${invoice.paymentId}/verify`);
+        if (invoice.amount) {
+          await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/cash-payment`, {
+            data: { amountReceived: Number(invoice.amount) },
+          });
+        }
       }
     }
   }

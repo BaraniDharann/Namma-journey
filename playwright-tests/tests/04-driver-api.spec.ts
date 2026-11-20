@@ -130,14 +130,16 @@ test.describe('Driver API', () => {
       'documented behaviour: end-trip alone does not complete the booking'
     ).toBe('STARTED');
 
-    // end-trip raises a UPI invoice; the owner verifying it is what completes the trip.
-    // (A passenger who pays cash instead is settled by the driver's cash-payment call, which
-    // switches the unpaid invoice to cash - see the next test.)
-    expect(invoice.paymentMethod).toBe('UPI');
+    // end-trip raises a Razorpay invoice (the QR is a Razorpay Payment Link when keys are set);
+    // Razorpay's webhook settles it. Owners no longer verify payments by hand, so here the
+    // passenger pays cash instead and the driver's cash-payment call completes the trip.
+    expect(invoice.paymentMethod).toBe('RAZORPAY');
     expect(invoice.status).toBe('PENDING');
 
-    const verified = await c.owner.post(`/api/owner/payments/${invoice.paymentId}/verify`);
-    expect(verified.status(), (await verified.text()).slice(0, 200)).toBe(200);
+    const cash = await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/cash-payment`, {
+      data: { amountReceived: Number(invoice.amount) },
+    });
+    expect(cash.status(), (await cash.text()).slice(0, 200)).toBe(200);
 
     const afterPay = await c.user.get(`/api/user/${U}/bookings/${b.bookingId}`);
     expect((await afterPay.json()).status).toBe('COMPLETED');
@@ -151,7 +153,7 @@ test.describe('Driver API', () => {
 
     const ended = await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/end-trip`);
     const invoice = await ended.json();
-    expect(invoice.paymentMethod).toBe('UPI');
+    expect(invoice.paymentMethod).toBe('RAZORPAY');
 
     const cash = await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/cash-payment`, {
       data: { amountReceived: Number(invoice.amount) },

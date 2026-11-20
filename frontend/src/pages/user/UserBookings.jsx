@@ -11,7 +11,7 @@ import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { inr, shortPlace } from '../../dash/metrics'
 import { modeLabel } from '../../dash/vehicles'
-import { useCelebrate, rememberPayment } from '../../components/celebrate/Celebration'
+import { useCelebrate } from '../../components/celebrate/Celebration'
 import TripSafetyBar from '../../components/safety/TripSafetyBar'
 import { telHref } from '../../utils/privacy'
 
@@ -160,41 +160,14 @@ function TripSummaryModal({ booking, userId, onClose }) {
   )
 }
 
-function UpiQrModal({ result, onClose, onPaid }) {
-  return (
-    <div className="modal-overlay" style={overlayStyle}>
-      <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="upi-title" style={{ ...boxStyle(380), textAlign: 'center' }}>
-        <div style={{ ...headStyle, display: 'block' }}>
-          <h3 id="upi-title" style={headTitle}>Scan to Pay</h3>
-          <p style={headSub}>Amount: <strong style={{ color: 'var(--pc-rail-ink)' }}>{inr(result.amount)}</strong></p>
-        </div>
-        <div style={{ padding: 24 }}>
-          <p style={{ fontSize: 12, color: 'var(--pc-muted)', marginBottom: 16 }}>Scan with GPay, PhonePe, Paytm or any UPI app</p>
-          {result.upiQrCode && (
-            <img src={result.upiQrCode} alt="UPI QR Code" style={{ width: 220, height: 220, borderRadius: 16, border: '2px solid var(--pc-line)', marginBottom: 16 }} />
-          )}
-          {onPaid && result.paymentId && result.paymentMethod !== 'CASH' && (
-            <button type="button" onClick={() => onPaid(result)} className="pc-btn" style={{ ...fullBtn, marginBottom: 10 }}>I&apos;ve paid</button>
-          )}
-          <a href={result.upiDeepLink} className="pc-btn" style={{ ...fullBtn, marginBottom: 10 }}><Icon name="phone" size={16} />Open UPI App Directly</a>
-          <p style={{ fontSize: 12, color: 'var(--pc-muted)', marginBottom: 12 }}>{result.message}</p>
-          <button type="button" onClick={onClose} className="pc-btn pc-btn-ghost" style={fullBtn}>Done</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 const PAY_METHODS = [
   { id: 'ONLINE', label: 'Online', icon: 'card' },
-  { id: 'UPI', label: 'UPI', icon: 'qr' },
   { id: 'CASH', label: 'Cash', icon: 'wallet' },
 ]
 
-function PaymentModal({ booking, onClose, onPay, onPaid, onPayOnline }) {
+function PaymentModal({ booking, onClose, onPay, onPayOnline }) {
   const [method, setMethod] = useState('ONLINE')
   const [loading, setLoading] = useState(false)
-  const [upiResult, setUpiResult] = useState(null)
 
   const handlePay = async () => {
     setLoading(true)
@@ -205,18 +178,9 @@ function PaymentModal({ booking, onClose, onPay, onPaid, onPayOnline }) {
       if (paid) onClose()
       return
     }
-    const res = await onPay(booking.bookingId, { paymentMethod: method })
-    if (method === 'UPI' && res?.upiQrCode) {
-      setUpiResult(res)
-    } else {
-      onClose()
-    }
+    await onPay(booking.bookingId, { paymentMethod: method })
+    onClose()
     setLoading(false)
-  }
-
-  if (upiResult) {
-    const paid = onPaid ? (result) => { onClose(); onPaid(booking, result) } : undefined
-    return <UpiQrModal result={upiResult} onClose={onClose} onPaid={paid} />
   }
 
   return (
@@ -231,7 +195,7 @@ function PaymentModal({ booking, onClose, onPay, onPaid, onPayOnline }) {
         <div style={{ padding: 24 }}>
           <div className="pc-figure" style={{ fontSize: 36, color: 'var(--pc-brand-deep)', marginBottom: booking.advancePaid ? 4 : 20, textAlign: 'center' }}>{inr(booking.amountDue ?? booking.totalAmount)}</div>
           {booking.advancePaid && <p style={{ fontSize: 12, color: 'var(--pc-muted)', textAlign: 'center', margin: '0 0 20px' }}>Balance after your {inr(booking.advanceAmount)} advance</p>}
-          <div role="radiogroup" aria-label="Payment method" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 12 }}>
+          <div role="radiogroup" aria-label="Payment method" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 12 }}>
             {PAY_METHODS.map(({ id: m, label, icon }) => (
               <button key={m} type="button" role="radio" aria-checked={method === m} onClick={() => setMethod(m)}
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px 8px', borderRadius: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer', transition: 'all 0.15s', background: method === m ? 'var(--pc-brand-soft)' : 'var(--pc-wash)', color: method === m ? 'var(--pc-brand-deep)' : 'var(--pc-ink-2)', border: method === m ? '2px solid var(--pc-brand)' : '2px solid var(--pc-line)' }}>
@@ -240,8 +204,7 @@ function PaymentModal({ booking, onClose, onPay, onPaid, onPayOnline }) {
             ))}
           </div>
           <p style={{ fontSize: 12, color: 'var(--pc-muted)', margin: '0 0 20px', textAlign: 'center' }}>
-            {method === 'ONLINE' ? 'Card, UPI or netbanking via Razorpay. Confirmed instantly.'
-              : method === 'UPI' ? 'Scan a QR with any UPI app. Confirmed by the owner.'
+            {method === 'ONLINE' ? 'GPay, PhonePe, any UPI app, card or netbanking via Razorpay. Confirmed instantly.'
               : 'Pay the driver at the end of the trip.'}
           </p>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -323,19 +286,6 @@ export default function UserBookings() {
   }
 
   // "I've paid" only records the claim locally (no API call); the app-wide watcher confirms it once verified.
-  const handlePaid = (booking, result) => {
-    rememberPayment(user.userId, {
-      paymentId: result.paymentId,
-      amount: result.amount,
-      label: `${shortPlace(booking.fromPlace)} → ${shortPlace(booking.toPlace)}`,
-    })
-    celebrate({
-      tone: 'calm',
-      title: 'Payment sent',
-      message: `₹${Math.round(result.amount || 0).toLocaleString('en-IN')} sent by UPI. You'll get a confirmation here as soon as it's verified.`,
-    })
-  }
-
   const handlePayment = async (bookingId, data) => {
     try {
       const res = await initiatePayment(user.userId, bookingId, data, paymentKey.current.get())
@@ -369,7 +319,7 @@ export default function UserBookings() {
   return (
     <DashboardLayout navItems={navItems} role="ROLE_USER">
       {reviewBooking && <ReviewModal booking={reviewBooking} onClose={() => setReviewBooking(null)} onSubmit={handleReview} />}
-      {payBooking && <PaymentModal booking={payBooking} onClose={() => setPayBooking(null)} onPay={handlePayment} onPaid={handlePaid} onPayOnline={handleOnlinePayment} />}
+      {payBooking && <PaymentModal booking={payBooking} onClose={() => setPayBooking(null)} onPay={handlePayment} onPayOnline={handleOnlinePayment} />}
       {summaryBooking && <TripSummaryModal booking={summaryBooking} userId={user.userId} onClose={() => setSummaryBooking(null)} />}
 
       <PageHead title="My Bookings" sub={`${bookings.length} total trips`}>
