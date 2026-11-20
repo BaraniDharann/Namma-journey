@@ -78,7 +78,7 @@ function DocumentViewer({ doc, onClose }) {
         </div>
         <img src={doc.src} alt={`${doc.label} of ${doc.name}`} draggable={false} referrerPolicy="no-referrer"
           onContextMenu={(e) => e.preventDefault()}
-          style={{ display: 'block', maxWidth: '100%', maxHeight: '75vh', margin: '0 auto', borderRadius: 10, userSelect: 'none' }} />
+          style={{ display: 'block', maxWidth: '100%', maxHeight: '75vh', margin: '0 auto', borderRadius: 10, userSelect: 'none', filter: 'blur(14px)' }} />
       </div>
     </div>
   )
@@ -153,7 +153,7 @@ function ApplicationCard({ app, tab, busy, onApprove, onReject, onView }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }}>{d.label}</div>
             {d.src ? (
               // Hidden until tapped; once shown, tapping the picture opens it full size.
-              <PrivateImage src={d.src} alt={`${d.label} of ${app.name}`} height={90} onOpen={() => onView({ ...d, name: app.name })} />
+              <PrivateImage src={d.src} alt={`${d.label} of ${app.name}`} height={90}  />
             ) : (
               <div style={{ height: 90, borderRadius: 10, background: 'var(--pc-wash)', color: 'var(--pc-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>Not uploaded</div>
             )}

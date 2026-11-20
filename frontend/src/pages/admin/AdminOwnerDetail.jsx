@@ -191,9 +191,8 @@ export default function AdminOwnerDetail() {
                   <figure key={name} style={{ margin: 0 }}>
                     <figcaption style={label}>{name}</figcaption>
                     {src
-                      // Hidden until tapped; once shown, tapping it opens the full size in a new tab.
-                      ? <PrivateImage src={src} alt={name} height={220} fit="contain"
-                          onOpen={() => window.open(src, '_blank', 'noopener,noreferrer')} />
+                      // Always blurred for privacy.
+                      ? <PrivateImage src={src} alt={name} height={220} fit="contain" />
                       : <p style={{ fontSize: 13 }}>Not uploaded</p>}
                   </figure>
                 ))}

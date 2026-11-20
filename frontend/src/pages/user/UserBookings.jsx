@@ -1,3 +1,4 @@
+import { BlurredPhoto } from '../../components/PrivateImage'
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
@@ -131,7 +132,7 @@ function TripSummaryModal({ booking, userId, onClose }) {
                   <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--pc-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Assigned Driver</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     {imgUrl(d.photo)
-                      ? <img src={imgUrl(d.photo)} alt="Driver" style={{ width: 48, height: 48, borderRadius: 14, objectFit: 'cover' }} />
+                      ? <BlurredPhoto src={imgUrl(d.photo)} alt="Driver" style={{ width: 48, height: 48, borderRadius: 14, objectFit: 'cover' }} />
                       : <div aria-hidden="true" style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--pc-brand-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 800, color: 'var(--pc-brand-deep)' }}>{d.name?.[0]?.toUpperCase()}</div>
                     }
                     <div style={{ minWidth: 0 }}>

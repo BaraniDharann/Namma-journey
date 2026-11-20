@@ -1,3 +1,4 @@
+import { BlurredPhoto } from '../PrivateImage'
 import React, { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
@@ -64,7 +65,7 @@ export default function RideTrackerSheet({ booking, info, onClose }) {
         {d && (
           <footer className="ar-driver">
             <span className="ar-driver-av" aria-hidden="true">
-              {d.photo ? <img src={d.photo} alt="" /> : String(d.name || '?').charAt(0).toUpperCase()}
+              {d.photo ? <BlurredPhoto src={d.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : String(d.name || '?').charAt(0).toUpperCase()}
             </span>
             <span className="ar-copy">
               <b>{d.name}</b>

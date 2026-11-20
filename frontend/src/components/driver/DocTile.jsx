@@ -18,7 +18,7 @@ export default function DocTile({ label, icon, file, onChange, missing, name, ac
     }}>
       <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)' }}>{label}</span>
       {preview
-        ? <img src={preview} alt={`Preview of ${label}`} style={{ maxWidth: '100%', maxHeight: 84, borderRadius: 8, objectFit: 'cover' }} />
+        ? <img src={preview} alt={`Preview of ${label}`} style={{ maxWidth: '100%', maxHeight: 84, borderRadius: 8, objectFit: 'cover', filter: 'blur(8px)' }} />
         : isPdf
           ? <span style={{ fontSize: 12, fontWeight: 600, wordBreak: 'break-all' }}>{file.name}</span>
           : <Icon name={icon} size={24} />}

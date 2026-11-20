@@ -210,7 +210,7 @@ export default function DriverProfile() {
 
           <Panel span={12} title="Documents" meta={`${DOCS.filter(([key]) => d[key]).length} of ${DOCS.length} uploaded`}>
             <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--pc-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="lock" size={14} />Hidden for your privacy. Tap one to see it for 30 seconds.
+              <Icon name="lock" size={14} />Blurred for your privacy.
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
               {DOCS.map(([key, icon, label]) => (
