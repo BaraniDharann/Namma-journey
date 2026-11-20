@@ -10,6 +10,7 @@ import {
 } from '../../../utils/busApi'
 import { liveAllocations, tripSeatState } from '../../../utils/busLayouts'
 import { TRIP_STATUS, dateText, errorText, inr, timeText } from '../../../utils/busText'
+import { maskPhone, telHref } from '../../../utils/privacy'
 
 const CREW = [
   ['driverName', 'Driver name'], ['driverPhone', 'Driver phone'],
@@ -139,7 +140,7 @@ export default function OwnerBusTripDetail() {
                       <>
                         <b>{a.passengerName || 'Passenger'}</b>{a.age ? `, ${a.age}` : ''}{a.gender ? ` (${a.gender})` : ''}{a.status === 'HELD' ? ' · paying now' : ''}
                         <div style={mutedStyle}>{stopName(a.fromSeq)} → {stopName(a.toSeq)}{a.ticketNo ? ` · ${a.ticketNo}` : ''}</div>
-                        {a.phone && <div><a href={`tel:${a.phone}`}>{a.phone}</a></div>}
+                        {a.phone && <div><a href={telHref(a.phone)}>{maskPhone(a.phone)}</a></div>}
                         {(a.boardingPoint || a.droppingPoint) && <div style={mutedStyle}>{a.boardingPoint} → {a.droppingPoint}</div>}
                       </>
                     )}
@@ -159,7 +160,7 @@ export default function OwnerBusTripDetail() {
                     <tr key={`${p.ticketNo}-${p.seat}-${i}`}>
                       <td><strong>{p.seat}</strong></td>
                       <td>{p.passengerName}<div style={mutedStyle}>{[p.age, p.gender].filter(Boolean).join(' · ')}</div></td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{p.phone ? <a href={`tel:${p.phone}`}>{p.phone}</a> : '—'}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{p.phone ? <a href={telHref(p.phone)}>{maskPhone(p.phone)}</a> : '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{stopName(p.fromSeq)} → {stopName(p.toSeq)}</td>
                       <td>{p.boardingPoint || '—'}</td>
                       <td>{p.droppingPoint || '—'}</td>

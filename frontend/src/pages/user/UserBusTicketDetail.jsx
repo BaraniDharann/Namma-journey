@@ -13,6 +13,7 @@ import { PASSENGER_STATUS, REFUND_STATUS, TICKET_STATUS, cancellableSeats, whenT
 import { userNavItems } from '../../utils/userMenu'
 import { showSuccess } from '../../utils/actionSuccess'
 import '../../styles/bus.css'
+import { maskPhone, telHref } from '../../utils/privacy'
 
 const GENDER = { M: 'Male', F: 'Female' }
 
@@ -214,7 +215,7 @@ export default function UserBusTicketDetail() {
             <PointBlock label="Dropping" point={ticket.droppingPoint} />
             {ticket.registrationNumber && <KV label="Bus number" value={ticket.registrationNumber} />}
             {crew.map(([role, name, phone]) => (
-              <div key={role} className="bus-kv"><small>{role}</small><b><a href={`tel:${phone}`} style={{ color: 'inherit' }}>{phone}</a></b>{name && <span>{name}</span>}</div>
+              <div key={role} className="bus-kv"><small>{role}</small><b><a href={telHref(phone)} style={{ color: 'inherit' }}>{maskPhone(phone)}</a></b>{name && <span>{name}</span>}</div>
             ))}
             <KV label="Contact" value={ticket.contactPhone} sub={[ticket.contactEmail, ticket.extraPhone && `also ${ticket.extraPhone}`].filter(Boolean).join(' · ')} />
           </div>

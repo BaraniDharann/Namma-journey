@@ -9,6 +9,7 @@ import { useCelebrate } from '../../components/celebrate/Celebration'
 import RideSafetyPanel from '../../components/safety/RideSafetyPanel'
 import CloseAccountPanel from '../../components/profile/CloseAccountPanel'
 import { F } from '../../utils/indianFormats'
+import { maskPhone } from '../../utils/privacy'
 
 const navItems = [
   { path: '/user/dashboard', icon: '', label: 'Dashboard' },
@@ -146,7 +147,7 @@ export default function UserProfile() {
                   style={inputStyle}
                 />
               ) : (
-                <div style={fieldValue}>{user?.mobile || '—'}</div>
+                <div style={fieldValue}>{maskPhone(user?.mobile) || '—'}</div>
               )}
             </div>
 

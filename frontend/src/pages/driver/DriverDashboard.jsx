@@ -13,6 +13,7 @@ import AnalyticsCard from '../../components/dash/AnalyticsCard'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 import { inr, shortPlace, todayStats, earningsThisWeek, completionRate, nextTrip, typeMix, daysUntil, statusSegments } from '../../dash/metrics'
 import { showSuccess } from '../../utils/actionSuccess'
+import { telHref } from '../../utils/privacy'
 
 const navItems = [
   { path: '/driver/dashboard', icon: '', label: 'Dashboard' },
@@ -190,7 +191,7 @@ export default function DriverDashboard() {
               </div>
               <div className="pc-chips" style={{ marginTop: 16 }}>
                 <a className="pc-btn" href={mapsUrl(m.next)} target="_blank" rel="noreferrer"><Icon name="nav" />Navigate</a>
-                {m.next.userPhone && <a className="pc-btn pc-btn-ghost" href={`tel:${m.next.userPhone}`}><Icon name="phone" />Call {firstName(m.next.userName)}</a>}
+                {m.next.userPhone && <a className="pc-btn pc-btn-ghost" href={telHref(m.next.userPhone)}><Icon name="phone" />Call {firstName(m.next.userName)}</a>}
                 <Link className="pc-btn pc-btn-ghost" to="/driver/bookings"><Icon name="route" />Open in My Trips</Link>
               </div>
             </>

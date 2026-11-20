@@ -10,6 +10,7 @@ import {
   updateOwnerDetails, updateOwnerPayout, getOwnerClosurePreview, closeOwnerAccount,
 } from '../../utils/api'
 import { F } from '../../utils/indianFormats'
+import { maskPhone, maskEmail } from '../../utils/privacy'
 
 const errorText = (e, fallback) => e.response?.data?.error || e.response?.data?.message || fallback
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
@@ -179,8 +180,8 @@ export default function OwnerProfile() {
               ) : (
                 <Rows rows={[
                   ['user', 'Contact', me.contactName],
-                  ['mail', 'Email', me.email],
-                  ['phone', 'Phone', me.phone],
+                  ['mail', 'Email', maskEmail(me.email)],
+                  ['phone', 'Phone', maskPhone(me.phone)],
                   ['map', 'Cities', (me.cities || []).join(', ')],
                   ['wheel', 'Trip assignment', me.assignmentMode === 'MANUAL' ? 'By hand' : 'Automatic'],
                 ]} />

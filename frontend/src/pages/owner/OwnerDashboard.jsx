@@ -1,3 +1,4 @@
+import { maskPhone } from '../../utils/privacy'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
@@ -187,7 +188,7 @@ export default function OwnerDashboard() {
                       <tbody>
                         {m.recent.map((b) => (
                           <tr key={b.id}>
-                            <td><div className="pc-row-title">{b.userName || '—'}</div><small style={{ color: 'var(--pc-muted)' }}>{b.userPhone}</small></td>
+                            <td><div className="pc-row-title">{b.userName || '—'}</div><small style={{ color: 'var(--pc-muted)' }}>{maskPhone(b.userPhone)}</small></td>
                             <td><div className="pc-row-title">{shortPlace(b.fromPlace)} → {shortPlace(b.toPlace)}</div></td>
                             <td>{b.fromDate}</td>
                             <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--pc-ink)' }}>{inr(b.totalAmount)}</td>

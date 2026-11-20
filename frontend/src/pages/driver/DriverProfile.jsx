@@ -7,8 +7,9 @@ import { Panel, PageHead, StatusPill, Skeleton } from '../../components/dash/ui'
 import EarningsPanel from '../../components/driver/EarningsPanel'
 import HomeAreaPanel from '../../components/driver/HomeAreaPanel'
 import CloseAccountPanel from '../../components/profile/CloseAccountPanel'
-import PrivateImage from '../../components/PrivateImage'
+import PrivateImage, { BlurredPhoto } from '../../components/PrivateImage'
 import { F } from '../../utils/indianFormats'
+import { maskPhone, maskEmail, maskId } from '../../utils/privacy'
 
 const errorText = (e, fallback) => e.response?.data?.error || e.response?.data?.message || fallback
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
@@ -117,7 +118,7 @@ export default function DriverProfile() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
               {imgUrl(d.photo)
-                ? <img src={imgUrl(d.photo)} alt="Driver" style={{ width: 72, height: 72, borderRadius: 20, objectFit: 'cover', border: '3px solid var(--pc-line)' }} />
+                ? <BlurredPhoto src={imgUrl(d.photo)} alt="Driver" style={{ width: 72, height: 72, borderRadius: 20, objectFit: 'cover', border: '3px solid var(--pc-line)' }} />
                 : <div aria-hidden="true" style={{ width: 72, height: 72, borderRadius: 20, background: 'var(--pc-rail)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, fontWeight: 800, color: '#fff' }}>{initial}</div>
               }
               <div style={{ minWidth: 0 }}>
@@ -169,10 +170,10 @@ export default function DriverProfile() {
             <div className="pc-rows">
               {[
                 ['Name', d.name || user?.name],
-                ['Mobile', d.mobile || user?.mobile],
-                ['Email', d.email || user?.email],
-                ['License Number', d.licenseNumber],
-                ['Aadhaar Number', d.aadhaarNumber],
+                ['Mobile', maskPhone(d.mobile || user?.mobile)],
+                ['Email', maskEmail(d.email || user?.email)],
+                ['License Number', maskId(d.licenseNumber)],
+                ['Aadhaar Number', maskId(d.aadhaarNumber)],
                 ['Joined', d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-IN') : null],
               ].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k} className="pc-row" style={{ gridTemplateColumns: 'auto minmax(0, 1fr)' }}>

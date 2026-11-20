@@ -465,6 +465,65 @@ public class PaymentService {
         return response;
     }
     
+    /** How close (in metres) the driver's phone must be to the drop point for the trip to end itself. */
+    public static final double ARRIVAL_RADIUS_METRES = 150;
+
+    /**
+     * The driver's live position reached the drop point, so the trip ends and completes on its
+     * own: the driver does not tap "End trip", "Cash received" or wait for Razorpay. A prepaid
+     * fare is already settled; anything still owed is recorded as paid to the driver at the drop
+     * (cash in hand), which puts the platform commission on the driver's dues ledger as usual.
+     *
+     * <p>Called on every location report, so it returns false quickly for anything that is not a
+     * started trip of this driver at its drop point. Two reports racing here are stopped by the
+     * booking's {@code @Version}: the second save fails and the caller ignores it.
+     *
+     * @return true when this call completed the trip
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "dailyRevenue",   allEntries = true),
+            @CacheEvict(value = "monthlyRevenue", allEntries = true),
+            @CacheEvict(value = "yearlyRevenue",  allEntries = true),
+            @CacheEvict(value = "monthlyRevenueSeries", allEntries = true)
+    })
+    public boolean completeOnArrival(Long driverId, UUID bookingId, double lat, double lon) {
+        TravelBooking booking = bookingRepository.findById(bookingId).orElse(null);
+        if (booking == null || booking.getDriverId() == null || !booking.getDriverId().equals(driverId)
+                || booking.getStatus() != TravelBooking.BookingStatus.STARTED
+                || booking.getToLat() == null || booking.getToLon() == null) {
+            return false;
+        }
+        double metres = TripRules.distanceKm(lat, lon, booking.getToLat(), booking.getToLon()) * 1000;
+        if (metres > ARRIVAL_RADIUS_METRES) {
+            return false;
+        }
+        markTripEnded(booking, driverId);
+        driverRepository.findById(driverId)
+                .ifPresent(driver -> notificationService.notifyTripEnded(booking, driver));
+
+        java.util.Optional<Payment> existing = paymentRepository.findByBookingId(bookingId);
+        if (existing.isPresent() && existing.get().getStatus() == Payment.PaymentStatus.VERIFIED) {
+            booking.setStatus(TravelBooking.BookingStatus.COMPLETED);
+            bookingRepository.save(booking);
+            locationTrackingService.removeLocation(bookingId.toString());
+            recordEarnings(booking, existing.get());
+            return true;
+        }
+        Payment payment = existing.orElseGet(() -> {
+            Payment p = new Payment();
+            p.setBookingId(bookingId);
+            p.setUserId(booking.getUserId());
+            p.setAmount(amountDue(booking));
+            p.setDriverId(driverId);
+            p.setCreatedAt(LocalDateTime.now());
+            return p;
+        });
+        payment.setPaymentMethod(Payment.PaymentMethod.CASH);
+        settle(payment, booking, "auto-arrival:driver:" + driverId);
+        return true;
+    }
+
     /**
      * Builds the {@code upi://pay} intent the customer's UPI app opens.
      *

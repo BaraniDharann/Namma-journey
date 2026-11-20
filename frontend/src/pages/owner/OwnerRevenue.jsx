@@ -8,6 +8,7 @@ import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { AreaChart, BarChart, Donut } from '../../components/dash/charts'
 import { inr, shortPlace, STATUS_META } from '../../dash/metrics'
+import { maskPhone } from '../../utils/privacy'
 // Lazy-load heavy libs on first download
 const getJsPDF = () => Promise.all([import('jspdf'), import('jspdf-autotable')]).then(([m]) => m.default)
 const getXLSX = () => import('xlsx')
@@ -416,7 +417,7 @@ export default function OwnerRevenue() {
                         <td style={{ color: 'var(--pc-muted)' }}>{i + 1}</td>
                         <td>
                           <div className="pc-row-title">{b.userName || '—'}</div>
-                          <small style={{ color: 'var(--pc-muted)' }}>{b.userPhone || ''}</small>
+                          <small style={{ color: 'var(--pc-muted)' }}>{maskPhone(b.userPhone)}</small>
                         </td>
                         <td title={`${b.fromPlace || ''} → ${b.toPlace || ''}`}>
                           <div className="pc-row-title">{shortPlace(b.fromPlace)}</div>
@@ -438,7 +439,7 @@ export default function OwnerRevenue() {
                           {drv.name ? (
                             <div>
                               <div className="pc-row-title">{drv.name}</div>
-                              <small style={{ color: 'var(--pc-muted)' }}>{drv.mobile || ''}</small>
+                              <small style={{ color: 'var(--pc-muted)' }}>{maskPhone(drv.mobile)}</small>
                             </div>
                           ) : <span style={{ color: 'var(--pc-muted)' }}>Not assigned</span>}
                         </td>
