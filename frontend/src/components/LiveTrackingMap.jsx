@@ -25,42 +25,27 @@ const dropIcon = new L.Icon({
 })
 
 /**
- * Frame pickup → drop and keep it there, so only the car moves. Re-fits when
- * the routed line arrives (it can bulge past the straight pickup/drop box) and
- * when the container changes size (a popup that opens with an animation is
- * measured too small at first, which cut the pickup pin off). Never on driver
- * position updates.
+ * Frame pickup → drop once and then leave the map alone, so only the car moves.
+ * Re-fits a single time when the routed line arrives (it can bulge past the
+ * straight pickup/drop box); never on driver position updates.
  */
 function FitBounds({ fromLat, fromLon, toLat, toLon, routeCoords }) {
   const map = useMap()
+  const fittedRef = useRef(null)
   useEffect(() => {
+    const key = `${fromLat},${fromLon},${toLat},${toLon}|${routeCoords ? 'route' : 'line'}`
+    if (fittedRef.current === key) return
+    fittedRef.current = key
     const pts = routeCoords?.length ? routeCoords : [[fromLat, fromLon], [toLat, toLon]]
-    const bounds = L.latLngBounds(pts)
-    const fit = () => {
-      map.invalidateSize({ animate: false })
-      map.fitBounds(bounds, { padding: [40, 40], animate: false })
-    }
-    fit()
-    const el = map.getContainer()
-    if (typeof ResizeObserver === 'undefined') return undefined
-    const ro = new ResizeObserver(() => fit())
-    ro.observe(el)
-    return () => ro.disconnect()
+    map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], animate: false })
   }, [map, fromLat, fromLon, toLat, toLon, routeCoords])
   return null
 }
 
-// The tracking map is a fixed picture of the trip: no drag, zoom or keyboard
-// panning by mouse or touch.
-const LOCKED_MAP = {
-  dragging: false,
-  touchZoom: false,
-  scrollWheelZoom: false,
-  doubleClickZoom: false,
-  boxZoom: false,
-  keyboard: false,
-  tap: false,
-  zoomControl: false,
+function MapInstance({ setMap }) {
+  const map = useMap()
+  useEffect(() => { setMap(map) }, [map, setMap])
+  return null
 }
 
 export default function LiveTrackingMap({
@@ -75,6 +60,7 @@ export default function LiveTrackingMap({
   // True when the figures came from the straight-line fallback rather than a real route,
   // so the UI can label them instead of passing a guess off as a routed ETA.
   const [etaIsEstimate, setEtaIsEstimate] = useState(false)
+  const [map, setMap] = useState(null)
   const [waitingForLocation, setWaitingForLocation] = useState(true)
   const [secondsAgo, setSecondsAgo] = useState(null)
   const lastEtaCalcRef = useRef(0)
