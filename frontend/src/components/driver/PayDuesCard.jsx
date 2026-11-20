@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import Icon from '../dash/Icon'
 import { getDriverDues, submitDriverDuesPayment } from '../../utils/api'
 import { inr } from '../../dash/metrics'
+import { showSuccess } from '../../utils/actionSuccess'
 
 const UTR = /^[A-Za-z0-9]{6,64}$/
 
@@ -52,7 +53,7 @@ export default function PayDuesCard({ driverId }) {
       const { data } = await submitDriverDuesPayment(driverId, value.toFixed(2), utr.trim())
       setDues(data)
       setUtr('')
-      toast.success('Sent to the owner. Your balance updates once they confirm it.')
+      showSuccess('Payment sent', 'Your balance updates once the owner confirms it.', 'calm')
       load()
     } catch { /* toasted */ } finally {
       setSaving(false)

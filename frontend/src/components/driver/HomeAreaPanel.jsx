@@ -4,6 +4,7 @@ import Icon from '../dash/Icon'
 import { Panel } from '../dash/ui'
 import HomeAreaPicker from './HomeAreaPicker'
 import { getDriverHomeArea, setDriverHomeArea } from '../../utils/api'
+import { showSuccess } from '../../utils/actionSuccess'
 
 /**
  * The driver's "where I drive" setting on their profile: the town riders are matched with them in.
@@ -31,7 +32,7 @@ export default function HomeAreaPanel({ driverId }) {
       const r = await setDriverHomeArea(driverId, choice)
       setArea(r.data)
       setEditing(false)
-      toast.success(r.data?.zoneActive
+      showSuccess('Area saved', r.data?.zoneActive
         ? `Saved. Riders in ${r.data.zoneName} will be sent to you.`
         : `Saved. City rides start in ${r.data?.zoneName} once you are approved.`)
     } catch { /* the api toast shows the reason */ } finally {

@@ -19,6 +19,7 @@ import {
 import { actionKey } from '../../utils/idempotency'
 import { openRazorpayCheckout } from '../../utils/razorpay'
 import { forgetReturn, rememberReturn } from '../../utils/returnTo'
+import { showSuccess } from '../../utils/actionSuccess'
 
 const STEPS = ['Select seats', 'Board/Drop point', 'Passenger info']
 const LEGEND_ALWAYS = ['AVAILABLE', 'SELECTED', 'SOLD']
@@ -283,7 +284,7 @@ export default function BusTripPage() {
           razorpayPaymentId: result.razorpay_payment_id,
           razorpaySignature: result.razorpay_signature,
         })
-        toast.success('Ticket booked. It is on its way to your email.')
+        showSuccess('Ticket booked', 'It is on its way to your email.')
         navigate(`/user/bus-tickets/${ticket.id}`, { state: { justBooked: true } })
       } catch {
         // Razorpay has the money; the webhook or the sweeper confirms the ticket shortly.

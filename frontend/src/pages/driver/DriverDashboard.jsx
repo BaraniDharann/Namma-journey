@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import toast from 'react-hot-toast'
 import DashboardLayout from '../../components/DashboardLayout'
 import LiveTrackingMap from '../../components/LiveTrackingMap'
 import { useAuth } from '../../context/AuthContext'
@@ -13,6 +12,7 @@ import { Gauge } from '../../components/dash/charts'
 import AnalyticsCard from '../../components/dash/AnalyticsCard'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 import { inr, shortPlace, todayStats, earningsThisWeek, completionRate, nextTrip, typeMix, daysUntil, statusSegments } from '../../dash/metrics'
+import { showSuccess } from '../../utils/actionSuccess'
 
 const navItems = [
   { path: '/driver/dashboard', icon: '', label: 'Dashboard' },
@@ -49,7 +49,7 @@ export default function DriverDashboard() {
       const r = await updateDriverModes(user.userId, { [key]: !profile[key] })
       setProfile(r.data)
       const on = r.data?.[key]
-      toast.success(key === 'servesCity'
+      showSuccess('Ride types saved', key === 'servesCity'
         ? (on ? 'City rides on. Nearby ride requests can reach you.' : 'City rides off.')
         : (on ? 'Trips on. Date bookings can be assigned to you.' : 'Trips off.'))
     } catch { /* surfaced by the api toast */ }
@@ -85,7 +85,7 @@ export default function DriverDashboard() {
       await toggleDriverAvailability(user.userId, next)
       setStatus(next)
       window.dispatchEvent(new CustomEvent(DRIVER_STATUS_EVENT, { detail: next }))
-      toast.success(next === 'ACTIVE' ? "You're online. Rides near you can reach you." : "You're offline. No new trips will be sent.")
+      showSuccess(next === 'ACTIVE' ? "You're online" : "You're offline", next === 'ACTIVE' ? 'Rides near you can reach you.' : 'No new trips will be sent.', next === 'ACTIVE' ? 'party' : 'calm')
     } catch { /* surfaced by the api toast */ }
     setToggling(false)
   }
@@ -100,7 +100,7 @@ export default function DriverDashboard() {
           message: `${shortPlace(b.fromPlace)} → ${shortPlace(b.toPlace)}. The traveller has been told you're on the way.`,
         })
       } else {
-        toast.success('Trip declined')
+        showSuccess('Trip declined', 'It goes to the next driver.', 'calm')
       }
       load()
     } catch { /* surfaced by the api toast */ }

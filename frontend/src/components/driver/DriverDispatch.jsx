@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
-import toast from 'react-hot-toast'
 import Icon from '../dash/Icon'
 import { driverBookingAction } from '../../utils/api'
 import { inr, shortPlace } from '../../dash/metrics'
 import { modeLabel, vehicleIcon, vehicleLabel } from '../../dash/vehicles'
 import useDriverDispatch, { DRIVER_TRIPS_EVENT } from '../../hooks/useDriverDispatch'
+import { showSuccess } from '../../utils/actionSuccess'
 
 /**
  * Ride Now for drivers, on every driver page: keeps their position reported while online, and
@@ -66,7 +66,7 @@ function RideOfferCard({ driverId, booking, deadline, onDone }) {
     setBusy(action)
     try {
       await driverBookingAction(driverId, booking.bookingId, action)
-      if (action === 'ACCEPT') toast.success(`Ride accepted. Head to ${shortPlace(booking.fromPlace)}.`)
+      if (action === 'ACCEPT') showSuccess('Ride accepted', `Head to ${shortPlace(booking.fromPlace)}.`)
     } catch { /* surfaced by the api toast, e.g. "This ride offer has expired" */ }
     onDone()
   }

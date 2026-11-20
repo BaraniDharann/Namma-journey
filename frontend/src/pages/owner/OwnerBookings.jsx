@@ -191,7 +191,7 @@ export default function OwnerBookings() {
                         <td>{b.driverId ? `#${b.driverId}`
                           : needsDriver(b) ? <span className="pc-pill pc-pill-wait" style={{ whiteSpace: 'nowrap' }}>Needs a driver</span>
                           : <span style={{ color: 'var(--pc-muted)' }}>Unassigned</span>}</td>
-                        <td>{(b.status === 'STARTED' || b.status === 'COMPLETED') && b.driverId ? (
+                        <td>{scope === 'trips' && (b.status === 'STARTED' || b.status === 'COMPLETED') && b.driverId ? (
                           <button type="button" onClick={() => setPhotoBookingId(b.bookingId || b.id)} className="pc-btn pc-btn-ghost pc-btn-sm"><Icon name="camera" size={14} />View</button>
                         ) : <span style={{ color: 'var(--pc-muted)' }}>—</span>}</td>
                         <td><StatusPill status={b.status} /></td>

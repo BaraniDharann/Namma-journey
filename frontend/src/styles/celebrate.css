@@ -1,64 +1,82 @@
 /* ═══════════════════════════════════════════════════════════════
-   Celebration popup — confetti, a self-drawing tick, and the
-   Namma Journey car driving across a little road.
+   Success popup, GPay style: a solid circle pops in, two ripples
+   spread from it, a white tick draws itself, then the words rise.
    Rendered in a portal on <body>, so it carries its own tokens.
    ═══════════════════════════════════════════════════════════════ */
 
 .cel-overlay {
-  --cel-ink: #0f2a2b; --cel-ink-2: #3e5a5b; --cel-brand: #f97316; --cel-brand-deep: #c2410c;
-  --cel-good: #15803d; --cel-good-soft: #dcfce7; --cel-wait: #b45309; --cel-wait-soft: #fef3c7;
+  --cel-ink: #0f2a2b; --cel-ink-2: #3e5a5b; --cel-surface: #fff; --cel-line: #eef1ef;
+  --cel-good: #12a150; --cel-good-deep: #0b7a3b; --cel-good-glow: rgba(18, 161, 80, .35);
+  --cel-wait: #d97706; --cel-wait-deep: #b45309; --cel-wait-glow: rgba(217, 119, 6, .32);
+  --cel-brand: #f97316; --cel-brand-deep: #c2410c;
   position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; padding: 16px;
-  background: rgba(15, 42, 43, .55); backdrop-filter: blur(4px);
+  background: rgba(15, 42, 43, .42); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   font-family: 'Nunito Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .cel-overlay { --cel-ink: #f1f5f4; --cel-ink-2: #b8c7c5; --cel-surface: #142425; --cel-line: #24393a; background: rgba(0, 0, 0, .6); }
+}
+:root[data-theme="dark"] .cel-overlay { --cel-ink: #f1f5f4; --cel-ink-2: #b8c7c5; --cel-surface: #142425; --cel-line: #24393a; background: rgba(0, 0, 0, .6); }
+
 .cel-box {
-  position: relative; width: min(380px, 100%); padding: 26px 24px 20px; border-radius: 26px;
-  background: #fff; color: var(--cel-ink); text-align: center; overflow: hidden;
-  box-shadow: 0 40px 80px -30px rgba(15, 42, 43, .7);
+  --tone: var(--cel-good); --tone-deep: var(--cel-good-deep); --tone-glow: var(--cel-good-glow);
+  position: relative; width: min(360px, 100%); padding: 34px 24px 22px; border-radius: 28px;
+  background: var(--cel-surface); color: var(--cel-ink); text-align: center; overflow: hidden;
+  box-shadow: 0 30px 70px -28px rgba(15, 42, 43, .65), 0 0 0 1px var(--cel-line);
 }
-.cel-box h2 { font-family: 'Unbounded', 'Nunito Sans', sans-serif; font-size: 19px; font-weight: 700; letter-spacing: -.02em; margin: 0; line-height: 1.25; }
-.cel-box p { margin: 8px auto 0; max-width: 34ch; font-size: 14px; line-height: 1.5; color: var(--cel-ink-2); font-weight: 600; }
+.cel-box.is-calm { --tone: var(--cel-wait); --tone-deep: var(--cel-wait-deep); --tone-glow: var(--cel-wait-glow); }
+.cel-box h2 { font-family: 'Unbounded', 'Nunito Sans', sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin: 0; line-height: 1.25; text-wrap: balance; }
+.cel-box p { margin: 8px auto 0; max-width: 32ch; font-size: 15px; line-height: 1.5; color: var(--cel-ink-2); font-weight: 600; text-wrap: pretty; }
 
-.cel-badge { width: 62px; height: 62px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; background: var(--cel-good-soft); color: var(--cel-good); position: relative; z-index: 1; }
-.cel-badge.is-calm { background: var(--cel-wait-soft); color: var(--cel-wait); }
-.cel-badge::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid currentColor; opacity: 0; animation: cel-ring 1.1s cubic-bezier(.16, 1, .3, 1) .35s; }
-.cel-tick { stroke-dasharray: 30; stroke-dashoffset: 30; animation: cel-draw .55s cubic-bezier(.65, 0, .35, 1) .3s forwards; }
+/* The mark: circle + ripples + tick */
+.cel-mark { position: relative; width: 104px; height: 104px; margin: 0 auto 22px; display: grid; place-items: center; }
+.cel-disc {
+  position: relative; z-index: 1; width: 88px; height: 88px; border-radius: 50%; display: grid; place-items: center;
+  color: #fff; background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--tone) 80%, #fff) 0%, var(--tone) 55%, var(--tone-deep) 100%);
+  box-shadow: 0 14px 30px -10px var(--tone-glow);
+  transform: scale(0); animation: cel-pop .55s cubic-bezier(.34, 1.56, .64, 1) .05s forwards;
+}
+.cel-ripple { position: absolute; inset: 8px; border-radius: 50%; background: var(--tone); opacity: 0; animation: cel-ripple 1.3s cubic-bezier(.16, 1, .3, 1) .3s; }
+.cel-ripple-2 { animation-delay: .55s; }
+.cel-tick { stroke-dasharray: 22; stroke-dashoffset: 22; animation: cel-draw .42s cubic-bezier(.65, 0, .35, 1) .38s forwards; }
+.cel-hand { transform-origin: 12px 12px; animation: cel-turn 1.6s linear .4s infinite; }
 
-.cel-road { position: relative; height: 46px; margin: 18px 0 16px; border-radius: 14px; background: #3d4652; overflow: hidden; }
-.cel-road::before { content: ''; position: absolute; left: 0; right: 0; top: 22px; height: 2px; background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .85) 0 12px, transparent 12px 26px); animation: cel-lane .45s linear infinite; }
-.cel-car { position: absolute; bottom: 5px; left: -90px; animation: cel-drive 2.8s cubic-bezier(.45, 0, .2, 1) .25s forwards; }
-.cel-wheel { animation: cel-spin .35s linear infinite; }
-.cel-box.is-calm .cel-car { animation: cel-cruise 3.2s ease-in-out .2s infinite; }
+/* Words rise in after the tick */
+.cel-rise { opacity: 0; transform: translateY(8px); animation: cel-rise .4s cubic-bezier(.16, 1, .3, 1) .45s forwards; }
+.cel-rise-2 { animation-delay: .52s; }
+.cel-rise-3 { animation-delay: .6s; }
 
-.cel-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; position: relative; z-index: 1; }
+.cel-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
 .cel-btn {
-  min-height: 44px; padding: 0 20px; border: 0; border-radius: 14px; cursor: pointer;
-  font: 800 14px 'Nunito Sans', system-ui, sans-serif; color: #fff; background: var(--cel-brand);
-  box-shadow: 0 12px 22px -14px rgba(249, 115, 22, 1); transition: transform .2s cubic-bezier(.16, 1, .3, 1);
+  min-height: 46px; min-width: 120px; padding: 0 22px; border: 0; border-radius: 999px; cursor: pointer;
+  font: 800 15px 'Nunito Sans', system-ui, sans-serif; color: #fff; background: var(--tone);
+  box-shadow: 0 10px 20px -12px var(--tone-glow); transition: transform .18s cubic-bezier(.16, 1, .3, 1), background-color .18s;
 }
-.cel-btn:hover { transform: translateY(-1px); }
-.cel-btn:focus-visible { outline: 2px solid var(--cel-brand-deep); outline-offset: 3px; }
-.cel-btn-ghost { background: #fff; color: var(--cel-ink); box-shadow: inset 0 0 0 1px #f1e6d8; }
+.cel-btn:hover { background: var(--tone-deep); }
+.cel-btn:active { transform: scale(.97); }
+.cel-btn:focus-visible { outline: 2px solid var(--tone-deep); outline-offset: 3px; }
+.cel-btn-ghost { background: transparent; color: var(--cel-ink); box-shadow: inset 0 0 0 1.5px var(--cel-line); }
+.cel-btn-ghost:hover { background: var(--cel-line); }
 
-.cel-confetti { position: absolute; left: 50%; top: 44px; width: 0; height: 0; pointer-events: none; }
-.cel-confetti i { position: absolute; left: 0; top: 0; opacity: 0; animation: cel-burst 1.5s cubic-bezier(.16, 1, .3, 1) .3s forwards; }
+/* Auto-close countdown along the bottom edge */
+.cel-timer { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--tone); opacity: .55; transform-origin: left; animation: cel-timer linear forwards; }
 
-.cel-box.is-still .cel-car { left: calc(50% - 43px); animation: none; }
-.cel-box.is-still .cel-road::before, .cel-box.is-still .cel-wheel { animation: none; }
-
+@keyframes cel-pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+@keyframes cel-ripple { 0% { opacity: .35; transform: scale(.9); } 100% { opacity: 0; transform: scale(1.6); } }
 @keyframes cel-draw { to { stroke-dashoffset: 0; } }
-@keyframes cel-ring { 0% { opacity: .6; transform: scale(.9); } 100% { opacity: 0; transform: scale(1.35); } }
-@keyframes cel-lane { to { background-position: -26px 0; } }
-@keyframes cel-drive { 0% { left: -90px; } 70% { left: calc(50% - 43px); } 100% { left: calc(50% - 43px); } }
-@keyframes cel-cruise { 0%, 100% { left: 18%; } 50% { left: calc(82% - 86px); } }
-@keyframes cel-spin { to { transform: rotate(360deg); } }
-@keyframes cel-burst {
-  0% { opacity: 1; transform: translate(-50%, -50%) rotate(0); }
-  80% { opacity: 1; }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y) + 60px)) rotate(var(--r)); }
+@keyframes cel-turn { to { transform: rotate(360deg); } }
+@keyframes cel-rise { to { opacity: 1; transform: none; } }
+@keyframes cel-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+@media (max-width: 420px) {
+  .cel-overlay { align-items: end; padding: 12px; }
+  .cel-box { width: 100%; border-radius: 26px; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
 }
+
+.cel-box.is-still .cel-disc, .cel-box.is-still .cel-rise { transform: none; opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .cel-overlay *, .cel-overlay *::before, .cel-overlay *::after { animation: none !important; transition: none !important; }
+  .cel-disc, .cel-rise { transform: none !important; opacity: 1 !important; }
   .cel-tick { stroke-dashoffset: 0; }
-  .cel-car { left: calc(50% - 43px) !important; }
+  .cel-ripple, .cel-timer { display: none; }
 }

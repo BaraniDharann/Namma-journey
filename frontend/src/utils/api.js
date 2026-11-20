@@ -2,6 +2,7 @@ import axios from 'axios'
 import toast from 'react-hot-toast'
 import { idempotencyHeaders } from './idempotency'
 import { shrinkFormDataImages } from './shrinkImage'
+import { describeSuccess } from './actionSuccess'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -47,8 +48,18 @@ export function busyRetryDelayMs(retryAfter, random = Math.random) {
   return base * 1000 + Math.floor(random() * 1000)
 }
 
+// Every write that succeeds raises the success popup (CelebrationProvider listens). A call can opt
+// out with { _silent: true } or { _noSuccess: true }; describeSuccess skips background calls.
+function announceSuccess(res) {
+  const cfg = res?.config
+  if (!cfg || cfg._silent || cfg._noSuccess || typeof window === 'undefined') return
+  const info = describeSuccess(cfg.method, cfg.url, cfg.data)
+  if (!info) return
+  try { window.dispatchEvent(new CustomEvent('nj:action-success', { detail: info })) } catch { /* old browser */ }
+}
+
 api.interceptors.response.use(
-  (res) => res,
+  (res) => { announceSuccess(res); return res },
   (err) => {
     const cfg = err.config
     if (err.response?.status === 503 && cfg && (cfg.method || 'get').toLowerCase() === 'get'

@@ -8,6 +8,7 @@ import { adminBusPayouts, adminMarkBusPayoutPaid } from '../../utils/busApi'
 import { inr } from '../../utils/busText'
 import { PAYOUT_STATUS, payoutTotals, whenText } from '../../utils/busBooking'
 import { adminNavItems, errorText, when } from './adminNav'
+import { showSuccess } from '../../utils/actionSuccess'
 import '../../styles/bus.css'
 
 const TABS = [['DUE', 'Due'], ['PAID', 'Paid']]
@@ -121,7 +122,7 @@ export default function AdminBusPayouts() {
 
       {paying && (
         <MarkPaid payout={paying} onClose={() => setPaying(null)}
-          onDone={() => { setPaying(null); toast.success('Payout marked as paid'); load(tab) }} />
+          onDone={() => { setPaying(null); showSuccess('Payout marked as paid'); load(tab) }} />
       )}
     </DashboardLayout>
   )

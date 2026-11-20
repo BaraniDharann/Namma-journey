@@ -26,6 +26,8 @@ const modalHead = { background: 'var(--pc-rail)', padding: '18px 24px', color: '
 const modalTitle = { fontWeight: 800, fontSize: 18, color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }
 const modalSub = { fontSize: 13, color: 'rgba(255,255,255,0.72)', margin: '4px 0 0' }
 
+const isCityRide = (b) => b?.serviceMode === 'CITY'
+
 function CameraModal({ bookingId, driverId, onPhotoCaptured, onClose }) {
   const videoRef = React.useRef(null)
   const canvasRef = React.useRef(null)
@@ -189,13 +191,20 @@ export default function DriverBookings() {
     setActionLoading(null)
   }
 
-  const handleEndTrip = (bookingId) => {
-    setCameraBookingId(bookingId)
+  // The photo check at the end is for owners' Travel trips only. A City ride (independent driver
+  // or an owner's City car) just ends: no camera step.
+  const handleEndTrip = (booking) => {
+    if (isCityRide(booking)) finishTrip(booking.bookingId)
+    else setCameraBookingId(booking.bookingId)
   }
 
-  const handlePhotoCapturedAndEndTrip = async () => {
+  const handlePhotoCapturedAndEndTrip = () => {
     const bookingId = cameraBookingId
     setCameraBookingId(null)
+    finishTrip(bookingId)
+  }
+
+  const finishTrip = async (bookingId) => {
     setActionLoading(bookingId + 'END')
     try {
       const res = await endTrip(user.userId, bookingId)
@@ -343,8 +352,10 @@ export default function DriverBookings() {
                             <Icon name="pin" size={15} />Track
                           </button>
                         )}
-                        <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => handleEndTrip(b.bookingId)} disabled={busy(b, 'END')}>
-                          {busy(b, 'END') ? '...' : <><Icon name="camera" size={15} />End trip</>}
+                        <button type="button" className="pc-btn pc-btn-teal pc-btn-sm" onClick={() => handleEndTrip(b)} disabled={busy(b, 'END')}>
+                          {busy(b, 'END') ? '...' : isCityRide(b)
+                            ? <><Icon name="check" size={15} />End ride</>
+                            : <><Icon name="camera" size={15} />End trip</>}
                         </button>
                         <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => handleCash(b.bookingId, b.amountDue ?? b.totalAmount)} disabled={busy(b, 'CASH')}>
                           {busy(b, 'CASH') ? '...' : <><Icon name="wallet" size={15} />Cash received</>}

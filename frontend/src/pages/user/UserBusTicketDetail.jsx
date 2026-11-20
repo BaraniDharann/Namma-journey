@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import toast from 'react-hot-toast'
 import DashboardLayout from '../../components/DashboardLayout'
 import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, Skeleton } from '../../components/dash/ui'
@@ -12,6 +11,7 @@ import { seatClassName } from '../../utils/busLayouts'
 import { clockText } from '../../utils/busSearch'
 import { PASSENGER_STATUS, REFUND_STATUS, TICKET_STATUS, cancellableSeats, whenText } from '../../utils/busBooking'
 import { userNavItems } from '../../utils/userMenu'
+import { showSuccess } from '../../utils/actionSuccess'
 import '../../styles/bus.css'
 
 const GENDER = { M: 'Male', F: 'Female' }
@@ -269,7 +269,7 @@ export default function UserBusTicketDetail() {
 
         {(ticket.canReview || ticket.review) && (
           <Panel span={6} title={ticket.review ? 'Your review' : 'How was the journey?'} className="bus-noprint">
-            <ReviewBox ticket={ticket} onDone={(t) => { setTicket(t); toast.success('Thanks for the review.') }} />
+            <ReviewBox ticket={ticket} onDone={(t) => { setTicket(t); showSuccess('Thanks for your review') }} />
           </Panel>
         )}
       </div>
