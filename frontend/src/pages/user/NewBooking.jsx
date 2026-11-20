@@ -14,6 +14,7 @@ import { inr, shortPlace } from '../../dash/metrics'
 import { VEHICLES, VEHICLE_ORDER, vehicleLabel, modeLabel } from '../../dash/vehicles'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 import RideSearchStatus from '../../components/RideSearchStatus'
+import RouteBusOptions from '../../components/bus/RouteBusOptions'
 import { useCollectAdvance } from '../../hooks/usePayOnline'
 
 const navItems = [
@@ -509,6 +510,8 @@ export default function NewBooking() {
               <Empty icon="map" title="No route yet">Pick both places from the suggestions to see the route.</Empty>
             )}
           </Panel>
+
+          <RouteBusOptions fromPlace={form.fromPlace} toPlace={form.toPlace} date={form.fromDate} />
 
           <Panel title="Price summary">
             <div className="pc-rows">
