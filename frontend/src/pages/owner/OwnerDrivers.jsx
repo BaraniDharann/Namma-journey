@@ -12,10 +12,11 @@ import { vehicleIcon, vehicleLabel } from '../../dash/vehicles'
 import { categoryLabel } from '../../utils/carCategories'
 import { rejectReasonError, REJECT_MAX } from '../../utils/rejectReason'
 import Icon from '../../components/dash/Icon'
-import PrivateImage from '../../components/PrivateImage'
+import PrivateImage, { BlurredPhoto } from '../../components/PrivateImage'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 import { F, fieldProps } from '../../utils/indianFormats'
+import { maskPhone, maskEmail } from '../../utils/privacy'
 
 const errorText = (e, fallback) => e.response?.data?.error || e.response?.data?.message || fallback
 const carText = (v) => (v ? `${v.registrationMissing ? 'No registration yet' : v.registrationNumber} · ${categoryLabel(v.category)}${v.model ? ` · ${v.model}` : ''}` : '')
@@ -333,12 +334,12 @@ function DriverDetailModal({ driver, vehicles, onClose, onUpdated }) {
         <div style={{ padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
             {imgUrl(driver.photo)
-              ? <img src={imgUrl(driver.photo)} alt="Driver" style={{ width: 64, height: 64, borderRadius: 16, objectFit: 'cover', border: '1px solid var(--pc-line)' }} />
+              ? <BlurredPhoto src={imgUrl(driver.photo)} alt="Driver" style={{ width: 64, height: 64, borderRadius: 16, objectFit: 'cover', border: '1px solid var(--pc-line)' }} />
               : <div style={avatarStyle(64)}>{driver.name?.[0]?.toUpperCase()}</div>
             }
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--pc-ink)' }}>{driver.name}</div>
-              <div style={{ fontSize: 13, color: 'var(--pc-ink-2)', overflowWrap: 'anywhere' }}>{driver.mobile} · {driver.email}</div>
+              <div style={{ fontSize: 13, color: 'var(--pc-ink-2)', overflowWrap: 'anywhere' }}>{maskPhone(driver.mobile)} · {maskEmail(driver.email)}</div>
               <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <StatusPill status={driver.status} label={driver.status} />
                 {driver.emailVerified && <span className="pc-pill pc-pill-ok">Verified</span>}
@@ -388,7 +389,7 @@ function DeleteConfirmModal({ driver, deleting, error, onConfirm, onClose }) {
         <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--pc-bad-soft)', color: 'var(--pc-bad)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}><Icon name="trash" size={26} /></div>
         <h3 id="delete-driver-title" style={{ fontWeight: 700, fontSize: 18, color: 'var(--pc-ink)', textAlign: 'center', marginBottom: 8 }}>Delete Driver?</h3>
         <p style={{ fontSize: 14, color: 'var(--pc-ink-2)', textAlign: 'center', marginBottom: 16 }}>
-          Are you sure you want to permanently delete <strong style={{ color: 'var(--pc-ink)' }}>{driver.name}</strong> ({driver.mobile})? This cannot be undone.
+          Are you sure you want to permanently delete <strong style={{ color: 'var(--pc-ink)' }}>{driver.name}</strong> ({maskPhone(driver.mobile)})? This cannot be undone.
         </p>
         {error && <div className="pc-error" role="alert" style={{ marginBottom: 16 }}><Icon name="alert" size={16} /><span>{error}</span></div>}
         <div style={{ display: 'flex', gap: 10 }}>
@@ -476,7 +477,7 @@ function DriverList({ independent = false, vehicles = [], hasIndependentTab = fa
                 <div style={avatarStyle(44)}>{d.name?.[0]?.toUpperCase()}</div>
                 <div style={{ minWidth: 0 }}>
                   <div className="pc-row-title" style={{ fontSize: 15 }}>{d.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--pc-muted)', overflowWrap: 'anywhere' }}>{d.mobile} · {d.email || '—'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--pc-muted)', overflowWrap: 'anywhere' }}>{maskPhone(d.mobile)} · {maskEmail(d.email) || '—'}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

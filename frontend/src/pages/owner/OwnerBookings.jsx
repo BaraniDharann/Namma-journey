@@ -11,6 +11,7 @@ import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
 import { useCelebrate } from '../../components/celebrate/Celebration'
+import { maskPhone } from '../../utils/privacy'
 
 const FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']
 const FILTER_LABEL = { ALL: 'All', PENDING: 'Pending', CONFIRMED: 'Confirmed', COMPLETED: 'Completed', CANCELLED: 'Cancelled' }
@@ -178,7 +179,7 @@ export default function OwnerBookings() {
                       // GET /owner/bookings returns the raw TravelBooking entity (id), while the
                       // assign-driver response is a TravelBookingResponse (bookingId). Use either.
                       <tr key={b.id || b.bookingId}>
-                        <td><div className="pc-row-title">{b.userName}</div><div style={muted}>{b.userPhone}</div></td>
+                        <td><div className="pc-row-title">{b.userName}</div><div style={muted}>{maskPhone(b.userPhone)}</div></td>
                         <td><div style={{ fontSize: 13, color: 'var(--pc-ink)' }}>{b.fromPlace}</div><div style={muted}>→ {b.toPlace}</div></td>
                         <td style={{ whiteSpace: 'nowrap' }}>{b.fromDate}</td>
                         <td>

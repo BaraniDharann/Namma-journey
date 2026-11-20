@@ -27,6 +27,9 @@ public class LocationWebSocketController {
     @Autowired
     private com.travelplatform.service.RideSafetyService rideSafetyService;
 
+    @Autowired(required = false)
+    private com.travelplatform.service.PaymentService paymentService;
+
     /**
      * Storing and broadcasting both live in the service now, so the REST fallback in
      * {@code DriverController#updateLocationRest} produces the same push this frame does.
@@ -53,5 +56,7 @@ public class LocationWebSocketController {
         if (rideSafetyService != null) {
             rideSafetyService.onLocation(dto);
         }
+        // At the drop point the trip ends and completes by itself.
+        DriverController.endTripIfArrived(paymentService, dto);
     }
 }

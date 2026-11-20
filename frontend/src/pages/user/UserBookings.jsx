@@ -12,6 +12,7 @@ import { inr, shortPlace } from '../../dash/metrics'
 import { modeLabel } from '../../dash/vehicles'
 import { useCelebrate, rememberPayment } from '../../components/celebrate/Celebration'
 import TripSafetyBar from '../../components/safety/TripSafetyBar'
+import { telHref } from '../../utils/privacy'
 
 const navItems = [
   { path: '/user/dashboard', icon: '', label: 'Dashboard' },
@@ -135,7 +136,7 @@ function TripSummaryModal({ booking, userId, onClose }) {
                     }
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--pc-ink)' }}>{d.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--pc-ink-2)', display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="phone" size={13} />{d.mobile}</div>
+                      <div style={{ fontSize: 12, color: 'var(--pc-ink-2)', display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="phone" size={13} /><a href={telHref(d.mobile)} style={{ color: 'inherit' }}>Call driver</a></div>
                       {d.email && <div style={{ fontSize: 12, color: 'var(--pc-ink-2)', display: 'flex', alignItems: 'center', gap: 6, overflowWrap: 'anywhere' }}><Icon name="mail" size={13} />{d.email}</div>}
                     </div>
                   </div>

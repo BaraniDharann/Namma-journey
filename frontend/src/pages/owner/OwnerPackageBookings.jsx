@@ -6,6 +6,7 @@ import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
 import { getOwnerPackageBookings, confirmPackageBooking, cancelOwnerPackageBooking, completePackageBooking } from '../../utils/api'
+import { maskPhone } from '../../utils/privacy'
 
 const STATUSES = ['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED']
 
@@ -91,7 +92,7 @@ export default function OwnerPackageBookings() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8, fontSize: 13, color: 'var(--pc-ink-2)' }}>
                       <Detail icon="user"><strong style={{ color: 'var(--pc-ink)' }}>{b.userName}</strong></Detail>
                       <Detail icon="mail">{b.userEmail}</Detail>
-                      <Detail icon="phone">{b.userPhone}</Detail>
+                      <Detail icon="phone">{maskPhone(b.userPhone)}</Detail>
                       <Detail icon="users">{b.numberOfPersons} persons</Detail>
                       <Detail icon="calendar">Travel: {b.travelDate}</Detail>
                       <Detail icon="clock">Booked: {new Date(b.bookingDate).toLocaleDateString()}</Detail>

@@ -1,3 +1,4 @@
+import { maskPhone } from '../../utils/privacy'
 import React, { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import Icon from '../dash/Icon'
@@ -138,7 +139,7 @@ export default function RideSafetyPanel({ userId }) {
             <Icon name="user" size={18} />
             <div style={{ flex: '1 1 160px', minWidth: 0 }}>
               <div style={{ fontWeight: 700, color: 'var(--pc-ink)', overflowWrap: 'anywhere' }}>{c.name}</div>
-              <div style={muted}>{c.phone} · {c.linked ? 'Gets Telegram alerts' : 'Has not accepted the invite yet'}</div>
+              <div style={muted}>{maskPhone(c.phone)} · {c.linked ? 'Gets Telegram alerts' : 'Has not accepted the invite yet'}</div>
             </div>
             {!c.linked && tg.available && (
               <button type="button" className="pc-btn pc-btn-ghost pc-btn-sm" onClick={() => reinvite(c)}>

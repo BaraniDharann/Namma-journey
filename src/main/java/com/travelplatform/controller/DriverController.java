@@ -254,7 +254,25 @@ public class DriverController {
         if (rideSafetyService != null) {
             rideSafetyService.onLocation(dto);
         }
+        endTripIfArrived(paymentService, dto);
         return ResponseEntity.ok(stored);
+    }
+
+    /**
+     * Ends and completes the trip when the driver's reported position is at the drop point
+     * (PaymentService#completeOnArrival). Never fails the location report itself: a race with
+     * another report or a manual end just means someone else completed it first.
+     */
+    static void endTripIfArrived(PaymentService payments, DriverLocationDTO dto) {
+        if (payments == null || dto == null || dto.getBookingId() == null) {
+            return;
+        }
+        try {
+            payments.completeOnArrival(dto.getDriverId(), UUID.fromString(dto.getBookingId()),
+                    dto.getLatitude(), dto.getLongitude());
+        } catch (RuntimeException ignored) {
+            // Already completed by a parallel report or by the driver; the next report sees COMPLETED.
+        }
     }
 
     /**

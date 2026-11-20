@@ -6,6 +6,7 @@ import Icon from '../../components/dash/Icon'
 import { Panel, PageHead, SummaryStrip, Empty, Skeleton } from '../../components/dash/ui'
 import { inr } from '../../dash/metrics'
 import { useCelebrate } from '../../components/celebrate/Celebration'
+import { maskPhone } from '../../utils/privacy'
 
 const labelStyle = { display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--pc-ink-2)', marginBottom: 6 }
 
@@ -175,7 +176,7 @@ export default function OwnerPayouts() {
                         return (
                           <tr key={r.driverId}>
                             <td style={{ overflowWrap: 'anywhere' }}>
-                              <strong>{r.name}</strong><div style={{ fontSize: 12, color: 'var(--pc-muted)' }}>{r.mobile}</div>
+                              <strong>{r.name}</strong><div style={{ fontSize: 12, color: 'var(--pc-muted)' }}>{maskPhone(r.mobile)}</div>
                               <div style={{ fontSize: 12, marginTop: 2 }}>
                                 UPI: {r.upiId ? <span style={{ fontFamily: 'monospace' }}>{r.upiId}</span> : <span style={{ color: 'var(--pc-muted)' }}>Not added yet</span>}
                               </div>
@@ -214,7 +215,7 @@ export default function OwnerPayouts() {
                       <tr key={r.ownerId}>
                         <td style={{ overflowWrap: 'anywhere' }}>
                           <strong>{r.name}</strong>
-                          <div style={{ fontSize: 12, color: 'var(--pc-muted)' }}>{[r.ownerCode, r.mobile, `${r.rides} rides`].filter(Boolean).join(' · ')}</div>
+                          <div style={{ fontSize: 12, color: 'var(--pc-muted)' }}>{[r.ownerCode, maskPhone(r.mobile), `${r.rides} rides`].filter(Boolean).join(' · ')}</div>
                           <div style={{ fontSize: 12, marginTop: 2 }}>
                             UPI: {r.upiId ? <span style={{ fontFamily: 'monospace' }}>{r.upiId}</span> : <span style={{ color: 'var(--pc-muted)' }}>Not in their profile</span>}
                           </div>

@@ -8,6 +8,7 @@ import { adminOwner, adminOwnerCheck, adminApproveOwner, adminRejectOwner, admin
 import { rejectReasonError, REJECT_MAX } from '../../utils/rejectReason'
 import { adminNavItems, errorText, when } from './adminNav'
 import BusCommissionPanel from '../../components/bus/BusCommissionPanel'
+import { maskPhone } from '../../utils/privacy'
 
 // Each check is made by hand on a free official source; the button opens it in a new tab.
 const CHECKS = [
@@ -133,7 +134,7 @@ export default function AdminOwnerDetail() {
             <Panel span={6} title="Applicant">
               <Row k="Contact" v={o.contactName} />
               <Row k="Email" v={o.email} />
-              <Row k="Mobile" v={o.phone} />
+              <Row k="Mobile" v={maskPhone(o.phone)} />
               <Row k="Cities" v={o.cities.join(', ')} />
               <Row k="PAN" v={o.panMasked} />
               <Row k="Aadhaar (last 4)" v={o.aadhaarLast4} />

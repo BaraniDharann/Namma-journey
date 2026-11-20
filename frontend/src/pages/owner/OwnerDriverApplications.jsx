@@ -7,6 +7,7 @@ import { Panel, PageHead, Empty, Skeleton } from '../../components/dash/ui'
 import { getDriverApplications, approveDriver, rejectDriver } from '../../utils/api'
 import { vehicleIcon, vehicleLabel } from '../../dash/vehicles'
 import { rejectReasonError, REJECT_MAX } from '../../utils/rejectReason'
+import { maskPhone, maskEmail } from '../../utils/privacy'
 
 const TABS = [
   ['UNDER_REVIEW', 'Waiting'],
@@ -122,7 +123,7 @@ function ApplicationCard({ app, tab, busy, onApprove, onReject, onView }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ minWidth: 0 }}>
           <div className="pc-row-title" style={{ fontSize: 16 }}>{app.name}</div>
-          <div style={{ fontSize: 12, color: 'var(--pc-muted)', overflowWrap: 'anywhere' }}>{app.mobile} · {app.email || '—'}</div>
+          <div style={{ fontSize: 12, color: 'var(--pc-muted)', overflowWrap: 'anywhere' }}>{maskPhone(app.mobile)} · {maskEmail(app.email) || '—'}</div>
           <div style={{ fontSize: 12, color: 'var(--pc-muted)' }}>Sent {submitted}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>

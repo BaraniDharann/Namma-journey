@@ -9,6 +9,7 @@ import { Panel, PageHead, StatusPill, Empty, Skeleton } from '../../components/d
 import { inr, shortPlace } from '../../dash/metrics'
 import { useCelebrate } from '../../components/celebrate/Celebration'
 import { announceTripState } from '../../hooks/useDriverDispatch'
+import { telHref } from '../../utils/privacy'
 
 const navItems = [
   { path: '/driver/dashboard', icon: '', label: 'Dashboard' },
@@ -309,7 +310,7 @@ export default function DriverBookings() {
                   </div>
                   <div className="pc-chips" style={{ marginTop: 14 }}>
                     <span className="pc-chip"><Icon name="user" size={15} />{b.userName}</span>
-                    <span className="pc-chip"><Icon name="phone" size={15} />{b.userPhone}</span>
+                    {b.userPhone && <a className="pc-chip" href={telHref(b.userPhone)} aria-label={`Call ${b.userName || 'passenger'}`}><Icon name="phone" size={15} />Call</a>}
                     <span className="pc-chip"><Icon name="users" size={15} />{`${b.travelMembers} persons`}</span>
                     <span className="pc-chip"><Icon name="car" size={15} />{b.acType}</span>
                     {b.bookingType === 'HOUR_BASED' && (
