@@ -161,6 +161,42 @@ class PaymentServiceSecurityTest {
     }
 
     @Test
+    @DisplayName("cash after End ride: the unpaid UPI invoice becomes a cash payment and settles")
+    void cashAfterEndRideSwitchesUnpaidUpiToCash() {
+        when(bookingRepository.findById(BOOKING_ID))
+                .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.STARTED)));
+        Payment upi = payment(Payment.PaymentMethod.UPI, Payment.PaymentStatus.PENDING);
+        upi.setUpiLinkExpiresAt(LocalDateTime.now().plusMinutes(5));
+        when(paymentRepository.findByBookingId(BOOKING_ID)).thenReturn(Optional.of(upi));
+
+        CashPaymentRequest request = new CashPaymentRequest();
+        request.setAmountReceived(new java.math.BigDecimal("2500.00"));
+
+        PaymentResponse response = service.markCashReceived(DRIVER_ID, BOOKING_ID, request);
+
+        assertEquals("CASH", response.getPaymentMethod());
+        assertEquals(Payment.PaymentStatus.VERIFIED.name(), response.getStatus());
+        assertEquals(null, upi.getUpiLinkExpiresAt());
+        verify(notificationService).notifyPaymentReceived(any());
+    }
+
+    @Test
+    @DisplayName("cash before End ride: no payment row yet, one is raised and settled")
+    void cashWithoutPaymentRowRaisesOne() {
+        when(bookingRepository.findById(BOOKING_ID))
+                .thenReturn(Optional.of(booking(TravelBooking.BookingStatus.STARTED)));
+        when(paymentRepository.findByBookingId(BOOKING_ID)).thenReturn(Optional.empty());
+
+        CashPaymentRequest request = new CashPaymentRequest();
+        request.setAmountReceived(new java.math.BigDecimal("2500.00"));
+
+        PaymentResponse response = service.markCashReceived(DRIVER_ID, BOOKING_ID, request);
+
+        assertEquals("CASH", response.getPaymentMethod());
+        assertEquals(Payment.PaymentStatus.VERIFIED.name(), response.getStatus());
+    }
+
+    @Test
     @DisplayName("an owner cannot verify the same payment twice")
     void verifyIsIdempotent() {
         when(paymentRepository.findById(PAYMENT_ID))

@@ -130,21 +130,39 @@ test.describe('Driver API', () => {
       'documented behaviour: end-trip alone does not complete the booking'
     ).toBe('STARTED');
 
-    // end-trip raises a UPI invoice, so the cash route is correctly refused here.
+    // end-trip raises a UPI invoice; the owner verifying it is what completes the trip.
+    // (A passenger who pays cash instead is settled by the driver's cash-payment call, which
+    // switches the unpaid invoice to cash - see the next test.)
     expect(invoice.paymentMethod).toBe('UPI');
     expect(invoice.status).toBe('PENDING');
-    const cash = await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/cash-payment`, {
-      data: { amountReceived: Number(invoice.amount) },
-    });
-    expect(cash.status()).toBe(400);
-    expect(await cash.text()).toContain('not a cash payment');
 
-    // The owner verifying the UPI payment is what completes the trip.
     const verified = await c.owner.post(`/api/owner/payments/${invoice.paymentId}/verify`);
     expect(verified.status(), (await verified.text()).slice(0, 200)).toBe(200);
 
     const afterPay = await c.user.get(`/api/user/${U}/bookings/${b.bookingId}`);
     expect((await afterPay.json()).status).toBe('COMPLETED');
+  });
+
+  test('passenger pays cash after end-trip: the driver settles it and the trip completes', async () => {
+    const created = await c.user.post(`/api/user/${U}/bookings`, { data: bookingPayload() });
+    const b = await created.json();
+    await c.owner.post(`/api/owner/bookings/${b.bookingId}/assign-driver`, { data: { driverId: Number(D) } });
+    await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/start-trip`);
+
+    const ended = await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/end-trip`);
+    const invoice = await ended.json();
+    expect(invoice.paymentMethod).toBe('UPI');
+
+    const cash = await c.driver.post(`/api/driver/${D}/bookings/${b.bookingId}/cash-payment`, {
+      data: { amountReceived: Number(invoice.amount) },
+    });
+    expect(cash.status(), (await cash.text()).slice(0, 200)).toBe(200);
+    const paid = await cash.json();
+    expect(paid.paymentMethod).toBe('CASH');
+    expect(paid.status).toBe('VERIFIED');
+
+    const after = await c.user.get(`/api/user/${U}/bookings/${b.bookingId}`);
+    expect((await after.json()).status).toBe('COMPLETED');
   });
 
   test('rejects an unknown booking action', async () => {

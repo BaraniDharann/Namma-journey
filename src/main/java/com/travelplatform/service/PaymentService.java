@@ -225,9 +225,20 @@ public class PaymentService {
             throw new RuntimeException("Unauthorized: Booking not assigned to you");
         }
         
-        Payment payment = paymentRepository.findByBookingId(bookingId)
-                .orElseThrow(() -> new RuntimeException("Payment not initiated"));
-        
+        // A passenger can hand over cash before the driver taps "End ride", so there may be no
+        // payment row yet: raise it here for the amount the booking says is due.
+        Payment payment = paymentRepository.findByBookingId(bookingId).orElseGet(() -> {
+            Payment p = new Payment();
+            p.setBookingId(bookingId);
+            p.setUserId(booking.getUserId());
+            p.setAmount(amountDue(booking));
+            p.setPaymentMethod(Payment.PaymentMethod.CASH);
+            p.setStatus(Payment.PaymentStatus.PENDING);
+            p.setDriverId(driverId);
+            p.setCreatedAt(LocalDateTime.now());
+            return p;
+        });
+
         // Idempotency guard. Without it a driver could call this repeatedly on a settled
         // booking: each call re-stamped the payment, re-completed the booking, re-sent the
         // "payment received" notification and evicted the revenue caches again, so one cash
@@ -243,8 +254,13 @@ public class PaymentService {
             throw new RuntimeException("Cash can only be collected on a trip that has started");
         }
 
+        // "End ride" always raises a UPI QR, and a passenger may also have opened online checkout.
+        // If they then pay the driver in cash, that unpaid UPI/online invoice becomes a cash one -
+        // refusing it ("This is not a cash payment") left the driver with no way to finish the
+        // ride. Already-paid rows were stopped above, so nothing settled is ever switched.
         if (payment.getPaymentMethod() != Payment.PaymentMethod.CASH) {
-            throw new RuntimeException("This is not a cash payment");
+            payment.setPaymentMethod(Payment.PaymentMethod.CASH);
+            payment.setUpiLinkExpiresAt(null);
         }
 
         // amountReceived arrived on the request but was never looked at: the payment was marked
