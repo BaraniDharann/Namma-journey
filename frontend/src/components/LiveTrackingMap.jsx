@@ -24,24 +24,27 @@ const dropIcon = new L.Icon({
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34],
 })
 
-function FitBounds({ bounds }) {
+/**
+ * Frame pickup → drop once and then leave the map alone, so only the car moves.
+ * Re-fits a single time when the routed line arrives (it can bulge past the
+ * straight pickup/drop box); never on driver position updates.
+ */
+function FitBounds({ fromLat, fromLon, toLat, toLon, routeCoords }) {
   const map = useMap()
+  const fittedRef = useRef(null)
   useEffect(() => {
-    if (bounds) map.fitBounds(bounds, { padding: [50, 50] })
-  }, [bounds, map])
+    const key = `${fromLat},${fromLon},${toLat},${toLon}|${routeCoords ? 'route' : 'line'}`
+    if (fittedRef.current === key) return
+    fittedRef.current = key
+    const pts = routeCoords?.length ? routeCoords : [[fromLat, fromLon], [toLat, toLon]]
+    map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], animate: false })
+  }, [map, fromLat, fromLon, toLat, toLon, routeCoords])
   return null
 }
 
-function MapInstance({ setMap, onUserDrag }) {
+function MapInstance({ setMap }) {
   const map = useMap()
-  useEffect(() => {
-    setMap(map)
-    if (onUserDrag) {
-      map.on('dragstart', onUserDrag)
-      return () => map.off('dragstart', onUserDrag)
-    }
-    return undefined
-  }, [map, setMap, onUserDrag])
+  useEffect(() => { setMap(map) }, [map, setMap])
   return null
 }
 
@@ -59,7 +62,6 @@ export default function LiveTrackingMap({
   const [etaIsEstimate, setEtaIsEstimate] = useState(false)
   const [map, setMap] = useState(null)
   const [waitingForLocation, setWaitingForLocation] = useState(true)
-  const [followDriver, setFollowDriver] = useState(true)
   const [secondsAgo, setSecondsAgo] = useState(null)
   const lastEtaCalcRef = useRef(0)
   const prevPosRef = useRef(null)
@@ -182,7 +184,6 @@ export default function LiveTrackingMap({
   if (!fromLat || !toLat) return null
 
   const center = [(fromLat + toLat) / 2, (fromLon + toLon) / 2]
-  const bounds = [[fromLat, fromLon], [toLat, toLon]]
 
   const formatEta = (mins) => {
     if (!mins) return '--'
@@ -295,8 +296,8 @@ export default function LiveTrackingMap({
       <div style={{ borderRadius: 14, overflow: 'hidden', border: '2px solid #e2e8f0', height: mapHeight, position: 'relative' }}>
         <MapContainer center={center} zoom={7} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true} zoomControl={false}>
           <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
-          <FitBounds bounds={bounds} />
-          <MapInstance setMap={setMap} onUserDrag={() => setFollowDriver(false)} />
+          <FitBounds fromLat={fromLat} fromLon={fromLon} toLat={toLat} toLon={toLon} routeCoords={routeCoords} />
+          <MapInstance setMap={setMap} />
 
           <Marker position={[fromLat, fromLon]} icon={pickupIcon}>
             <Popup><strong>Pickup</strong><br />{fromPlace || 'Start'}</Popup>
@@ -340,26 +341,25 @@ export default function LiveTrackingMap({
               heading={driverHeading}
               routeCoords={routeCoords}
               vehicle={vehicle}
-              follow={followDriver}
+              follow={false}
               tooltip={isDriver ? `Your ${vehicle.label}` : `Your ride · ${vehicle.label}`}
             />
           )}
         </MapContainer>
-        {/* Recenter button */}
-        {driverPos && (
-          <button type="button" aria-label="Re-center on driver" onClick={() => {
-            setFollowDriver(true)
-            if (map) map.panTo(driverPos, { animate: true, duration: 0.5 })
-          }} style={{
-            position: 'absolute', bottom: 12, right: 12, zIndex: 1000,
-            width: 38, height: 38, borderRadius: '50%', border: '2px solid #e2e8f0',
-            background: followDriver ? '#3b82f6' : '#fff', color: followDriver ? '#fff' : '#3b82f6',
-            cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'all 0.2s',
-          }} title="Re-center on driver">
-            <Icon name="pin" size={18} />
-          </button>
-        )}
+        {/* Back to the whole pickup → drop view, if the user zoomed or dragged away */}
+        <button type="button" aria-label="Show whole route" onClick={() => {
+          if (!map) return
+          const pts = routeCoords?.length ? routeCoords : [[fromLat, fromLon], [toLat, toLon]]
+          map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], animate: true })
+        }} style={{
+          position: 'absolute', bottom: 12, right: 12, zIndex: 1000,
+          width: 38, height: 38, borderRadius: '50%', border: '2px solid #e2e8f0',
+          background: '#fff', color: '#3b82f6',
+          cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'all 0.2s',
+        }} title="Show whole route">
+          <Icon name="pin" size={18} />
+        </button>
       </div>
 
       <style>{`
