@@ -115,7 +115,7 @@ function RejectDialog({ driver, busy, error, onSubmit, onClose }) {
   )
 }
 
-function ApplicationCard({ app, tab, busy, onApprove, onReject, onView }) {
+function ApplicationCard({ app, tab, busy, onApprove, onReject }) {
   const docs = DOCS.map(([key, label]) => ({ key, label, src: imgUrl(app[key]) }))
   const submitted = app.submittedAt ? new Date(app.submittedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
   return (
@@ -280,7 +280,7 @@ export default function OwnerDriverApplications() {
           <Panel span={12} title={TABS.find(([k]) => k === tab)[1]} meta={`${apps.length}`}>
             {apps.map((a) => (
               <ApplicationCard key={a.driverId} app={a} tab={tab} busy={busyId === a.driverId}
-                onApprove={approve} onReject={(x) => { setRejectError(''); setRejecting(x) }} onView={setViewing} />
+                onApprove={approve} onReject={(x) => { setRejectError(''); setRejecting(x) }} />
             ))}
           </Panel>
         )}
