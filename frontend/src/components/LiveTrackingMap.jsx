@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import Icon from './dash/Icon'
 import useDriverLocationSender from '../hooks/useDriverLocationSender'
 import useLiveDriverLocation from '../hooks/useLiveDriverLocation'
 import { OSRM_BASE_URL, TILE_URL, TILE_ATTRIBUTION } from '../config/mapServices'
@@ -25,27 +24,42 @@ const dropIcon = new L.Icon({
 })
 
 /**
- * Frame pickup → drop once and then leave the map alone, so only the car moves.
- * Re-fits a single time when the routed line arrives (it can bulge past the
- * straight pickup/drop box); never on driver position updates.
+ * Frame pickup → drop and keep it there, so only the car moves. Re-fits when
+ * the routed line arrives (it can bulge past the straight pickup/drop box) and
+ * when the container changes size (a popup that opens with an animation is
+ * measured too small at first, which cut the pickup pin off). Never on driver
+ * position updates.
  */
 function FitBounds({ fromLat, fromLon, toLat, toLon, routeCoords }) {
   const map = useMap()
-  const fittedRef = useRef(null)
   useEffect(() => {
-    const key = `${fromLat},${fromLon},${toLat},${toLon}|${routeCoords ? 'route' : 'line'}`
-    if (fittedRef.current === key) return
-    fittedRef.current = key
     const pts = routeCoords?.length ? routeCoords : [[fromLat, fromLon], [toLat, toLon]]
-    map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], animate: false })
+    const bounds = L.latLngBounds(pts)
+    const fit = () => {
+      map.invalidateSize({ animate: false })
+      map.fitBounds(bounds, { padding: [40, 40], animate: false })
+    }
+    fit()
+    const el = map.getContainer()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(() => fit())
+    ro.observe(el)
+    return () => ro.disconnect()
   }, [map, fromLat, fromLon, toLat, toLon, routeCoords])
   return null
 }
 
-function MapInstance({ setMap }) {
-  const map = useMap()
-  useEffect(() => { setMap(map) }, [map, setMap])
-  return null
+// The tracking map is a fixed picture of the trip: no drag, zoom or keyboard
+// panning by mouse or touch.
+const LOCKED_MAP = {
+  dragging: false,
+  touchZoom: false,
+  scrollWheelZoom: false,
+  doubleClickZoom: false,
+  boxZoom: false,
+  keyboard: false,
+  tap: false,
+  zoomControl: false,
 }
 
 export default function LiveTrackingMap({
@@ -60,7 +74,6 @@ export default function LiveTrackingMap({
   // True when the figures came from the straight-line fallback rather than a real route,
   // so the UI can label them instead of passing a guess off as a routed ETA.
   const [etaIsEstimate, setEtaIsEstimate] = useState(false)
-  const [map, setMap] = useState(null)
   const [waitingForLocation, setWaitingForLocation] = useState(true)
   const [secondsAgo, setSecondsAgo] = useState(null)
   const lastEtaCalcRef = useRef(0)
@@ -294,10 +307,9 @@ export default function LiveTrackingMap({
 
       {/* Map */}
       <div style={{ borderRadius: 14, overflow: 'hidden', border: '2px solid #e2e8f0', height: mapHeight, position: 'relative' }}>
-        <MapContainer center={center} zoom={7} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true} zoomControl={false}>
+        <MapContainer center={center} zoom={7} style={{ height: '100%', width: '100%', touchAction: 'pan-y' }} {...LOCKED_MAP}>
           <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
           <FitBounds fromLat={fromLat} fromLon={fromLon} toLat={toLat} toLon={toLon} routeCoords={routeCoords} />
-          <MapInstance setMap={setMap} />
 
           <Marker position={[fromLat, fromLon]} icon={pickupIcon}>
             <Popup><strong>Pickup</strong><br />{fromPlace || 'Start'}</Popup>
@@ -346,20 +358,6 @@ export default function LiveTrackingMap({
             />
           )}
         </MapContainer>
-        {/* Back to the whole pickup → drop view, if the user zoomed or dragged away */}
-        <button type="button" aria-label="Show whole route" onClick={() => {
-          if (!map) return
-          const pts = routeCoords?.length ? routeCoords : [[fromLat, fromLon], [toLat, toLon]]
-          map.fitBounds(L.latLngBounds(pts), { padding: [40, 40], animate: true })
-        }} style={{
-          position: 'absolute', bottom: 12, right: 12, zIndex: 1000,
-          width: 38, height: 38, borderRadius: '50%', border: '2px solid #e2e8f0',
-          background: '#fff', color: '#3b82f6',
-          cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'all 0.2s',
-        }} title="Show whole route">
-          <Icon name="pin" size={18} />
-        </button>
       </div>
 
       <style>{`
